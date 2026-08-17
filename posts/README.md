@@ -1,0 +1,46 @@
+# 一行 torch.compile 背後發生了什麼？30 天深度拆解 PyTorch 編譯器
+
+## Part 0：全景
+
+- Day 1 | torch.compile 是怎麼長出來的？
+- Day 2 | 一行 torch.compile，四段 pipeline
+
+## Part 1：TorchDynamo
+
+- Day 3 | TorchDynamo 攔截了什麼：CPython 的 Frame Evaluation Hook
+- Day 4 | 符號直譯器 InstructionTranslator：一條指令一個 Handler
+- Day 5 | VariableTracker 與 Source：Dynamo 眼中的每一個 Python 值
+- Day 6 | Guards：編譯結果什麼時候還能用
+- Day 7 | SideEffects：會改東西的 Python，怎麼過純函數的圖
+- Day 8 | OutputGraph：散落的產出怎麼收成一張 FX Graph
+- Day 9 | PyCodegen：Dynamo 怎麼把新 Bytecode 寫回 CPython
+- Day 10 | Graph Break 全機制：斷在哪裡，怎麼接回來
+- Day 11 | Symbolic Shapes：讓一張圖吃下所有 batch size
+
+## Part 2：AOTAutograd
+
+- Day 12 | AOTAutograd 總覽：為什麼 backpropagation 也要 Ahead-of-Time
+- Day 13 | Functionalization：In-place 與 View 怎麼被改寫成純函數
+- Day 14 | Decomposition 與 PrimTorch：兩千個 Operator 拆成幾百個
+- Day 15 | Joint Graph 與 Partitioner：forward 與 backpropagation 的切分
+- Day 16 | Min-cut Recomputation：重算還是存下來
+- Day 17 | FakeTensor 與 Meta Device：不算數值也能 Trace
+
+## Part 3：TorchInductor
+
+- Day 18 | Inductor 總覽：從 FX Graph 到 Kernel 的路
+- Day 19 | Lowering 與 Loop-level IR：圖怎麼變成迴圈
+- Day 20 | Scheduler：誰跟誰可以融合
+- Day 21 | Fusion 的邊界：垂直、水平與 Reduction
+- Day 22 | Triton Codegen：讀懂 Inductor 生出來的 GPU Kernel
+- Day 23 | C++ Codegen：CPU 後端與 OpenMP
+- Day 24 | Autotune 與 max-autotune：讓機器自己挑 Kernel
+- Day 25 | 快取：編譯結果存在哪裡，什麼時候失效
+
+## Part 4：整合與實戰
+
+- Day 26 | CUDA Graph 與 reduce-overhead：壓掉 Kernel 啟動開銷
+- Day 27 | Recompilation 爆炸：怎麼發生，怎麼診斷，怎麼修
+- Day 28 | 除錯工具箱：TORCH_LOGS、explain、depyf 與 Minifier
+- Day 29 | 自己寫一個 Backend：從 FX Graph 接手
+- Day 30 | 總結：什麼時候快、為什麼慢、怎麼修

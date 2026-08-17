@@ -1,0 +1,4 @@
+media/
+.venv/
+__pycache__/
+pal.png
