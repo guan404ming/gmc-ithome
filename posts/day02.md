@@ -1,4 +1,4 @@
-# Day 2 | 一行 torch.compile，四段 pipeline
+# Day 2 | torch.compile 之後，你的 Python 去哪了？
 
 ## 前言
 
@@ -18,7 +18,7 @@ model = torch.compile(model)
 
 這一行執行完的當下幾乎什麼都沒發生，它只是把 `model` 包了一層。真正的工作要等到你第一次帶著真實輸入呼叫它，那一刻才會一口氣走完下面四個階段：
 
-![torch.compile 的四段 pipeline](../assets/day02/pipeline.gif)
+![torch.compile 的四段pipeline](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day02/pipeline.gif)
 
 *圖一：torch.compile 的四段 pipeline：Dynamo 擷取、AOTAutograd 展開、Inductor 生成程式碼、Runtime 執行。*
 
@@ -97,13 +97,11 @@ f_aot    = torch.compile(f, backend="aot_eager")  # Dynamo + AOTAutograd
 f_full   = torch.compile(f, backend="inductor")   # 完整 pipeline，這是預設值
 ```
 
-
-| backend       | Dynamo 擷取 | AOTAutograd 展開 | Inductor 生成程式碼 |
-| ------------- | --------- | -------------- | -------------- |
-| `"eager"`     | 有         | 無              | 無              |
-| `"aot_eager"` | 有         | 有              | 無              |
-| `"inductor"`  | 有         | 有              | 有              |
-
+| backend | Dynamo 擷取 | AOTAutograd 展開 | Inductor 生成程式碼 |
+| --- | --- | --- | --- |
+| `"eager"` | 有 | 無 | 無 |
+| `"aot_eager"` | 有 | 有 | 無 |
+| `"inductor"` | 有 | 有 | 有 |
 
 三個名字很容易誤導，這邊先給個簡單的解釋。`backend="eager"` 不是「不編譯」。Dynamo 照樣攔截你的 Bytecode、建圖、裝 Guard，只是最後不生成新的 Kernel，而是把圖裡的 Operator 照原樣用 Eager 跑。所以它跑起來跟原生差不多快，但該 Graph Break 的地方一樣會斷、該 Recompile 的地方一樣會重編。`backend="aot_eager"` 則是多接一段 AOTAutograd：圖被展開、正規化、拆解，但還是用 Eager 執行每個 Operator。
 
@@ -230,11 +228,9 @@ Kernel 的名字 `triton_poi_fused_add_cos_mul_sin_tanh_0` 已經把事情說完
 
 ## 結語
 
-今天透過從使用者的角度來我們的畫 landscape。`torch.compile` 從你的 Python 到 GPU 上的 Kernel，中間是 Dynamo、AOTAutograd、Inductor、Runtime 四段 pipeline。另一個值得記得的是 PyTorch 編譯是延遲的，第一次帶真實輸入呼叫時才一口氣跑完三段，所以第一次慢是正常的，通常在生產環境都會需要先 warm up 才可以測得比較準確的數據。`backend` 參數對應 pipeline 的斷點，`eager`、`aot_eager`、`inductor` 是層層包住的關係，也因此也成為定位問題最直接的工具。
+今天透過從使用者的角度來畫我們 landscape，簡單的理解了這個神秘黑盒子的骨架。`torch.compile` 從你寫的 Python 到 GPU 上的 Kernel，中間是 Dynamo、AOTAutograd、Inductor、Runtime 四段 pipeline。另一個值得記得的是 PyTorch 編譯是延遲的，第一次帶真實輸入呼叫時才一口氣跑完，所以第一次慢是正常的，通常在生產環境都會需要先 warm up 才可以測得比較準確的數據。`backend` 參數對應 pipeline 的斷點，`eager`、`aot_eager`、`inductor` 是層層包住的關係，也因此也成為定位問題最直接的工具。
 
-把這四段記在腦中很重要，因為接下來每一篇都會回到這張圖上，指著其中的某一段說「今天要拆的是這裡」。
-
-明天正式進入第一個 component。TorchDynamo 到底是怎麼「在 Python 跑的當下」攔截你的程式的？答案藏在 CPython 的 Frame Evaluation Hook 裡。我們會用 `dis` 把 Bytecode 攤開，看 Dynamo 是在哪一層動的手腳，以及為什麼這個設計讓它能吃下幾乎任何 Python，卻又總在某些地方不得不斷開。那我們明天見！
+明天即將正式進入我們第一個重要的 component --> TorchDynamo！我們會來聊聊它到底是怎麼「在 Python 跑的當下」攔截你的程式的？這個答案基本上是藏在 CPython 的 Frame Evaluation Hook 裡。我們會用 `dis` 把 Bytecode 攤開，看 Dynamo 是在哪一層動的手腳，以及為什麼這個設計讓它能吃下幾乎任何 Python，卻又總在某些地方不得不斷開。那我們明天見！
 
 ## 參考資料
 
@@ -243,4 +239,3 @@ Kernel 的名字 `triton_poi_fused_add_cos_mul_sin_tanh_0` 已經把事情說完
 - [TorchDynamo 深入介紹](https://pytorch.org/docs/stable/torch.compiler_dynamo_overview.html)
 - [torch.compile 除錯與疑難排解](https://pytorch.org/docs/stable/torch.compiler_troubleshooting.html)
 - Ansel et al., [*PyTorch 2: Faster Machine Learning Through Dynamic Python Bytecode Transformation and Graph Compilation*](https://pytorch.org/assets/pytorch2-2.pdf), ASPLOS 2024
-

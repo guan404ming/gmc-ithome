@@ -2,15 +2,15 @@
 
 ## 前言
 
-大家好，我是 Wesley，這是我第一次參加鐵人賽。這三十天的主題是「一行 torch.compile 背後發生了什麼？30 天深度拆解 PyTorch 編譯器」。
+大家好，我是 [Guan-Ming](http://guan404ming.com)。目前是台大電機所 CS 組的研究生，對於 AI Infra 以及 AI Compiler 的開發和研究都很有興趣。平常也有在一些開源專案擔任維護者，包含 Apache Airflow, Apache TVM 以及 PyTorch 等等。今年是我第一次參加 IT 鐵人賽，也很高興能跟「源來適你」的一群小夥伴一起參加團體賽。最近因為研究的關係碰了很多機器學習編譯器的概念以及論文，因此我想在這三十天跟大家分享以及深入的主題就是「一行 torch.compile 背後發生了什麼？30 天深度拆解 PyTorch 編譯器」！
 
-會想寫這個系列，是因為 `torch.compile` 大概是 PyTorch 2.0 之後最常被提到、也最常被當成魔法的一個功能。加一行模型就變快，但很少有人說得清楚它到底做了什麼。變快的原因是什麼？為什麼有時候沒效？為什麼換個 batch size 又慢一次？這些問題其實都有很明確的答案，只是要打開黑盒子才看得到。所以這個系列會直接讀 PyTorch 的原始碼，把每一層的中間產物 dump 出來看，用簡單的圖幫助理解，帶大家把 Dynamo、AOTAutograd、Inductor 三層一段一段拆開。
+會想寫這個系列，主要是因為 `torch.compile` 大概是 PyTorch 2.0 之後最常被提到、也最常被當成黑魔法的一個功能。在大部分使用 PyTorch 來建構的模型，只要加上這一行之後，模型的執行速度就會很明顯變快。不過很少人能清楚的理解它裡面到底做了些什麼？變快的原因是什麼？為什麼有時候沒效？這些問題其實都有很明確的答案，只是會需要去耐心地打開這個超大的黑盒子才看得到。所以筆者想透過這個系列跟大家一起學習、深入瞭解 PyTorch 的原始碼。並且把每一層的中間產物 dump 出來，輔以簡單的圖示或是 gif 來幫助理解。我們會一起把 PyTorch Compiler 中重要的 Dynamo、AOTAutograd、Inductor 三層，各個拆開並深入理解裡面的重要概念。最後也會有一些實作的部分，例如怎麼樣搭建一個 custom backend 等等去更理解實作中會踩到的坑。
 
-這篇文章會出現一些你可能還不熟的名詞，例如 FX Graph、Guard、Graph Break、Triton、Frame Evaluation Hook 等等。不用擔心，這些都不需要現在就懂，接下來的系列會一個一個講清楚。
+## 這 30 天會怎麼分配？
 
-第一天的目標不是理解細節，而是先建立一個整體輪廓：PyTorch 為什麼一開始選了 Eager Mode、為了拿到計算圖它試過哪些方法、為什麼那些方法沒有成功、以及最後 `torch.compile` 是被誰、用什麼想法做出來的。知道這段歷史，後面每一個設計決定就都有脈絡可循了。
+這三十天的內容大致上會分成四個部分。第一部分是 Dynamo，講它怎麼在 Bytecode 層攔截 Python、Guard 是什麼、為什麼會 Graph Break、吐出的 FX Graph 長什麼樣。第二部分是 AOTAutograd，講 backward propagation 怎麼被一起 Trace、In-place 怎麼被正規化、Operator 怎麼被拆成基本運算。第三部分是 Inductor，講圖怎麼變成 Loop、誰跟誰融合、以及怎麼讀它生出來的 Triton 和 C++。最後一部分是整合與實戰，包括 CUDA Graph、快取、Recompilation 爆炸，以及嘗試自己寫一個 Backend。
 
-正文開始！
+不過第一天的目標不是馬上跳進程式碼去硬啃細節，而是先建立一個整體輪廓去理解：PyTorch 為什麼一開始選了 Eager Mode、為了拿到計算圖它試過哪些方法、為什麼那些方法沒有成功、以及最後 `torch.compile` 是被誰、用什麼想法做出來的。知道這段歷史，後面每一個設計決定就都有脈絡可循了。那就事不遲疑，正文準備開始！
 
 ## PyTorch 的起點：Eager Mode 是設計，不是妥協
 
@@ -42,16 +42,16 @@ TorchScript 的目標其實偏部署，重點是把模型序列化、離開 Pyth
 
 ## 轉折：TorchDynamo 與 PyTorch 2.0
 
-2021 年 9 月，Jason Ansel 在 PyTorch dev-discuss 上[發表了 TorchDynamo 的雛形](https://dev-discuss.pytorch.org/t/torchdynamo-an-experiment-in-dynamic-python-bytecode-transformation/361)。它的核心想法很不一樣：不去解析 Python 原始碼，也不靠 Tracing 錄 Operator，而是利用 CPython 的 Frame Evaluation Hook（[PEP 523](https://peps.python.org/pep-0523/)），在 Python Bytecode 執行的當下把它攔下來，把能編的 Tensor 運算抓成 FX Graph，看不懂的地方就在那裡斷開（這就是 Graph Break），退回一般 Python 執行，之後再接回來。這樣使用者一行程式都不用改，而且永遠不會「不能跑」，最壞的情況只是沒加速而已。
+2021 年 9 月，Jason Ansel 在 PyTorch dev-discuss 上發表了 [TorchDynamo 的雛形](https://dev-discuss.pytorch.org/t/torchdynamo-an-experiment-in-dynamic-python-bytecode-transformation/361)。它的核心想法很不一樣：不去解析 Python 原始碼，也不靠 Tracing 錄 Operator，而是利用 CPython 的 Frame Evaluation Hook（[PEP 523](https://peps.python.org/pep-0523/)），在 Python Bytecode 執行的當下把它攔下來，把能編的 Tensor 運算抓成 FX Graph，看不懂的地方就在那裡斷開（這就是 Graph Break），退回一般 Python 執行，之後再接回來。這樣使用者一行程式都不用改，而且永遠不會「不能跑」，最壞的情況只是沒加速而已。
 
-Dynamo 解決的是「怎麼拿到圖」，但光有圖還不夠。同一時期還有幾塊拼圖陸續到位。[AOTAutograd](https://github.com/pytorch/pytorch/tree/main/torch/_functorch) 由 Horace He 等人主導，它拿到 forward 圖之後把 backpropagation 也一起 Trace 出來，讓訓練也能被整張圖編譯，並且把 In-place 修改、View 這些麻煩的東西正規化成純函數式。[TorchInductor](https://github.com/pytorch/pytorch/tree/main/torch/_inductor) 由 Jason Ansel 主導，是預設的後端，把圖 Lower 成 Loop-level IR、做融合，然後生成 Triton（GPU）或 C++（CPU）程式碼；[Triton](https://github.com/triton-lang/triton) 是 OpenAI 的 Philippe Tillet 做的、用 Python 寫 GPU Kernel 的語言，讓「用 Python 生 GPU Kernel」這件事變得可行。還有 [PrimTorch](https://github.com/pytorch/pytorch/tree/main/torch/_prims)，把 PyTorch 兩千多個 Operator 拆解到幾百個基本 Operator，讓後端不用一一實作。
+Dynamo 解決的是「怎麼拿到圖」，但光有圖還不夠。同一時期還有幾塊拼圖陸續到位。[AOTAutograd](https://github.com/pytorch/pytorch/tree/main/torch/_functorch) 由 Horace He 等人主導，它拿到前向圖之後把反向傳播也一起 Trace 出來，讓訓練也能被整張圖編譯，並且把 In-place 修改、View 這些麻煩的東西正規化成純函數式。[TorchInductor](https://github.com/pytorch/pytorch/tree/main/torch/_inductor) 由 Jason Ansel 主導，是預設的後端，把圖 Lower 成 Loop-level IR、做融合，然後生成 Triton（GPU）或 C++（CPU）程式碼；[Triton](https://github.com/triton-lang/triton) 是 OpenAI 的 Philippe Tillet 做的、用 Python 寫 GPU Kernel 的語言，讓「用 Python 生 GPU Kernel」這件事變得可行。還有 [PrimTorch](https://github.com/pytorch/pytorch/tree/main/torch/_prims)，把 PyTorch 兩千多個 Operator 拆解到幾百個基本 Operator，讓後端不用一一實作。
 
 2022 年 12 月的 PyTorch Conference 上，這一整套以 PyTorch 2.0 的名義發表，2023 年 3 月[正式釋出](https://pytorch.org/blog/pytorch-2.0-release/)，對外的介面就是那一行 `torch.compile`。2024 年 ASPLOS 的論文 [*PyTorch 2: Faster Machine Learning Through Dynamic Python Bytecode Transformation and Graph Compilation*](https://pytorch.org/assets/pytorch2-2.pdf) 是這整套設計的正式論述，也是這個系列會反覆回頭看的一份文件。順帶一提，PyTorch 在 2022 年 9 月從 Meta 移交給 Linux Foundation 底下新成立的 [PyTorch Foundation](https://pytorch.org/blog/PyTorchfoundation/)，但核心開發至今仍以 Meta 的團隊為主。
 
 ## 把時間軸攤開
 
 | 年份 | 事件 | 對「圖」的態度 |
-|---|---|---|
+| --- | --- | --- |
 | 2017 | PyTorch 0.1 釋出 | 純 Eager，沒有圖 |
 | 2018 | PyTorch 1.0，TorchScript | 要使用者改寫成子集，才拿得到圖 |
 | 2019 | NeurIPS 論文 | 明文把易用性放第一 |
@@ -62,11 +62,13 @@ Dynamo 解決的是「怎麼拿到圖」，但光有圖還不夠。同一時期�
 
 如果把這條線縮成一句話：PyTorch 從頭到尾沒有放棄 Eager Mode，`torch.compile` 是在保留 Eager 語意的前提下，把圖偷偷抓出來的第三次嘗試，而前兩次的教訓決定了它的每一個設計。
 
-## 這 30 天會怎麼走
+## 結語
 
-接下來的內容大致分成四個部分。第一部分是 Dynamo，講它怎麼在 Bytecode 層攔截 Python、Guard 是什麼、為什麼會 Graph Break、吐出的 FX Graph 長什麼樣。第二部分是 AOTAutograd，講 backpropagation 怎麼被一起 Trace、In-place 怎麼被正規化、Operator 怎麼被拆成基本運算。第三部分是 Inductor，講圖怎麼變成 Loop、誰跟誰融合、以及怎麼讀它生出來的 Triton 和 C++。最後一部分是整合與實戰，包括 CUDA Graph、快取、Recompilation 爆炸，以及自己寫一個 Backend。
+回頭看這段歷史，其實可以濃縮成一個貫穿全系列的核心矛盾：易用性和完整計算圖，長期以來是二選一的。TorchScript 選了圖、犧牲了易用性，所以輸了；Lazy Tensor 選了透明，卻付出 Overhead 和 Flush 的代價。TorchDynamo 之所以是轉折點，不是因為它技術上多炫，而是它換了一個層級思考。在 Bytecode 層攔截，讓「抓不到圖」從致命錯誤降級成 Graph Break，最壞情況只是沒加速，而不是不能跑。
 
-明天會從使用者的視角出發，把 `torch.compile` 的四段 pipeline攤開：Dynamo、AOTAutograd、Inductor、Runtime 各做什麼，並用 `backend` 參數把它們一段一段切開來親手驗證。那我們明天見！
+理解這一點很重要，因為後面會看到的每一個設計，包括 Guard 為什麼存在、Graph Break 為什麼是 feature 而不是 bug、Recompilation 為什麼會爆炸，都是「保 Eager 語意、圖能抓多少算多少」這個哲學的直接後果。帶著這個視角讀原始碼，很多看起來奇怪的取捨就會變得理所當然。
+
+明天會從使用者的視角出發，把 `torch.compile` 的四段流水線攤開：Dynamo、AOTAutograd、Inductor、Runtime 各做什麼，並用 `backend` 參數把它們一段一段切開來親手驗證。那我們明天見！
 
 ## 參考資料
 
