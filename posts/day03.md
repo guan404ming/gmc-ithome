@@ -8,6 +8,10 @@
 
 正文開始！
 
+![CPython 執行一個 frame 的兩條路](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day03/eval_frame.gif)
+
+*圖一：CPython 執行一個 frame 的兩條路。預設走 `_PyEval_EvalFrameDefault` 一條一條跑 bytecode；`torch.compile` 把 `eval_frame` 指標換掉後，同一個 frame 改送進 Dynamo，錄成 FX Graph、記下 Guards、改寫 bytecode，再交回 CPython 執行。*
+
 ## CPython 平常怎麼跑一個函式
 
 Python 的每一次函式呼叫，CPython 都會建一個 frame。Frame 裝著這次呼叫的所有狀態：區域變數、value stack、目前執行到第幾條指令。函式的邏輯不是以原始碼的形式在跑，而是先被編譯成 bytecode 存在 code object 裡，CPython 再一條一條執行。
