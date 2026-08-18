@@ -55,7 +55,9 @@ def code_lines(lines, size=12, color=TXT, buff=0.085):
 
 
 def pill(name, zh):
-    t = VGroup(Dot(radius=0.06, color=ACCENT), T(name, font=SANS, font_size=18, weight=BOLD, color=BG), T("·", font=MONO, font_size=16, color="#666"), T(zh, font=CJK, font_size=16, color=BG)).arrange(RIGHT, buff=0.15)
+    zh_font = CJK if any("一" <= ch <= "鿿" for ch in zh) else MONO
+    body = T(f"{name}  ·  {zh}", font_size=17, font=SANS, color=BG, t2f={name: SANS, "·": MONO, zh: zh_font}, t2w={name: BOLD}, t2c={"·": "#666"})
+    t = VGroup(Dot(radius=0.06, color=ACCENT), body).arrange(RIGHT, buff=0.15)
     bg = RoundedRectangle(corner_radius=0.3, width=t.width + 0.6, height=0.6, stroke_width=0, fill_color="#eceae6", fill_opacity=1)
     return VGroup(bg, t.move_to(bg))
 

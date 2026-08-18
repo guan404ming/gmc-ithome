@@ -47,7 +47,9 @@ def titled(w, h, name, sub):
 
 
 def pill(name, zh):
-    t = VGroup(Dot(radius=0.06, color=ACCENT), T(name, font=SANS, font_size=18, weight=BOLD, color=BG), T("·", font=MONO, font_size=16, color="#666"), T(zh, font=CJK, font_size=16, color=BG)).arrange(RIGHT, buff=0.15)
+    zh_font = CJK if any("一" <= ch <= "鿿" for ch in zh) else MONO
+    body = T(f"{name}  ·  {zh}", font_size=17, font=SANS, color=BG, t2f={name: SANS, "·": MONO, zh: zh_font}, t2w={name: BOLD}, t2c={"·": "#666"})
+    t = VGroup(Dot(radius=0.06, color=ACCENT), body).arrange(RIGHT, buff=0.15)
     bg = RoundedRectangle(corner_radius=0.3, width=t.width + 0.6, height=0.6, stroke_width=0, fill_color="#eceae6", fill_opacity=1)
     return VGroup(bg, t.move_to(bg))
 
@@ -86,9 +88,9 @@ class Translator(Scene):
         # ---- layout ----
         TOP, BOT = 2.45, -2.75
         H = TOP - BOT
-        LX, LW = -4.75, 3.7
-        MX, MW = -0.85, 3.3
-        RX, RW = 3.7, 5.3
+        LX, LW = -4.575, 4.07
+        MX, MW = 0.0, 4.07
+        RX, RW = 4.575, 4.07
 
         bc_card = titled(LW, H, "BYTECODE", "dispatch_table 查表").move_to([LX, (TOP + BOT) / 2, 0])
         rows = VGroup(*[T(l, font=MONO, font_size=14, color=TXT) for l in BC]).arrange(DOWN, aligned_edge=LEFT, buff=0.3).next_to(bc_card[1], DOWN, buff=0.4).align_to(bc_card[1], LEFT)
@@ -111,12 +113,12 @@ class Translator(Scene):
 
         # graph nodes positions
         gx0 = fx_card[0].get_left()[0] + 0.35
-        n_x = node("L_x_  f32[8]").move_to([gx0 + 0.9, TOP - 0.95, 0])
-        n_y = node("L_y_  f32[8]").move_to([gx0 + 2.6, TOP - 0.95, 0])
-        n_mul = node("mul", w=1.2).move_to([gx0 + 1.75, TOP - 2.05, 0])
-        n_c1 = node("1", w=0.6).move_to([gx0 + 3.6, TOP - 2.05, 0])
-        n_add = node("add", w=1.2).move_to([gx0 + 2.65, TOP - 3.15, 0])
-        n_out = node("output", w=1.5).move_to([gx0 + 2.65, TOP - 4.25, 0])
+        n_x = node("L_x_  f32[8]").move_to([gx0 + 0.85, TOP - 0.95, 0])
+        n_y = node("L_y_  f32[8]").move_to([gx0 + 2.5, TOP - 0.95, 0])
+        n_mul = node("mul", w=1.2).move_to([gx0 + 1.65, TOP - 2.05, 0])
+        n_c1 = node("1", w=0.6).move_to([gx0 + 3.25, TOP - 2.05, 0])
+        n_add = node("add", w=1.2).move_to([gx0 + 2.45, TOP - 3.15, 0])
+        n_out = node("output", w=1.5).move_to([gx0 + 2.45, TOP - 4.25, 0])
 
         def edge(a, b):
             return Line(a.get_bottom(), b.get_top(), color=MUTED, stroke_width=1.5, buff=0.05)
