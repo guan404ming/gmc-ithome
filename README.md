@@ -12,7 +12,7 @@
 ### Part 1：TorchDynamo
 
 - Day 3 | Dynamo 憑什麼攔得住你的 Python？
-- Day 4 | 符號直譯器 InstructionTranslator：一條指令一個 Handler
+- Day 4 | 沒有真值，Dynamo 怎麼把 bytecode 走完？
 - Day 5 | VariableTracker 與 Source：Dynamo 眼中的每一個 Python 值
 - Day 6 | Guards：編譯結果什麼時候還能用
 - Day 7 | SideEffects：會改東西的 Python，怎麼過純函數的圖

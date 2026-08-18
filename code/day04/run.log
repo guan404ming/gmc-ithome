@@ -1,0 +1,79 @@
+✓ Initialized. View run at 
+https://modal.com/apps/guan404ming/main/ap-i2wyDHZAYTfkDZ6Z3EokoT
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/wesley/Documents/GitHub/gmc-ithome/code/day04/trace.py
+└── 🔨 Created function run.
+torch 2.8.0+cu128
+
+=== dis.dis(f) ===
+ 16           0 RESUME                   0
+
+ 17           2 LOAD_FAST                0 (x)
+              4 LOAD_FAST                1 (y)
+              6 BINARY_OP                5 (*)
+             10 STORE_FAST               2 (z)
+
+ 18          12 LOAD_FAST                2 (z)
+             14 LOAD_CONST               1 (1)
+             16 BINARY_OP                0 (+)
+             20 RETURN_VALUE
+
+=== dispatch_table ===
+entries: 256 | handlers: 129
+  LOAD_FAST          -> InstructionTranslatorBase.LOAD_FAST
+  STORE_FAST         -> InstructionTranslatorBase.STORE_FAST
+  LOAD_CONST         -> InstructionTranslatorBase.LOAD_CONST
+  BINARY_OP          -> InstructionTranslatorBase.BINARY_OP
+  CALL               -> InstructionTranslatorBase.CALL
+  RETURN_VALUE       -> InstructionTranslator.RETURN_VALUE
+  POP_JUMP_IF_FALSE  -> generic_jump.<locals>.inner
+
+=== TORCH_LOGS=trace_bytecode ===
+V0818 02:43:47.106000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE RESUME 0 []
+V0818 02:43:47.107000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_FAST x []
+V0818 02:43:47.107000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_FAST y [LazyVariableTracker()]
+V0818 02:43:47.108000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE BINARY_OP 5 [LazyVariableTracker(), LazyVariableTracker()]
+V0818 02:43:47.114000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE STORE_FAST z [TensorVariable()]
+V0818 02:43:47.114000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_FAST z []
+V0818 02:43:47.115000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_CONST 1 [TensorVariable()]
+V0818 02:43:47.115000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE BINARY_OP 0 [TensorVariable(), ConstantVariable(int: 1)]
+V0818 02:43:47.117000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE RETURN_VALUE None [TensorVariable()]
+V0818 02:43:47.119000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code] TRACED GRAPH
+V0818 02:43:47.119000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]  ===== __compiled_fn_1_a77ff6b1_a70b_4640_a89a_ab1be84ed108 =====
+V0818 02:43:47.119000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]  /usr/local/lib/python3.12/site-packages/torch/fx/_lazy_graph_module.py class GraphModule(torch.nn.Module):
+V0818 02:43:47.119000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]     def forward(self, L_x_: "f32[8][1]cuda:0", L_y_: "f32[8][1]cuda:0"):
+V0818 02:43:47.119000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         l_x_ = L_x_
+V0818 02:43:47.119000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         l_y_ = L_y_
+V0818 02:43:47.119000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0818 02:43:47.119000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]          # File: /root/trace.py:17 in f, code: z = x * y
+V0818 02:43:47.119000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         z: "f32[8][1]cuda:0" = l_x_ * l_y_;  l_x_ = l_y_ = None
+V0818 02:43:47.119000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0818 02:43:47.119000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]          # File: /root/trace.py:18 in f, code: return z + 1
+V0818 02:43:47.119000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         add: "f32[8][1]cuda:0" = z + 1;  z = None
+V0818 02:43:47.119000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         return (add,)
+V0818 02:43:47.119000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0818 02:43:47.119000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code] 
+
+=== python-only work is absorbed ===
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code] TRACED GRAPH
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]  ===== __compiled_fn_3_36f092d7_44aa_4db9_8ac8_a4caa6c92f3c =====
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]  /usr/local/lib/python3.12/site-packages/torch/fx/_lazy_graph_module.py class GraphModule(torch.nn.Module):
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]     def forward(self, L_x_: "f32[8][1]cuda:0"):
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]         l_x_ = L_x_
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]         
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]          # File: /root/trace.py:43 in g, code: parts.append(x * (scale + i))
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]         element: "f32[8][1]cuda:0" = l_x_ * 2
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]         element_1: "f32[8][1]cuda:0" = l_x_ * 3
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]         element_2: "f32[8][1]cuda:0" = l_x_ * 4;  l_x_ = None
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]         
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]          # File: /usr/local/lib/python3.12/site-packages/torch/_dynamo/polyfills/functools.py:45 in reduce, code: value = function(value, element)
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]         value: "f32[8][1]cuda:0" = 0 + element;  element = None
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]         value_1: "f32[8][1]cuda:0" = value + element_1;  value = element_1 = None
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]         value_2: "f32[8][1]cuda:0" = value_1 + element_2;  value_1 = element_2 = None
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]         return (value_2,)
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]         
+V0818 02:43:48.153000 7 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code] 
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/guan404ming/main/ap-i2wyDHZAYTfkDZ6Z3EokoT
