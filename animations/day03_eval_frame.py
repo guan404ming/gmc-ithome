@@ -126,13 +126,13 @@ class EvalFrame(Scene):
         switch("DYNAMO", "接手", "torch.compile 把 eval_frame 指標換成 Dynamo 的 evaluator，同一個 frame 改送進 Dynamo")
         self.play(colA.animate.set_opacity(0.45), FadeIn(hdrB), FadeIn(b1), FadeIn(valB), b1[0].animate.set_stroke(ACCENT, width=2.5).set_fill(ACTIVE_FILL), run_time=0.5)
         self.play(GrowArrow(ba12), FadeIn(b2), FadeIn(rowsB), run_time=0.4)
-        self.wait(1.0)
+        self.wait(1.5)
 
         switch("DYNAMO", "符號執行", "Dynamo 不真的算，拿符號值走過每一條 bytecode，把 Tensor 運算記下來")
         for r in rowsB:
             self.play(r.animate.set_color(ACCENT), run_time=0.1)
             self.play(r.animate.set_color(TXT), run_time=0.1)
-        self.wait(0.8)
+        self.wait(1.5)
 
         b3 = titled(COL_W, H3, "Dynamo", "產物").move_to([RX, Y3, 0])
         m1 = mini("FX GRAPH", ["sin = sin(x)", "add = sin + 1"], w=1.85)
@@ -144,7 +144,7 @@ class EvalFrame(Scene):
         for m, (n, z, c) in zip(minis, [("DYNAMO", "FX Graph", "走過的 Tensor 運算收成一張 FX Graph，交給後端編譯"), ("DYNAMO", "Guards", "同時記下這張圖成立的前提：輸入的 dtype、shape，torch.sin 還是同一個物件"), ("DYNAMO", "改寫 bytecode", "生成一份新的 bytecode：整段運算換成呼叫編好的函式")]):
             switch(n, z, c)
             self.play(FadeIn(m, shift=UP * 0.1), run_time=0.35)
-            self.wait(1.4)
+            self.wait(1.5)
 
         # ---- hand back ----
         switch("CPYTHON", "執行新 bytecode", "新的 code object 交回 CPython 執行；下次 Guard 通過就直接重用，Dynamo 不再介入")
