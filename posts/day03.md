@@ -10,7 +10,7 @@
 
 ![CPython 執行一個 frame 的兩條路](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day03/eval_frame.gif)
 
-*圖一：CPython 執行一個 frame 的兩條路。預設走 `_PyEval_EvalFrameDefault` 一條一條跑 bytecode；`torch.compile` 把 `eval_frame` 指標換掉後，同一個 frame 改送進 Dynamo，錄成 FX Graph、記下 Guards、改寫 bytecode，再交回 CPython 執行。*
+*圖一：同一個 frame 的兩種命運。左邊沒有 `torch.compile`，`eval_frame` 指向 `_PyEval_EvalFrameDefault`，bytecode 一條一條跑；右邊 `torch.compile` 把指標換成 Dynamo 的 evaluator，同一份 bytecode 被符號執行、收成 FX Graph、記下 Guards、生成新的 bytecode，再交回 CPython 執行。*
 
 ## CPython 平常怎麼跑一個函式
 
