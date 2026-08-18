@@ -2,8 +2,8 @@
 
 ## Part 0：全景
 
-- Day 1 | torch.compile 是怎麼長出來的？
-- Day 2 | 一行 torch.compile，四段 pipeline
+- [Day 1 | torch.compile 是怎麼長出來的？](https://ithelp.ithome.com.tw/articles/10403466)
+- [Day 2 | torch.compile 之後，你的 Python 去哪了？](https://ithelp.ithome.com.tw/articles/10403473)
 
 ## Part 1：TorchDynamo
 
