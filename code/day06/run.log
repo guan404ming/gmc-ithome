@@ -1,0 +1,140 @@
+✓ Initialized. View run at 
+https://modal.com/apps/guan404ming/main/ap-rnUEIiYtM3ciWMc4p0UPs8
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/wesley/Documents/GitHub/gmc-ithome/code/day06/guards.py
+└── 🔨 Created function run.
+torch 2.8.0+cu128
+
+=== 1. TORCH_LOGS=guards ===
+V0818 16:49:38.069000 7 site-packages/torch/_dynamo/guards.py:3064] [0/0] [__guards] GUARDS:
+V0818 16:49:38.070000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] 
+V0818 16:49:38.070000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] TREE_GUARD_MANAGER:
+V0818 16:49:38.070000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] +- RootGuardManager
+V0818 16:49:38.070000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- LAMBDA_GUARD: torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None  # _dynamo/output_graph.py:633 in init_ambient_guards
+V0818 16:49:38.070000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- DEFAULT_DEVICE: utils_device.CURRENT_DEVICE == None                           # _dynamo/output_graph.py:621 in init_ambient_guards
+V0818 16:49:38.070000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GLOBAL_STATE: ___check_global_state()
+V0818 16:49:38.070000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- TORCH_FUNCTION_MODE_STACK: ___check_torch_function_mode_stack()
+V0818 16:49:38.070000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GuardManager: source=L['n'], accessed_by=FrameLocalsGuardAccessor(key='n', framelocals_idx=1)
+V0818 16:49:38.070000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- EQUALS_MATCH: L['n'] == 3                                                   # return x * n * cfg_scale  # oot/guards.py:16 in f
+V0818 16:49:38.070000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GuardManager: source=L['x'], accessed_by=FrameLocalsGuardAccessor(key='x', framelocals_idx=0)
+V0818 16:49:38.070000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- TENSOR_MATCH: check_tensor(L['x'], Tensor, DispatchKeySet(CUDA, BackendSelect, ADInplaceOrView, AutogradCUDA), torch.float32, device=0, requires_grad=False, size=[4, 4], stride=[4, 1])  # return x * n * cfg_scale  # oot/guards.py:16 in f
+V0818 16:49:38.070000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- NO_HASATTR: hasattr(L['x'], '_dynamo_dynamic_indices') == False           # return x * n * cfg_scale  # oot/guards.py:16 in f
+V0818 16:49:38.070000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GuardManager: source=L['cfg_scale'], accessed_by=FrameLocalsGuardAccessor(key='cfg_scale', framelocals_idx=2)
+V0818 16:49:38.070000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- EQUALS_MATCH: L['cfg_scale'] == 2                                           # return x * n * cfg_scale  # oot/guards.py:16 in f
+V0818 16:49:38.070000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] 
+V0818 16:49:38.079000 7 site-packages/torch/_dynamo/guards.py:2894] [0/0] [__guards] Guard eval latency = 9.60 us
+
+=== 2. what fails, what does not ===
+V0818 16:49:38.088000 7 site-packages/torch/_dynamo/guards.py:3508] [0/1] [__recompiles] Recompiling function f in /root/guards.py:15
+V0818 16:49:38.088000 7 site-packages/torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     triggered by the following guard failure(s):
+V0818 16:49:38.088000 7 site-packages/torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     - 0/0: tensor 'x' size mismatch at index 0. expected 4, actual 8
+V0818 16:49:38.327000 7 site-packages/torch/_dynamo/guards.py:3508] [0/2] [__recompiles] Recompiling function f in /root/guards.py:15
+V0818 16:49:38.327000 7 site-packages/torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     triggered by the following guard failure(s):
+V0818 16:49:38.327000 7 site-packages/torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     - 0/1: n == 3                                                 
+V0818 16:49:38.327000 7 site-packages/torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     - 0/0: n == 3                                                   # return x * n * cfg_scale  # oot/guards.py:16 in f
+V0818 16:49:38.482000 7 site-packages/torch/_dynamo/guards.py:3508] [0/3] [__recompiles] Recompiling function f in /root/guards.py:15
+V0818 16:49:38.482000 7 site-packages/torch/_dynamo/guards.py:3508] [0/3] [__recompiles]     triggered by the following guard failure(s):
+V0818 16:49:38.482000 7 site-packages/torch/_dynamo/guards.py:3508] [0/3] [__recompiles]     - 0/2: tensor 'x' dtype mismatch. expected Float, actual Double
+V0818 16:49:38.482000 7 site-packages/torch/_dynamo/guards.py:3508] [0/3] [__recompiles]     - 0/1: tensor 'x' dtype mismatch. expected Float, actual Double
+V0818 16:49:38.482000 7 site-packages/torch/_dynamo/guards.py:3508] [0/3] [__recompiles]     - 0/0: tensor 'x' dtype mismatch. expected Float, actual Double
+V0818 16:49:38.621000 7 site-packages/torch/_dynamo/guards.py:3508] [0/4] [__recompiles] Recompiling function f in /root/guards.py:15
+V0818 16:49:38.621000 7 site-packages/torch/_dynamo/guards.py:3508] [0/4] [__recompiles]     triggered by the following guard failure(s):
+V0818 16:49:38.621000 7 site-packages/torch/_dynamo/guards.py:3508] [0/4] [__recompiles]     - 0/3: GLOBAL_STATE changed: grad_mode 
+V0818 16:49:38.621000 7 site-packages/torch/_dynamo/guards.py:3508] [0/4] [__recompiles]     - 0/2: GLOBAL_STATE changed: grad_mode 
+V0818 16:49:38.621000 7 site-packages/torch/_dynamo/guards.py:3508] [0/4] [__recompiles]     - 0/1: GLOBAL_STATE changed: grad_mode 
+V0818 16:49:38.621000 7 site-packages/torch/_dynamo/guards.py:3508] [0/4] [__recompiles]     - 0/0: GLOBAL_STATE changed: grad_mode 
+
+=== 3. cache entries on f.__code__ ===
+entries: 5
+  entry 0: 
+TREE_GUARD_MANAGER:
++- RootGuardManager
+| +- LAMBDA_GUARD: torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None  # _dynamo/output_graph.py:633 in init_ambient_guards
+| +- DEFAULT_DEVICE: utils_device.CURRENT_DEVICE == None                           # _dynamo/output_graph.py:621 in init_ambient_guards
+| +- GLOBAL_STATE: ___check_global_state()
+| +- TORCH_FUNCTION_MODE_STACK: ___check_torch_function_mode_stack()
+| +- GuardManager: source=L['n'], accessed_by=FrameLocalsGuardAccessor(key='n', framelocals_idx=1)
+| | +- TYPE_MATCH: ___check_type_id(L['n'], 23377805663968)                    
+| +- GuardManager: source=L['x'], accessed_by=FrameLocalsGuardAccessor(key='x', framelocals_idx=0)
+| | +- TENSOR_MATCH: check_tensor(L['x'], Tensor, DispatchKeySet(CUDA, BackendSelect, ADInplaceOrView, AutogradCUDA), torch.float32, device=0, requires_grad=False, size=[None, 4], stride=[4, 1])
+| | +- NO_HASATTR: hasattr(L['x'], '_dynamo_dynamic_indices') == False         
+| +- GuardManager: source=L['cfg_scale'], accessed_by=FrameLocalsGuardAccessor(key='cfg_scale', framelocals_idx=2)
+| | +- EQUALS_MATCH: L['cfg_scale'] == 2                                         
++- LAMBDA_GUARD: 2 <= L['x'].size()[0] <= 536870911  # return x * n * cfg_scale  # oot/guards.py:16 in f (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.mark_unbacked(tensor, dim)) and (_inductor/codecache.py:1310 in _lookup_graph)
+
+  entry 1: 
+TREE_GUARD_MANAGER:
++- RootGuardManager
+| +- LAMBDA_GUARD: torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None  # _dynamo/output_graph.py:633 in init_ambient_guards
+| +- DEFAULT_DEVICE: utils_device.CURRENT_DEVICE == None                           # _dynamo/output_graph.py:621 in init_ambient_guards
+| +- GLOBAL_STATE: ___check_global_state()
+| +- TORCH_FUNCTION_MODE_STACK: ___check_torch_function_mode_stack()
+| +- GuardManager: source=L['n'], accessed_by=FrameLocalsGuardAccessor(key='n', framelocals_idx=1)
+| | +- TYPE_MATCH: ___check_type_id(L['n'], 23377805663968)                    
+| +- GuardManager: source=L['x'], accessed_by=FrameLocalsGuardAccessor(key='x', framelocals_idx=0)
+| | +- TENSOR_MATCH: check_tensor(L['x'], Tensor, DispatchKeySet(CUDA, BackendSelect, ADInplaceOrView, AutogradCUDA), torch.float64, device=0, requires_grad=False, size=[None, 4], stride=[4, 1])
+| | +- NO_HASATTR: hasattr(L['x'], '_dynamo_dynamic_indices') == False         
+| +- GuardManager: source=L['cfg_scale'], accessed_by=FrameLocalsGuardAccessor(key='cfg_scale', framelocals_idx=2)
+| | +- EQUALS_MATCH: L['cfg_scale'] == 2                                         
++- LAMBDA_GUARD: 2 <= L['x'].size()[0] <= 536870911  # return x * n * cfg_scale  # oot/guards.py:16 in f (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.mark_unbacked(tensor, dim)) and (_inductor/codegen/simd.py:1400 in can_use_32bit_indexing)
+
+  entry 2: 
+TREE_GUARD_MANAGER:
++- RootGuardManager
+| +- LAMBDA_GUARD: torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None  # _dynamo/output_graph.py:633 in init_ambient_guards
+| +- DEFAULT_DEVICE: utils_device.CURRENT_DEVICE == None                           # _dynamo/output_graph.py:621 in init_ambient_guards
+| +- GLOBAL_STATE: ___check_global_state()
+| +- TORCH_FUNCTION_MODE_STACK: ___check_torch_function_mode_stack()
+| +- GuardManager: source=L['x'], accessed_by=FrameLocalsGuardAccessor(key='x', framelocals_idx=0)
+| | +- TENSOR_MATCH: check_tensor(L['x'], Tensor, DispatchKeySet(CUDA, BackendSelect, ADInplaceOrView, AutogradCUDA), torch.float32, device=0, requires_grad=False, size=[None, 4], stride=[4, 1])
+| | +- NO_HASATTR: hasattr(L['x'], '_dynamo_dynamic_indices') == False         
+| +- GuardManager: source=L['n'], accessed_by=FrameLocalsGuardAccessor(key='n', framelocals_idx=1)
+| | +- TYPE_MATCH: ___check_type_id(L['n'], 23377805663968)                    
+| +- GuardManager: source=L['cfg_scale'], accessed_by=FrameLocalsGuardAccessor(key='cfg_scale', framelocals_idx=2)
+| | +- EQUALS_MATCH: L['cfg_scale'] == 2                                         
++- LAMBDA_GUARD: 2 <= L['x'].size()[0] <= 536870911  # return x * n * cfg_scale  # oot/guards.py:16 in f (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.mark_unbacked(tensor, dim)) and (_inductor/codegen/simd.py:1400 in can_use_32bit_indexing)
+
+  entry 3: 
+TREE_GUARD_MANAGER:
++- RootGuardManager
+| +- LAMBDA_GUARD: torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None  # _dynamo/output_graph.py:633 in init_ambient_guards
+| +- DEFAULT_DEVICE: utils_device.CURRENT_DEVICE == None                           # _dynamo/output_graph.py:621 in init_ambient_guards
+| +- GLOBAL_STATE: ___check_global_state()
+| +- TORCH_FUNCTION_MODE_STACK: ___check_torch_function_mode_stack()
+| +- GuardManager: source=L['n'], accessed_by=FrameLocalsGuardAccessor(key='n', framelocals_idx=1)
+| | +- EQUALS_MATCH: L['n'] == 3                                                 
+| +- GuardManager: source=L['x'], accessed_by=FrameLocalsGuardAccessor(key='x', framelocals_idx=0)
+| | +- TENSOR_MATCH: check_tensor(L['x'], Tensor, DispatchKeySet(CUDA, BackendSelect, ADInplaceOrView, AutogradCUDA), torch.float32, device=0, requires_grad=False, size=[None, 4], stride=[4, 1])
+| | +- NO_HASATTR: hasattr(L['x'], '_dynamo_dynamic_indices') == False         
+| +- GuardManager: source=L['cfg_scale'], accessed_by=FrameLocalsGuardAccessor(key='cfg_scale', framelocals_idx=2)
+| | +- EQUALS_MATCH: L['cfg_scale'] == 2                                         
++- LAMBDA_GUARD: 2 <= L['x'].size()[0] <= 536870911  # return x * n * cfg_scale  # oot/guards.py:16 in f (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.mark_unbacked(tensor, dim)) and (_inductor/codegen/simd.py:1400 in can_use_32bit_indexing)
+
+  entry 4: 
+TREE_GUARD_MANAGER:
++- RootGuardManager
+| +- LAMBDA_GUARD: torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None  # _dynamo/output_graph.py:633 in init_ambient_guards
+| +- DEFAULT_DEVICE: utils_device.CURRENT_DEVICE == None                           # _dynamo/output_graph.py:621 in init_ambient_guards
+| +- GLOBAL_STATE: ___check_global_state()
+| +- TORCH_FUNCTION_MODE_STACK: ___check_torch_function_mode_stack()
+| +- GuardManager: source=L['x'], accessed_by=FrameLocalsGuardAccessor(key='x', framelocals_idx=0)
+| | +- TENSOR_MATCH: check_tensor(L['x'], Tensor, DispatchKeySet(CUDA, BackendSelect, ADInplaceOrView, AutogradCUDA), torch.float32, device=0, requires_grad=False, size=[4, 4], stride=[4, 1])  # return x * n * cfg_scale  # oot/guards.py:16 in f
+| | +- NO_HASATTR: hasattr(L['x'], '_dynamo_dynamic_indices') == False           # return x * n * cfg_scale  # oot/guards.py:16 in f
+| +- GuardManager: source=L['n'], accessed_by=FrameLocalsGuardAccessor(key='n', framelocals_idx=1)
+| | +- EQUALS_MATCH: L['n'] == 3                                                   # return x * n * cfg_scale  # oot/guards.py:16 in f
+| +- GuardManager: source=L['cfg_scale'], accessed_by=FrameLocalsGuardAccessor(key='cfg_scale', framelocals_idx=2)
+| | +- EQUALS_MATCH: L['cfg_scale'] == 2                                           # return x * n * cfg_scale  # oot/guards.py:16 in f
+
+
+=== 4. hit different entries without recompiling ===
+still 5 entries
+
+=== 5. recompile_limit ===
+recompile_limit = 8
+V0818 16:49:39.011000 7 site-packages/torch/_dynamo/guards.py:3508] [0/1] [__recompiles] Recompiling function h in /root/guards.py:55
+V0818 16:49:39.011000 7 site-packages/torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     triggered by the following guard failure(s):
+V0818 16:49:39.011000 7 site-packages/torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     - 0/0: n == 0                                                 
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/guan404ming/main/ap-rnUEIiYtM3ciWMc4p0UPs8
