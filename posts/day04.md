@@ -201,7 +201,7 @@ def forward(self, L_x_: "f32[8][1]cuda:0"):
 
 而 handler 做到一半發現只靠符號走不下去、主動舉手的那一刻，就是 Graph Break。
 
-今天一直把 stack 裡裝的東西叫「符號替身」，含糊帶過。明天就講它：`VariableTracker`。Dynamo 幫每一種 Python 值都準備了一種包法，Tensor、常數、list、函式、`nn.Module` 各有各的類別，各自決定「被呼叫時怎麼辦、被取屬性時怎麼辦」。理解了這套型別系統，你也會理解兩件事：為什麼呼叫自己寫的函式不會斷圖（它被 inline 進來了），以及 Python 的 int 是怎麼被「烘」進圖裡變成常數的。那我們明天見！
+今天一直把 stack 裡裝的東西叫「符號替身」，含糊帶過。明天就講它：`VariableTracker`。Dynamo 幫每一種 Python 值都準備了一種包法，Tensor、常數、list、函式、`nn.Module` 各有各的類別，各自決定「被呼叫時怎麼辦、被取屬性時怎麼辦」。理解了這套型別系統，你也會理解兩件事：為什麼呼叫自己寫的函式不會斷圖（它被 inline 進來了），以及 Python 的 int 是怎麼被 bake 進圖裡變成常數的。那我們明天見！
 
 ## 參考資料
 

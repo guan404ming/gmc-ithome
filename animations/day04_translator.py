@@ -171,7 +171,7 @@ class Translator(Scene):
         point(5); switch("STEP 6", "LOAD_CONST 1", "推一個常數替身 ConstantVariable(1)。Python 的 int 就這樣被帶著走")
         push("1  ConstantVariable(int)", color=MUTED); self.wait(HOLD)
         # 7 BINARY_OP +
-        point(6); switch("STEP 7", "BINARY_OP +", "Tensor 加常數：往圖上加 add 節點，常數直接烘進去")
+        point(6); switch("STEP 7", "BINARY_OP +", "Tensor 加常數：往圖上加 add 節點，常數直接 bake 進去")
         pop(0.2); pop(0.2)
         e3, e4 = edge(n_mul, n_add), edge(n_c1, n_add)
         self.play(FadeIn(n_c1), FadeIn(n_add), Create(e3), Create(e4), run_time=0.4)

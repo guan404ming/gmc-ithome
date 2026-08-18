@@ -1,16 +1,14 @@
-# Day 3 | Dynamo 憑什麼攔得住你的 Python？
+# Day 3 | TorchDynamo？它憑什麼攔得住你的 Python？
 
 ## 前言
 
-昨天畫完 `torch.compile` 的四站地圖，第一站是 Dynamo，我們說它會「在 Python 執行的當下攔截你的 bytecode」。這句話講得很輕鬆，但仔細想其實很奇怪：一個第三方套件，憑什麼能插進 CPython 的執行過程，在你的函式要跑之前先接手？它不是 monkey patch，也沒有改你的原始碼，那它到底站在哪裡？
+昨天帶大家走完了 `torch.compile` 的四大站，對整個編譯的骨架有了基本的認知。其中第一站就是 Dynamo，我們說它會「在 Python 執行的當下攔截你的 bytecode」。這句話講得很輕鬆，但仔細想其實很奇怪：一個第三方套件，憑什麼能插進 CPython 的執行過程，而且還在你的函式要跑之前先接手、再改寫一波，最後丟給 CPython 完全不同的東西去執行？它不是 monkey patch，也沒有改你的原始碼，那它到底怎麼辦到的？以及他中間到底做了什麼奇怪的手腳？
 
-今天就來回答這個問題。答案是 CPython 官方留的一個洞：PEP 523 的 frame evaluation API。搞懂這個洞，你就會知道 Dynamo 為什麼能吃下幾乎任何 Python、為什麼選擇讀最底層的 bytecode，以及為什麼它總在某些地方不得不斷開。
+今天就來回答這個問題。答案其實源自於 CPython 官方留的一個洞：PEP 523 的 frame evaluation API。搞懂這個洞，你就會知道 Dynamo 為什麼能吃下幾乎任何 Python、為什麼選擇讀最底層的 bytecode，以及為什麼它總在某些地方不得不斷開。正文開始！
 
-正文開始！
+![function、code object、frame、globals 的關係](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day03/frame_code_object.png)
 
-![CPython 執行一個 frame 的兩條路](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day03/eval_frame.gif)
-
-*圖一：同一個 frame 的兩種命運。左邊沒有 `torch.compile`，`eval_frame` 指向 `_PyEval_EvalFrameDefault`，bytecode 一條一條跑；右邊 `torch.compile` 把指標換成 Dynamo 的 evaluator，同一份 bytecode 被符號執行、收成 FX Graph、記下 Guards、生成新的 bytecode，再交回 CPython 執行。*
+*圖一：呼叫 `f(x)` 那一刻 CPython 手上的東西。function 物件指向 code object 和 globals；code object 是靜態的，裝著 bytecode、常數、變數名；frame 是動態的，每次呼叫新建一個，裝著這一次的區域變數、value stack、執行到第幾條，並指回 code object 和 globals。*
 
 ## CPython 平常怎麼跑一個函式
 
@@ -59,31 +57,37 @@ dis.dis(f)
 
 ## Dynamo 接手之後做什麼
 
+![CPython 執行一個 frame 的兩條路](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day03/eval_frame.gif)
+
+*圖二：同一個 frame 的兩種命運。左邊沒有 `torch.compile`，`eval_frame` 指向 `_PyEval_EvalFrameDefault`，bytecode 一條一條跑；右邊 `torch.compile` 把指標換成 Dynamo 的 evaluator，同一份 bytecode 被符號執行、收成 FX Graph、記下 Guards、生成新的 bytecode，再交回 CPython 執行。*
+
 當你 `torch.compile(f)` 之後第一次呼叫，`f` 的 frame 送到 Dynamo 的自訂 evaluator。它先做一次快篩：這個 frame 有沒有可能含 Tensor 運算？如果是 Python 內建、標準函式庫、或者明確被標成 skip 的模組，直接原樣交回 `_PyEval_EvalFrameDefault`，不浪費時間。過了快篩的 frame 才會走完整的流程，大致是這幾步：
 
 1. **拿到 code object 和 bytecode**，順便把這次呼叫的區域變數、全域變數、closure 都收進來，因為接下來要「假裝執行」，得知道每個名字對到什麼。
 2. **符號式地執行 bytecode**。這是 Dynamo 的本體：它自己實作了一個 Python 層的 bytecode 直譯器，一條指令一個 handler，維護一個跟 CPython 一樣的 value stack。差別在 stack 上放的不是真值，而是符號值：Tensor 用 FakeTensor 代替，只有 shape、dtype、device，沒有資料；Python 物件則被包成各種 `VariableTracker`，記著「這個值從哪裡來」（一個區域變數、一個屬性、一個 list 的第幾個元素）。走過每一條指令時，碰到 Tensor 運算就在 FX Graph 上加一個節點，碰到純 Python 的東西（算個 int、拼個 tuple）就直接在符號層算掉。
 3. **記下成立的前提，也就是 Guard**。符號執行過程中每做一個假設，就寫一條 Guard：`x` 是 f32、shape 是 `[8]`、`torch.sin` 還是同一個函式物件、某個 Python 常數的值沒變。這張圖只在這些條件全部成立時才是對的。
-4. **處理副作用**。Python 函式常會改東西：對 list `append`、對物件設屬性、寫全域變數。這些不能塞進純函數式的圖，Dynamo 會把它們先記在一本帳（`SideEffects`）上，等圖跑完再用 Python 補做。
+4. **處理 side effect**。Python 函式常會改東西：對 list `append`、對物件設屬性、寫全域變數。這些不能塞進純函數式的圖，Dynamo 會把它們先記在一本帳（`SideEffects`）上，等圖跑完再用 Python 補做。
 5. **把散落的產出收成一張 FX Graph**（`OutputGraph`），交給後端編譯，拿回一個可以呼叫的函式。
-6. **生成新的 bytecode**（`PyCodegen`）：原本那段運算換成「載入編譯產物、把該傳的參數推上 stack、呼叫、把回傳值拆開放回原本的變數」，再接上第 4 步的副作用補做。
+6. **生成新的 bytecode**（`PyCodegen`）：原本那段運算換成「載入編譯產物、把該傳的參數推上 stack、呼叫、把回傳值拆開放回原本的變數」，再接上第 4 步的 side effect 補做。
 7. **把新 bytecode 和 Guard 一起快取在 code object 上**。下次同一個函式進來，先跑一遍 Guard 檢查，全過就直接執行改寫過的 bytecode，Dynamo 完全不介入；有一條不過就重新來一次，也就是 Recompile。
 
 如果第 2 步走到一半碰到符號執行走不下去的指令（後面會看到），Dynamo 不會整個放棄，而是在那裡切一刀：前半段照上面的流程收成一張圖並編譯，斷點處交還 CPython 用真值執行，之後再從下一條指令開始新的一輪。這就是 Graph Break。
 
 上面每一步在 `torch/_dynamo/` 裡都對到一個具體的元件，接下來 Dynamo 這幾篇就是沿著這張表一格一格拆：
 
-| 步驟 | 元件 | 原始碼位置 |
-|---|---|---|
-| 攔下 frame，決定要不要處理 | eval_frame hook、`convert_frame` | `torch/csrc/dynamo/eval_frame.c`、`convert_frame.py` |
-| 符號執行 bytecode | `InstructionTranslator` | `symbolic_convert.py` |
-| 追蹤每一個 Python 值與來源 | `VariableTracker`、`Source` | `variables/`、`source.py` |
-| 記下成立的前提 | `Guard`、`GuardBuilder` | `guards.py` |
-| 記帳、補做副作用 | `SideEffects` | `side_effects.py` |
-| 收成一張圖並送去編譯 | `OutputGraph` | `output_graph.py` |
-| 生成新的 bytecode | `PyCodegen` | `codegen.py`、`bytecode_transformation.py` |
-| 走不下去就斷開、再接回來 | Graph Break、resume function | `resume_execution.py` |
-| 形狀不固定時怎麼辦 | Symbolic Shapes | `torch/fx/experimental/symbolic_shapes.py` |
+
+| 步驟                | 元件                              | 原始碼位置                                               |
+| ----------------- | ------------------------------- | --------------------------------------------------- |
+| 攔下 frame，決定要不要處理  | eval_frame hook、`convert_frame` | `torch/csrc/dynamo/eval_frame.c`、`convert_frame.py` |
+| 符號執行 bytecode     | `InstructionTranslator`         | `symbolic_convert.py`                               |
+| 追蹤每一個 Python 值與來源 | `VariableTracker`、`Source`      | `variables/`、`source.py`                            |
+| 記下成立的前提           | `Guard`、`GuardBuilder`          | `guards.py`                                         |
+| 記帳、補做 side effect          | `SideEffects`                   | `side_effects.py`                                   |
+| 收成一張圖並送去編譯        | `OutputGraph`                   | `output_graph.py`                                   |
+| 生成新的 bytecode     | `PyCodegen`                     | `codegen.py`、`bytecode_transformation.py`           |
+| 走不下去就斷開、再接回來      | Graph Break、resume function     | `resume_execution.py`                               |
+| 形狀不固定時怎麼辦         | Symbolic Shapes                 | `torch/fx/experimental/symbolic_shapes.py`          |
+
 
 所以 Dynamo 的「即時」不是它跑在旁邊監看，而是它就站在 CPython 執行每個 frame 的必經之路上，而且只在第一次真的動手，之後靠 Guard 決定要不要再動。
 
@@ -148,7 +152,7 @@ Graph Break Reason: Data-dependent branching
 
 `dynamo.explain(g)(x)` 的摘要則是 `Graph Count: 2`、`Graph Break Count: 1`：`if` 之前能捕獲的部分收成第一張圖，控制權交還 CPython 去真的跑那個 `if`，等分支確定後再從後面接著捕獲第二張圖。最後那行 debug context 很有意思，`attempted to jump with TensorVariable()`，它說的是 Dynamo 的符號直譯器走到一條跳躍指令（`POP_JUMP_IF_FALSE`），發現 stack 頂端是一個 Tensor 而不是能判斷真假的常數，於是放棄。這正好是明天的主題。
 
-同樣會逼它斷開的還有：呼叫進到它沒有符號模型的 C 函式、`.item()` 這種要把 Tensor 值抽成 Python 純量的操作、`print` 這類有副作用的東西。Frame eval hook 給了 Dynamo「看到一切」的能力，但「一切都能符號化」是另一回事，這條界線就是 Dynamo 這幾篇的主軸。
+同樣會逼它斷開的還有：呼叫進到它沒有符號模型的 C 函式、`.item()` 這種要把 Tensor 值抽成 Python 純量的操作、`print` 這類有 side effect 的東西。Frame eval hook 給了 Dynamo「看到一切」的能力，但「一切都能符號化」是另一回事，這條界線就是 Dynamo 這幾篇的主軸。
 
 ## 結語
 
@@ -168,3 +172,4 @@ Dynamo 的攔截點在 frame，不在函式。PEP 523 在 CPython 的 interprete
 - [torch/_dynamo/eval_frame.py](https://github.com/pytorch/pytorch/blob/main/torch/_dynamo/eval_frame.py)
 - [Dynamo Deep-Dive（PyTorch 官方文件）](https://pytorch.org/docs/stable/torch.compiler_dynamo_deepdive.html)
 - [torch.compile 的 logging 選項](https://pytorch.org/docs/stable/logging.html)
+
