@@ -1,0 +1,95 @@
+✓ Initialized. View run at 
+https://modal.com/apps/guan404ming/main/ap-DAWdg4rzkevI1gbf5rMMGy
+✓ Created objects.
+├── 🔨 Created mount /Users/wesley/Documents/GitHub/gmc-ithome/code/day05/vt.py
+└── 🔨 Created function run.
+torch 2.8.0+cu128
+
+=== 1. trace_bytecode: what is on the stack ===
+V0818 10:42:56.969000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE COPY_FREE_VARS 1 []
+V0818 10:42:56.969000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE RESUME 0 []
+V0818 10:42:56.969000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE PUSH_NULL None []
+V0818 10:42:56.969000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_DEREF helper [NullVariable]
+V0818 10:42:56.970000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_FAST x [NullVariable, LazyVariableTracker()]
+V0818 10:42:56.970000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE CALL 1 [NullVariable, LazyVariableTracker(), LazyVariableTracker()]
+V0818 10:42:56.974000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE RESUME 0 []
+V0818 10:42:56.974000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_FAST t []
+V0818 10:42:56.975000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_CONST 3 [TensorVariable()]
+V0818 10:42:56.975000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE BINARY_OP 5 [TensorVariable(), ConstantVariable(int: 3)]
+V0818 10:42:56.977000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE RETURN_VALUE None [TensorVariable()]
+V0818 10:42:56.978000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE STORE_FAST y [TensorVariable()]
+V0818 10:42:56.978000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_FAST y []
+V0818 10:42:56.978000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_FAST n [TensorVariable()]
+V0818 10:42:56.978000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE BINARY_OP 5 [TensorVariable(), LazyVariableTracker()]
+V0818 10:42:56.979000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_FAST items [TensorVariable()]
+V0818 10:42:56.979000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_CONST 0 [TensorVariable(), LazyVariableTracker()]
+V0818 10:42:56.980000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE BINARY_SUBSCR None [TensorVariable(), LazyVariableTracker(), ConstantVariable(int: 0)]
+V0818 10:42:56.980000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE BINARY_OP 0 [TensorVariable(), LazyVariableTracker()]
+V0818 10:42:56.982000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_FAST cfg [TensorVariable()]
+V0818 10:42:56.982000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_ATTR scale [TensorVariable(), LazyVariableTracker()]
+V0818 10:42:56.982000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE BINARY_OP 0 [TensorVariable(), LazyVariableTracker()]
+V0818 10:42:56.984000 7 site-packages/torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE RETURN_VALUE None [TensorVariable()]
+
+=== 2. graph_code: ints baked, helper inlined ===
+V0818 10:42:57.878000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code] TRACED GRAPH
+V0818 10:42:57.878000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]  ===== __compiled_fn_3_9c4f864e_3524_476a_8898_84b438ad8d88 =====
+V0818 10:42:57.878000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]  /usr/local/lib/python3.12/site-packages/torch/fx/_lazy_graph_module.py class GraphModule(torch.nn.Module):
+V0818 10:42:57.878000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]     def forward(self, L_x_: "f32[8][1]cuda:0"):
+V0818 10:42:57.878000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         l_x_ = L_x_
+V0818 10:42:57.878000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0818 10:42:57.878000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]          # File: /root/vt.py:21 in helper, code: return t * 3
+V0818 10:42:57.878000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         y: "f32[8][1]cuda:0" = l_x_ * 3;  l_x_ = None
+V0818 10:42:57.878000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0818 10:42:57.878000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]          # File: /root/vt.py:25 in f, code: return y * n + items[0] + cfg.scale
+V0818 10:42:57.878000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         mul_1: "f32[8][1]cuda:0" = y * 3;  y = None
+V0818 10:42:57.878000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         add: "f32[8][1]cuda:0" = mul_1 + 1;  mul_1 = None
+V0818 10:42:57.878000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         add_1: "f32[8][1]cuda:0" = add + 2;  add = None
+V0818 10:42:57.878000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         return (add_1,)
+V0818 10:42:57.878000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0818 10:42:57.878000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code] 
+
+=== 3. guards: Source names ===
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:3064] [0/0] [__guards] GUARDS:
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] 
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] TREE_GUARD_MANAGER:
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] +- RootGuardManager
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- LAMBDA_GUARD: torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None  # _dynamo/output_graph.py:633 in init_ambient_guards
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- DEFAULT_DEVICE: utils_device.CURRENT_DEVICE == None                           # _dynamo/output_graph.py:621 in init_ambient_guards
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GLOBAL_STATE: ___check_global_state()
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- TORCH_FUNCTION_MODE_STACK: ___check_torch_function_mode_stack()
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GuardManager: source=L['n'], accessed_by=FrameLocalsGuardAccessor(key='n', framelocals_idx=1)
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- EQUALS_MATCH: L['n'] == 3                                                   # return y * n + items[0] + cfg.scale  # oot/vt.py:25 in f
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GuardManager: source=L['x'], accessed_by=FrameLocalsGuardAccessor(key='x', framelocals_idx=0)
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- TENSOR_MATCH: check_tensor(L['x'], Tensor, DispatchKeySet(CUDA, BackendSelect, ADInplaceOrView, AutogradCUDA), torch.float32, device=0, requires_grad=False, size=[8], stride=[1])  # y = helper(x)  # oot/vt.py:24 in f
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- NO_HASATTR: hasattr(L['x'], '_dynamo_dynamic_indices') == False           # y = helper(x)  # oot/vt.py:24 in f
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GuardManager: source=L['cfg'], accessed_by=FrameLocalsGuardAccessor(key='cfg', framelocals_idx=3)
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- TYPE_MATCH: ___check_type_id(L['cfg'], 94810117705760)                    # return y * n + items[0] + cfg.scale  # oot/vt.py:25 in f
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- GuardManager: source=L['cfg'].scale, accessed_by=GetAttrGuardAccessor(scale)
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | | +- EQUALS_MATCH: L['cfg'].scale == 2                                           # return y * n + items[0] + cfg.scale  # oot/vt.py:25 in f
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GuardManager: source=L['items'], accessed_by=FrameLocalsGuardAccessor(key='items', framelocals_idx=2)
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- TYPE_MATCH: ___check_type_id(L['items'], 22635973059264)                  # return y * n + items[0] + cfg.scale  # oot/vt.py:25 in f
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- LENGTH_CHECK: len(L['items']) == 2                                          # return y * n + items[0] + cfg.scale  # oot/vt.py:25 in f
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- GuardManager: source=L['items'][0], accessed_by=ListGetItemGuardAccessor(0)
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | | +- EQUALS_MATCH: L['items'][0] == 1                                            # return y * n + items[0] + cfg.scale  # oot/vt.py:25 in f
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GuardManager: source=L['helper'], accessed_by=FrameLocalsGuardAccessor(key='helper', framelocals_idx=5)
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- GuardManager: source=L['helper'].__code__, accessed_by=GetAttrGuardAccessor(__code__)
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | | +- ID_MATCH: ___check_obj_id(L['helper'].__code__, 22635932715296)         # y = helper(x)  # oot/vt.py:24 in f
+V0818 10:42:57.916000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] 
+V0818 10:42:57.923000 7 site-packages/torch/_dynamo/guards.py:2894] [0/0] [__guards] Guard eval latency = 10.19 us
+
+=== 4. recompile when a baked constant changes ===
+V0818 10:42:57.950000 7 site-packages/torch/_dynamo/guards.py:3508] [0/1] [__recompiles] Recompiling function f in /root/vt.py:23
+V0818 10:42:57.950000 7 site-packages/torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     triggered by the following guard failure(s):
+V0818 10:42:57.950000 7 site-packages/torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     - 0/0: n == 3                                                 
+V0818 10:42:58.074000 7 site-packages/torch/_dynamo/guards.py:3508] [0/2] [__recompiles] Recompiling function f in /root/vt.py:23
+V0818 10:42:58.074000 7 site-packages/torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     triggered by the following guard failure(s):
+V0818 10:42:58.074000 7 site-packages/torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     - 0/1: cfg.scale == 2                                         
+V0818 10:42:58.074000 7 site-packages/torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     - 0/0: n == 3                                                 
+Stopping app - local entrypoint completed.
+
+=== 5. Source objects ===
+LocalSource    name() = L['x']
+AttrSource     name() = G['cfg'].scale
+GetItemSource  name() = L['items'][0]
+✓ App completed. View run at 
+https://modal.com/apps/guan404ming/main/ap-DAWdg4rzkevI1gbf5rMMGy
