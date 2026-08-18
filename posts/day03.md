@@ -59,15 +59,33 @@ dis.dis(f)
 
 ## Dynamo 接手之後做什麼
 
-當你 `torch.compile(f)` 之後第一次呼叫，`f` 的 frame 送到 Dynamo 的自訂 evaluator，它做的大致是：
+當你 `torch.compile(f)` 之後第一次呼叫，`f` 的 frame 送到 Dynamo 的自訂 evaluator。它先做一次快篩：這個 frame 有沒有可能含 Tensor 運算？如果是 Python 內建、標準函式庫、或者明確被標成 skip 的模組，直接原樣交回 `_PyEval_EvalFrameDefault`，不浪費時間。過了快篩的 frame 才會走完整的流程，大致是這幾步：
 
-1. 拿到這個 frame 的 code object 和 bytecode。
-2. 符號式地執行 bytecode：不是真的算數字，而是拿 FakeTensor 之類的符號值走過每一條指令，把「這裡做了一個 `sin`、那裡做了一個 `add`」記錄成一張 FX Graph。
-3. 同時記下這次能成立的前提，也就是 Guard，例如 `x` 是某個 dtype、某個 shape。
-4. 把這張圖交給後端編譯，然後改寫這個 frame 的 bytecode：把原本那段運算換成「呼叫編譯好的產物」。
-5. 把結果快取在 code object 上，key 是 Guard。下次同一個函式再進來，Guard 過就直接用改寫過的 bytecode，不用重跑 Dynamo。
+1. **拿到 code object 和 bytecode**，順便把這次呼叫的區域變數、全域變數、closure 都收進來，因為接下來要「假裝執行」，得知道每個名字對到什麼。
+2. **符號式地執行 bytecode**。這是 Dynamo 的本體：它自己實作了一個 Python 層的 bytecode 直譯器，一條指令一個 handler，維護一個跟 CPython 一樣的 value stack。差別在 stack 上放的不是真值，而是符號值：Tensor 用 FakeTensor 代替，只有 shape、dtype、device，沒有資料；Python 物件則被包成各種 `VariableTracker`，記著「這個值從哪裡來」（一個區域變數、一個屬性、一個 list 的第幾個元素）。走過每一條指令時，碰到 Tensor 運算就在 FX Graph 上加一個節點，碰到純 Python 的東西（算個 int、拼個 tuple）就直接在符號層算掉。
+3. **記下成立的前提，也就是 Guard**。符號執行過程中每做一個假設，就寫一條 Guard：`x` 是 f32、shape 是 `[8]`、`torch.sin` 還是同一個函式物件、某個 Python 常數的值沒變。這張圖只在這些條件全部成立時才是對的。
+4. **處理副作用**。Python 函式常會改東西：對 list `append`、對物件設屬性、寫全域變數。這些不能塞進純函數式的圖，Dynamo 會把它們先記在一本帳（`SideEffects`）上，等圖跑完再用 Python 補做。
+5. **把散落的產出收成一張 FX Graph**（`OutputGraph`），交給後端編譯，拿回一個可以呼叫的函式。
+6. **生成新的 bytecode**（`PyCodegen`）：原本那段運算換成「載入編譯產物、把該傳的參數推上 stack、呼叫、把回傳值拆開放回原本的變數」，再接上第 4 步的副作用補做。
+7. **把新 bytecode 和 Guard 一起快取在 code object 上**。下次同一個函式進來，先跑一遍 Guard 檢查，全過就直接執行改寫過的 bytecode，Dynamo 完全不介入；有一條不過就重新來一次，也就是 Recompile。
 
-所以 Dynamo 的「即時」不是它跑在旁邊監看，而是它就站在 CPython 執行每個 frame 的必經之路上。
+如果第 2 步走到一半碰到符號執行走不下去的指令（後面會看到），Dynamo 不會整個放棄，而是在那裡切一刀：前半段照上面的流程收成一張圖並編譯，斷點處交還 CPython 用真值執行，之後再從下一條指令開始新的一輪。這就是 Graph Break。
+
+上面每一步在 `torch/_dynamo/` 裡都對到一個具體的元件，接下來 Dynamo 這幾篇就是沿著這張表一格一格拆：
+
+| 步驟 | 元件 | 原始碼位置 |
+|---|---|---|
+| 攔下 frame，決定要不要處理 | eval_frame hook、`convert_frame` | `torch/csrc/dynamo/eval_frame.c`、`convert_frame.py` |
+| 符號執行 bytecode | `InstructionTranslator` | `symbolic_convert.py` |
+| 追蹤每一個 Python 值與來源 | `VariableTracker`、`Source` | `variables/`、`source.py` |
+| 記下成立的前提 | `Guard`、`GuardBuilder` | `guards.py` |
+| 記帳、補做副作用 | `SideEffects` | `side_effects.py` |
+| 收成一張圖並送去編譯 | `OutputGraph` | `output_graph.py` |
+| 生成新的 bytecode | `PyCodegen` | `codegen.py`、`bytecode_transformation.py` |
+| 走不下去就斷開、再接回來 | Graph Break、resume function | `resume_execution.py` |
+| 形狀不固定時怎麼辦 | Symbolic Shapes | `torch/fx/experimental/symbolic_shapes.py` |
+
+所以 Dynamo 的「即時」不是它跑在旁邊監看，而是它就站在 CPython 執行每個 frame 的必經之路上，而且只在第一次真的動手，之後靠 Guard 決定要不要再動。
 
 ## 親眼看它改寫 bytecode
 
