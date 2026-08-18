@@ -4,12 +4,12 @@
 
 ## 30 天目錄
 
-## Part 0：全景
+### Part 0：全景
 
 - [Day 1 | torch.compile 是怎麼長出來的？](https://ithelp.ithome.com.tw/articles/10403466)
 - [Day 2 | torch.compile 之後，你的 Python 去哪了？](https://ithelp.ithome.com.tw/articles/10403473)
 
-## Part 1：TorchDynamo
+### Part 1：TorchDynamo
 
 - Day 3 | Dynamo 憑什麼攔得住你的 Python？
 - Day 4 | 符號直譯器 InstructionTranslator：一條指令一個 Handler
@@ -21,7 +21,7 @@
 - Day 10 | Graph Break 全機制：斷在哪裡，怎麼接回來
 - Day 11 | Symbolic Shapes：讓一張圖吃下所有 batch size
 
-## Part 2：AOTAutograd
+### Part 2：AOTAutograd
 
 - Day 12 | AOTAutograd 總覽：為什麼 backpropagation 也要 Ahead-of-Time
 - Day 13 | Functionalization：In-place 與 View 怎麼被改寫成純函數
@@ -30,7 +30,7 @@
 - Day 16 | Min-cut Recomputation：重算還是存下來
 - Day 17 | FakeTensor 與 Meta Device：不算數值也能 Trace
 
-## Part 3：TorchInductor
+### Part 3：TorchInductor
 
 - Day 18 | Inductor 總覽：從 FX Graph 到 Kernel 的路
 - Day 19 | Lowering 與 Loop-level IR：圖怎麼變成迴圈
@@ -41,7 +41,7 @@
 - Day 24 | Autotune 與 max-autotune：讓機器自己挑 Kernel
 - Day 25 | 快取：編譯結果存在哪裡，什麼時候失效
 
-## Part 4：整合與實戰
+### Part 4：整合與實戰
 
 - Day 26 | CUDA Graph 與 reduce-overhead：壓掉 Kernel 啟動開銷
 - Day 27 | Recompilation 爆炸：怎麼發生，怎麼診斷，怎麼修
