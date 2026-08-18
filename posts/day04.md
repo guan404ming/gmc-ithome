@@ -43,6 +43,8 @@ Python 3.12 下 `dis.dis(f)` 印出來是：
 
 `LOAD_FAST x` 把區域變數 `x` 推上 stack；`BINARY_OP 5 (*)` 彈出兩個值、相乘、把結果推回去；`STORE_FAST z` 彈出頂端存進區域變數 `z`。八條指令，一台機器，一個 stack，一張區域變數表。
 
+一個小提醒：bytecode 是跟著 Python 版本走的。3.10 以前乘法是 `BINARY_MULTIPLY`、加法是 `BINARY_ADD`，3.11 把它們合併成一條帶參數的 `BINARY_OP`；函式呼叫在 3.11 之後也從 `CALL_FUNCTION` 變成 `PUSH_NULL` 加 `CALL`。這代表 Dynamo 得對每一個支援的 Python 版本維護一套對應，也是為什麼新版 Python 剛出時 `torch.compile` 常常要等幾個月才跟上。
+
 ## InstructionTranslator：同一台機器，換成符號跑
 
 `InstructionTranslator` 把這台機器原樣搬過來，換掉兩個核心零件：
@@ -110,6 +112,8 @@ BINARY_ADD = stack_op(operator.add)
 ```
 
 彈出 n 個運算元，交給一個包著 `operator.mul` 的 `BuiltinVariable` 去「呼叫」，把結果推回去。3.11 之後的 `BINARY_OP` 只是多一層查表，依 `inst.arg` 轉到對應的 `stack_op`。至於「呼叫」在符號世界裡代表什麼，就是關鍵所在：如果兩個運算元都是 Tensor 的替身，`BuiltinVariable` 不會真的算，而是往 FX Graph 加一個 `mul` 節點，然後推回一個代表結果的新替身；如果兩個都是 Python 常數，它就直接算掉，推回一個常數替身。
+
+順帶一提，`symbolic_convert.py` 裡其實有一個基底和兩個子類別。`InstructionTranslatorBase` 放所有 handler 和主迴圈；`InstructionTranslator` 是最外層那個 frame 用的，多了「翻譯結束要收圖、生成新 bytecode」的收尾邏輯；`InliningInstructionTranslator` 則是碰到呼叫你自己寫的函式時，開來鑽進被呼叫函式 bytecode 的那一台，翻完把回傳值接回上一層的 stack。同一套 handler、同一張 `dispatch_table`，只是誰負責收尾不一樣。這也是為什麼呼叫自己的函式不會斷圖，明天講 `VariableTracker` 時會再看到它。
 
 ## 逐條走一遍
 
@@ -190,6 +194,13 @@ def forward(self, L_x_: "f32[8][1]cuda:0"):
 ## Handler 舉手的地方，就是 Graph Break
 
 這個設計也直接解釋了 Graph Break 從哪來。昨天看到的那條訊息，`attempted to jump with TensorVariable()`，現在可以讀懂了：`POP_JUMP_IF_FALSE` 對到的 handler 是 `generic_jump` 生出來的，它彈出 stack 頂端，看是什麼。是常數就直接決定跳不跳；是 Tensor 替身，它沒辦法只靠符號知道真假，於是呼叫 `unimplemented_v2()` 舉手，觸發 Graph Break。
+
+值得看一下 `generic_jump` 裡面那串判斷，因為它把「什麼能走、什麼不能走」寫得很白：
+
+- stack 頂端是 Python 常數（`is_python_constant()`）：直接 `bool()` 它，決定跳或不跳，翻譯繼續。這就是 `if n > 0` 這種純 Python 條件在翻譯期就地選邊的原因。
+- 是 `TensorVariable`：呼叫 `jump_graph_break`，斷開。
+- 是 `NNModuleVariable` 或 list、dict 這類容器：問它「你是不是空的」，翻譯期就知道答案，繼續。
+- 是使用者自訂物件：試著找它的 `__bool__` 或 `__len__`，如果那個方法翻出來是常數就繼續，翻出來還是 Tensor 就一樣斷開。
 
 所以 Graph Break 不是查表失敗。`dispatch_table` 對幾乎每個 opcode 都有同名 handler，查表這一步不會落空。真正斷開的時間點在 handler 執行中：它接下指令、看了運算元，發現這個操作沒辦法用符號值走下去，才主動認輸。這就是為什麼你讀 Graph Break 訊息時，看到的永遠是「哪個操作、為什麼走不下去」，而不是「哪條指令不認識」。至於舉手之後怎麼收拾殘局、續行函式怎麼生、後面怎麼接回來，留到 Graph Break 那一篇。
 

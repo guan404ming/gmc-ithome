@@ -63,13 +63,13 @@ dis.dis(f)
 
 當你 `torch.compile(f)` 之後第一次呼叫，`f` 的 frame 送到 Dynamo 的自訂 evaluator。它先做一次快篩：這個 frame 有沒有可能含 Tensor 運算？如果是 Python 內建、標準函式庫、或者明確被標成 skip 的模組，直接原樣交回 `_PyEval_EvalFrameDefault`，不浪費時間。過了快篩的 frame 才會走完整的流程，大致是這幾步：
 
-1. **拿到 code object 和 bytecode**，順便把這次呼叫的區域變數、全域變數、closure 都收進來，因為接下來要「假裝執行」，得知道每個名字對到什麼。
-2. **符號式地執行 bytecode**。這是 Dynamo 的本體：它自己實作了一個 Python 層的 bytecode 直譯器，一條指令一個 handler，維護一個跟 CPython 一樣的 value stack。差別在 stack 上放的不是真值，而是符號值：Tensor 用 FakeTensor 代替，只有 shape、dtype、device，沒有資料；Python 物件則被包成各種 `VariableTracker`，記著「這個值從哪裡來」（一個區域變數、一個屬性、一個 list 的第幾個元素）。走過每一條指令時，碰到 Tensor 運算就在 FX Graph 上加一個節點，碰到純 Python 的東西（算個 int、拼個 tuple）就直接在符號層算掉。
-3. **記下成立的前提，也就是 Guard**。符號執行過程中每做一個假設，就寫一條 Guard：`x` 是 f32、shape 是 `[8]`、`torch.sin` 還是同一個函式物件、某個 Python 常數的值沒變。這張圖只在這些條件全部成立時才是對的。
-4. **處理 side effect**。Python 函式常會改東西：對 list `append`、對物件設屬性、寫全域變數。這些不能塞進純函數式的圖，Dynamo 會把它們先記在一本帳（`SideEffects`）上，等圖跑完再用 Python 補做。
+1. **拿到 code object 和 bytecode**，順便把這次呼叫的區域變數、全域變數、closure 收進來，接下來「假裝執行」時才知道每個名字對到什麼。
+2. **符號式地執行 bytecode**。這是 Dynamo 的本體：一個 Python 層的 bytecode 直譯器，一條指令一個 handler，維護一個跟 CPython 一樣的 value stack。差別在 stack 上放的不是真值而是符號：Tensor 用 FakeTensor 代替，只有 shape、dtype、device；Python 物件被包成 `VariableTracker`，記著自己從哪裡來。碰到 Tensor 運算就往 FX Graph 加節點，碰到純 Python 的東西就在符號層直接算掉。
+3. **記下成立的前提，也就是 Guard**。每做一個假設就寫一條：`x` 是 f32、shape 是 `[8]`、`torch.sin` 還是同一個函式物件。這張圖只在這些條件全部成立時才是對的。
+4. **處理 side effect**。對 list `append`、對物件設屬性、寫全域變數，這些不能塞進純函數式的圖，先記在一本帳（`SideEffects`）上，等圖跑完再用 Python 補做。
 5. **把散落的產出收成一張 FX Graph**（`OutputGraph`），交給後端編譯，拿回一個可以呼叫的函式。
-6. **生成新的 bytecode**（`PyCodegen`）：原本那段運算換成「載入編譯產物、把該傳的參數推上 stack、呼叫、把回傳值拆開放回原本的變數」，再接上第 4 步的 side effect 補做。
-7. **把新 bytecode 和 Guard 一起快取在 code object 上**。下次同一個函式進來，先跑一遍 Guard 檢查，全過就直接執行改寫過的 bytecode，Dynamo 完全不介入；有一條不過就重新來一次，也就是 Recompile。
+6. **生成新的 bytecode**（`PyCodegen`）：原本那段運算換成「載入編譯產物、推參數、呼叫、把回傳值放回變數」，再接上第 4 步的 side effect 補做。
+7. **把新 bytecode 和 Guard 一起快取在 code object 上**。下次進來先跑 Guard，全過就直接執行改寫過的 bytecode；有一條不過就重來一次，也就是 Recompile。
 
 如果第 2 步走到一半碰到符號執行走不下去的指令（後面會看到），Dynamo 不會整個放棄，而是在那裡切一刀：前半段照上面的流程收成一張圖並編譯，斷點處交還 CPython 用真值執行，之後再從下一條指令開始新的一輪。這就是 Graph Break。
 

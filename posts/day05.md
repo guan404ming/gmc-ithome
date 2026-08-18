@@ -45,6 +45,8 @@ Dynamo 在翻譯 bytecode 時手上沒有真值，但指令的行為偏偏取決
 | 其他物件 | `UserDefinedObjectVariable` | 逐屬性追蹤，能走多遠走多遠 |
 | 還沒被碰過的值 | `LazyVariableTracker` | 先掛個殼，真的被用到才實體化 |
 
+兩個沒出現在下面實驗裡、但你一定會撞到的成員先點一下。`TorchInGraphFunctionVariable` 包的是 `torch.sin`、`torch.matmul` 這類 PyTorch 自己的函式，它的 `call_function` 就是往圖上加一個節點，Day 3 那個 `torch.sin(x)` 就是走這條路進圖的。`NNModuleVariable` 包的是你的 `nn.Module`：追蹤 `self.linear(x)` 時，Dynamo 順著屬性鏈找到 `self.linear.weight`，把它登記成圖的輸入而不是常數，所以權重更新不會觸發重編。
+
 拿一個把這些都用上的函式實際跑：
 
 ```python
