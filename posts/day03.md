@@ -2,17 +2,17 @@
 
 ## 前言
 
-昨天帶大家走完了 `torch.compile` 的四大站，對整個編譯的骨架有了基本的認知。其中第一站就是 Dynamo，我們說它會「在 Python 執行的當下攔截你的 bytecode」。這句話講得很輕鬆，但仔細想其實很奇怪：一個第三方套件，憑什麼能插進 CPython 的執行過程，而且還在你的函式要跑之前先接手、再改寫一波，最後丟給 CPython 完全不同的東西去執行？它不是 monkey patch，也沒有改你的原始碼，那它到底怎麼辦到的？以及他中間到底做了什麼奇怪的手腳？
+昨天帶大家走完了 `torch.compile` 的四大站，現在應該對整個編譯的骨架有了基本的認知。而在這個 pipeline 中第一站就是 Dynamo，我們說它會「在 Python 執行的當下攔截你的 bytecode」。這句話講得很輕鬆，但仔細想其實很奇怪：一個第三方套件，憑什麼能插進 CPython 的執行過程，而且還在你的函式要跑之前先接手、再改寫一波，最後丟給 CPython 一個完全不同的東西去執行？它不是 monkey patch，也沒有改你的原始碼，那它到底怎麼辦到的？以及他中間到底做了什麼奇怪的手腳？
 
-今天就來回答這個問題。答案其實源自於 CPython 官方留的一個洞：PEP 523 的 frame evaluation API。搞懂這個洞，你就會知道 Dynamo 為什麼能吃下幾乎任何 Python、為什麼選擇讀最底層的 bytecode，以及為什麼它總在某些地方不得不斷開。正文開始！
+那今天就來回答這個問題。答案其實源自於 CPython 官方留的一個洞：PEP 523 的 frame evaluation API。搞懂這個洞，你就會知道 Dynamo 為什麼能吃下幾乎任何 Python、為什麼選擇讀最底層的 bytecode，以及為什麼它總在某些地方不得不斷開。正文開始！
+
+## CPython 平常怎麼跑一個函式
+
+Python 的每一次函式呼叫，CPython 都會建一個 frame。Frame 裝著這次呼叫的所有狀態：區域變數、value stack以及目前執行到第幾條指令。函式的邏輯不是以原始碼的形式在跑，而是先被編譯成 bytecode 存在 code object 裡，CPython 再一條一條執行。
 
 ![function、code object、frame、globals 的關係](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day03/frame_code_object.png)
 
 *圖一：呼叫 `f(x)` 那一刻 CPython 手上的東西。function 物件指向 code object 和 globals；code object 是靜態的，裝著 bytecode、常數、變數名；frame 是動態的，每次呼叫新建一個，裝著這一次的區域變數、value stack、執行到第幾條，並指回 code object 和 globals。*
-
-## CPython 平常怎麼跑一個函式
-
-Python 的每一次函式呼叫，CPython 都會建一個 frame。Frame 裝著這次呼叫的所有狀態：區域變數、value stack、目前執行到第幾條指令。函式的邏輯不是以原始碼的形式在跑，而是先被編譯成 bytecode 存在 code object 裡，CPython 再一條一條執行。
 
 用內建的 `dis` 就能把 bytecode 攤開來看：
 
@@ -93,7 +93,7 @@ dis.dis(f)
 
 ## 親眼看它改寫 bytecode
 
-第 4 步說它會「改寫 bytecode」，這不是比喻，`TORCH_LOGS="bytecode"` 就能把改寫前後兩份都印出來：
+第 4 步說它會「改寫 bytecode」，我們可以透過 `TORCH_LOGS="bytecode"` 來把改寫前後的兩份 bytecode 都印出來：
 
 ```python
 torch._logging.set_logs(bytecode=True)
@@ -126,7 +126,7 @@ MODIFIED BYTECODE f bytecode.py line 17
 
 因為 bytecode 是唯一保證存在的形式。原始碼可能根本拿不到（`exec` 出來的、lambda、被 decorator 包過的、`.pyc` 直接載入的），AST 也一樣。但只要函式能被 CPython 執行，它就一定有 code object、一定有 bytecode。在 frame 這一層動手，Dynamo 就能吃下幾乎任何來源的 Python，不管它是誰寫的、怎麼生出來的。這也是昨天講的 TorchScript 做不到的事：`torch.jit.script` 要解析原始碼，一遇到拿不到原始碼、或用了它不支援的語法就死。
 
-代價是 Dynamo 得自己實作一個 bytecode 的符號直譯器，把 CPython 幾百條指令的語意在 Python 層重寫一遍，而且每個 Python 版本的 bytecode 都不太一樣（3.11 之後改動特別大）。這是 Dynamo 裡最厚重的一塊，明天會打開來看。
+代價是 Dynamo 得自己實作一個 bytecode 的符號直譯器，把 CPython 幾百條指令的語意在 Python 層重寫一遍，而且每個 Python 版本的 bytecode 都不太一樣（3.11 之後改動特別大）。這是 Dynamo 裡最厚重的一塊，這邊就留到明天，我們來把它拆出來深入了解。
 
 ## 「幾乎任何」還是留了「幾乎」
 
@@ -156,7 +156,7 @@ Graph Break Reason: Data-dependent branching
 
 ## 結語
 
-Dynamo 的攔截點在 frame，不在函式。PEP 523 在 CPython 的 interpreter state 上留了一個 `eval_frame` 函式指標，Dynamo 把它換成自己的，從此每一個 frame 要執行前，CPython 都會先問過它。這就是為什麼它不用改你的原始碼、也不用包裝你的函式物件，卻能「在 Python 執行的當下」接手。
+Dynamo 的攔截點在 frame，不在函式。PEP 523 在 CPython 的 interpreter state 上留了一個 `eval_frame` 函式指標，Dynamo 把它換成自己的魔改過的函式，從此每一個 frame 要執行前，CPython 都會先問過它。這就是為什麼它不用改你的原始碼、也不用包裝你的函式物件，卻能「在 Python 執行的當下」接手。
 
 選 bytecode 是為了通用性，不是炫技。原始碼和 AST 都可能拿不到，但只要能被 CPython 執行就一定有 bytecode，所以 Dynamo 不挑來源。代價是它得自己寫一個 bytecode 的符號直譯器，而它會 Graph Break，正是因為某些指令沒辦法只靠符號值走下去。
 
