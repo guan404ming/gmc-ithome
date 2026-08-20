@@ -1,0 +1,56 @@
+✓ Initialized. View run at 
+https://modal.com/apps/guan404ming/main/ap-Z7CzkaeNjNLQl1Hb9ATJ9L
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/wesley/Documents/GitHub/gmc-ithome/code/day09/codegen.py
+└── 🔨 Created function run.
+torch 2.8.0+cu128
+V0820 01:43:41.822000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode] ORIGINAL BYTECODE f /root/codegen.py line 13 
+V0820 01:43:41.822000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]  13           0 RESUME                   0
+V0820 01:43:41.822000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode] 
+V0820 01:43:41.822000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]  14           2 LOAD_FAST                0 (x)
+V0820 01:43:41.822000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]               4 LOAD_FAST                1 (n)
+V0820 01:43:41.822000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]               6 BINARY_OP                5 (*)
+V0820 01:43:41.822000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              10 LOAD_CONST               1 (1)
+V0820 01:43:41.822000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              12 BINARY_OP                0 (+)
+V0820 01:43:41.822000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              16 RETURN_VALUE
+V0820 01:43:41.822000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode] 
+V0820 01:43:41.822000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode] 
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode] MODIFIED BYTECODE f /root/codegen.py line 13 
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]  13           0 RESUME                   0
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]               2 LOAD_GLOBAL              1 (NULL + __compiled_fn_1_cd21c25a_6e9b_4a51_b663_34d9131c2bba)
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              12 LOAD_GLOBAL              3 (NULL + __import_torch_dot__dynamo_dot_utils)
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              22 LOAD_ATTR                4 (record_pregraph_bytecode_enter)
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              42 COPY                     1
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              44 STORE_FAST               3 (tmp_1)
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              46 CALL                     0
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              54 STORE_FAST               4 (tmp_2)
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              56 LOAD_FAST                0 (x)
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              58 LOAD_GLOBAL              3 (NULL + __import_torch_dot__dynamo_dot_utils)
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              68 LOAD_ATTR                6 (record_pregraph_bytecode_exit)
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              88 COPY                     1
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              90 STORE_FAST               5 (tmp_3)
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              92 LOAD_FAST                4 (tmp_2)
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              94 CALL                     1
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]             102 POP_TOP
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]             104 CALL                     1
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]             112 STORE_FAST               2 (graph_out_0)
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]             114 LOAD_FAST                2 (graph_out_0)
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]             116 LOAD_CONST               2 (0)
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]             118 BINARY_SUBSCR
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]             122 DELETE_FAST              2 (graph_out_0)
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]             124 RETURN_VALUE
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode] 
+V0820 01:43:42.851000 7 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode] 
+
+=== instruction objects: jump targets are references ===
+  RESUME                 arg=0
+  LOAD_FAST              arg=0
+  LOAD_CONST             arg=None
+  IS_OP                  arg=1
+  POP_JUMP_IF_TRUE       arg=1 -> target=RETURN_CONST@12
+  RETURN_CONST           arg=1
+  RETURN_CONST           arg=2
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/guan404ming/main/ap-Z7CzkaeNjNLQl1Hb9ATJ9L

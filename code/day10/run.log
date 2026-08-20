@@ -1,0 +1,543 @@
+✓ Initialized. View run at 
+https://modal.com/apps/guan404ming/main/ap-dnXMwafBc0tCrfaVpnualX
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/wesley/Documents/GitHub/gmc-ithome/code/day10/graph_break.py
+└── 🔨 Created function run.
+torch 2.8.0+cu128
+
+=== 1. graph_breaks + graph_code + bytecode ===
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode] ORIGINAL BYTECODE f /root/graph_break.py line 14 
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]  14           0 RESUME                   0
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode] 
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]  15           2 LOAD_FAST                0 (x)
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]               4 LOAD_CONST               1 (2)
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]               6 BINARY_OP                5 (*)
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              10 STORE_FAST               0 (x)
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode] 
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]  16          12 LOAD_GLOBAL              1 (NULL + print)
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              22 LOAD_CONST               2 ('mid')
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              24 CALL                     1
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              32 POP_TOP
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode] 
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]  17          34 LOAD_FAST                0 (x)
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              36 LOAD_CONST               3 (1)
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              38 BINARY_OP                0 (+)
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode]              42 RETURN_VALUE
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode] 
+V0820 01:43:43.377000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0] [__bytecode] 
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks] Graph break in user code at /root/graph_break.py:16
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks] Graph Break Reason: Failed to trace builtin operator
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]   Explanation: Dynamo does not know how to trace builtin operator `print` with argument types ['str'] (has_kwargs False)
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]   Hint: Avoid calling builtin `print` with argument types ['str']. Consider using an equivalent alternative function/method to `print`.
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]   Hint: If you are attempting to call a logging function (e.g. `print`), you can try adding it to `torch._dynamo.config.reorderable_logging_functions`.
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]   Hint: Please report an issue to PyTorch.
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks] 
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]   Developer debug context: builtin print [<class 'torch._dynamo.variables.constant.ConstantVariable'>] False
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks] 
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks] User code traceback:
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]   File "<frozen runpy>", line 198, in _run_module_as_main
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]   File "<frozen runpy>", line 88, in _run_code
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]   File "/pkg/modal/_container_entrypoint.py", line 492, in <module>
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]     main(container_args, client)
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]   File "/pkg/modal/_container_entrypoint.py", line 474, in main
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]     run_function(container_args, client)
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]   File "/pkg/modal/_container_entrypoint.py", line 467, in run_function
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]     call_function(event_loop, container_io_manager, finalized_functions, batch_max_size, batch_wait_ms)
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]   File "/pkg/modal/_container_entrypoint.py", line 264, in call_function
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]     run_input_sync(io_context)
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]   File "/pkg/modal/_container_entrypoint.py", line 189, in run_input_sync
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]     values = io_context.call_function_sync()
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]   File "/pkg/modal/_runtime/container_io_manager.py", line 218, in call_function_sync
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]     expected_value_or_values = self.finalized_function.callable(*args, **kwargs)
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]   File "/root/graph_break.py", line 23, in run
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]     torch.compile(f)(x)
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]   File "/root/graph_break.py", line 16, in f
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks]     print("mid")
+V0820 01:43:43.388000 8 site-packages/torch/_dynamo/symbolic_convert.py:560] [0/0] [__graph_breaks] 
+V0820 01:43:43.393000 8 site-packages/torch/_dynamo/output_graph.py:1667] [0/0_1] [__graph_code] TRACED GRAPH
+V0820 01:43:43.393000 8 site-packages/torch/_dynamo/output_graph.py:1667] [0/0_1] [__graph_code]  ===== __compiled_fn_2_ad5d3db0_ddf5_4e00_8e83_63d2fb008d47 =====
+V0820 01:43:43.393000 8 site-packages/torch/_dynamo/output_graph.py:1667] [0/0_1] [__graph_code]  /usr/local/lib/python3.12/site-packages/torch/fx/_lazy_graph_module.py class GraphModule(torch.nn.Module):
+V0820 01:43:43.393000 8 site-packages/torch/_dynamo/output_graph.py:1667] [0/0_1] [__graph_code]     def forward(self, L_x_: "f32[4][1]cuda:0"):
+V0820 01:43:43.393000 8 site-packages/torch/_dynamo/output_graph.py:1667] [0/0_1] [__graph_code]         l_x_ = L_x_
+V0820 01:43:43.393000 8 site-packages/torch/_dynamo/output_graph.py:1667] [0/0_1] [__graph_code]         
+V0820 01:43:43.393000 8 site-packages/torch/_dynamo/output_graph.py:1667] [0/0_1] [__graph_code]          # File: /root/graph_break.py:15 in f, code: x = x * 2
+V0820 01:43:43.393000 8 site-packages/torch/_dynamo/output_graph.py:1667] [0/0_1] [__graph_code]         x: "f32[4][1]cuda:0" = l_x_ * 2;  l_x_ = None
+V0820 01:43:43.393000 8 site-packages/torch/_dynamo/output_graph.py:1667] [0/0_1] [__graph_code]         return (x,)
+V0820 01:43:43.393000 8 site-packages/torch/_dynamo/output_graph.py:1667] [0/0_1] [__graph_code]         
+V0820 01:43:43.393000 8 site-packages/torch/_dynamo/output_graph.py:1667] [0/0_1] [__graph_code] 
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode] MODIFIED BYTECODE f /root/graph_break.py line 14 
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]  14           0 RESUME                   0
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]               2 LOAD_GLOBAL              5 (NULL + __compiled_fn_2_ad5d3db0_ddf5_4e00_8e83_63d2fb008d47)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]              12 LOAD_GLOBAL              7 (NULL + __import_torch_dot__dynamo_dot_utils)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]              22 LOAD_ATTR                8 (record_pregraph_bytecode_enter)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]              42 COPY                     1
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]              44 STORE_FAST               2 (tmp_1)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]              46 CALL                     0
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]              54 STORE_FAST               3 (tmp_2)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]              56 LOAD_FAST                0 (x)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]              58 LOAD_GLOBAL              7 (NULL + __import_torch_dot__dynamo_dot_utils)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]              68 LOAD_ATTR               10 (record_pregraph_bytecode_exit)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]              88 COPY                     1
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]              90 STORE_FAST               4 (tmp_3)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]              92 LOAD_FAST                3 (tmp_2)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]              94 CALL                     1
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             102 POP_TOP
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             104 CALL                     1
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             112 STORE_FAST               1 (graph_out_0)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             114 PUSH_NULL
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             116 LOAD_GLOBAL              2 (__builtins_dict___1)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             126 LOAD_CONST               4 ('print')
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             128 BINARY_SUBSCR
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             132 LOAD_CONST               2 ('mid')
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             134 LOAD_FAST                1 (graph_out_0)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             136 LOAD_CONST               5 (0)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             138 BINARY_SUBSCR
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             142 STORE_FAST               0 (x)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             144 DELETE_FAST              1 (graph_out_0)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode] 
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]  16         146 CALL                     1
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             154 LOAD_GLOBAL             13 (NULL + __resume_at_32_3_141c9a62_3e20_4a01_b97f_ddd8f6d17119)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             164 SWAP                     3
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             166 SWAP                     2
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             168 SWAP                     3
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             170 SWAP                     2
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             172 LOAD_FAST                0 (x)
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             174 CALL                     2
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode]             182 RETURN_VALUE
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode] 
+V0820 01:43:44.505000 8 site-packages/torch/_dynamo/convert_frame.py:813] [0/0_1] [__bytecode] 
+mid
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode] ORIGINAL BYTECODE torch_dynamo_resume_in_f_at_16 /root/graph_break.py line 16 
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]  16           0 RESUME                   0
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]               2 LOAD_FAST                0 (___stack0)
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]               4 JUMP_FORWARD            16 (to 38)
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]               6 RESUME                   0
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]               8 LOAD_FAST                1 (x)
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              10 LOAD_CONST               1 (2)
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              12 BINARY_OP                5 (*)
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              16 STORE_FAST               1 (x)
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              18 LOAD_GLOBAL              1 (NULL + print)
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              28 LOAD_CONST               2 ('mid')
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              30 CALL                     1
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]         >>   38 POP_TOP
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode] 
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]  17          40 LOAD_FAST                1 (x)
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              42 LOAD_CONST               3 (1)
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              44 BINARY_OP                0 (+)
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              48 RETURN_VALUE
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode] 
+V0820 01:43:44.520000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode] 
+V0820 01:43:44.526000 8 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code] TRACED GRAPH
+V0820 01:43:44.526000 8 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]  ===== __compiled_fn_5_b6b99f28_67a1_435c_8260_e2d881ab29ee =====
+V0820 01:43:44.526000 8 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]  /usr/local/lib/python3.12/site-packages/torch/fx/_lazy_graph_module.py class GraphModule(torch.nn.Module):
+V0820 01:43:44.526000 8 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]     def forward(self, L_x_: "f32[4][1]cuda:0"):
+V0820 01:43:44.526000 8 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]         l_x_ = L_x_
+V0820 01:43:44.526000 8 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]         
+V0820 01:43:44.526000 8 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]          # File: /root/graph_break.py:17 in torch_dynamo_resume_in_f_at_16, code: return x + 1
+V0820 01:43:44.526000 8 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]         add: "f32[4][1]cuda:0" = l_x_ + 1;  l_x_ = None
+V0820 01:43:44.526000 8 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]         return (add,)
+V0820 01:43:44.526000 8 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code]         
+V0820 01:43:44.526000 8 site-packages/torch/_dynamo/output_graph.py:1667] [1/0] [__graph_code] 
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode] MODIFIED BYTECODE torch_dynamo_resume_in_f_at_16 /root/graph_break.py line 16 
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]  16           0 RESUME                   0
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]               2 LOAD_GLOBAL              3 (NULL + __compiled_fn_5_b6b99f28_67a1_435c_8260_e2d881ab29ee)
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              12 LOAD_GLOBAL              5 (NULL + __import_torch_dot__dynamo_dot_utils)
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              22 LOAD_ATTR                6 (record_pregraph_bytecode_enter)
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              42 COPY                     1
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              44 STORE_FAST               3 (tmp_1)
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              46 CALL                     0
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              54 STORE_FAST               4 (tmp_2)
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              56 LOAD_FAST                1 (x)
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              58 LOAD_GLOBAL              5 (NULL + __import_torch_dot__dynamo_dot_utils)
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              68 LOAD_ATTR                8 (record_pregraph_bytecode_exit)
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              88 COPY                     1
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              90 STORE_FAST               5 (tmp_3)
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              92 LOAD_FAST                4 (tmp_2)
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]              94 CALL                     1
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]             102 POP_TOP
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]             104 CALL                     1
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]             112 STORE_FAST               2 (graph_out_0)
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]             114 LOAD_FAST                2 (graph_out_0)
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]             116 LOAD_CONST               4 (0)
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]             118 BINARY_SUBSCR
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]             122 DELETE_FAST              2 (graph_out_0)
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode]             124 RETURN_VALUE
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode] 
+V0820 01:43:44.654000 8 site-packages/torch/_dynamo/convert_frame.py:813] [1/0] [__bytecode] 
+
+=== 2. explain ===
+mid
+Graph Count: 2
+Graph Break Count: 1
+Op Count: 2
+Break Reasons:
+  Break Reason 1:
+    Reason: Failed to trace builtin operator
+  Explanation: Dynamo does not know how to trace builtin operator `print` with argument types ['str'] (has_kwargs False)
+  Hint: Avoid calling builtin `print` with argument types ['str']. Consider using an equivalent alternative function/method to `print`.
+  Hint: If you are attempting to call a logging function (e.g. `print`), you can try adding it to `torch._dynamo.config.reorderable_logging_functions`.
+  Hint: Please report an issue to PyTorch.
+
+  Developer debug context: builtin print [<class 'torch._dynamo.variables.constant.ConstantVariable'>] False
+
+    User Stack:
+      <FrameSummary file /root/graph_break.py, line 16 in f>
+Ops per Graph:
+  Ops 1:
+    <built-in function mul>
+  Ops 2:
+    <built-in function add>
+Out Guards:
+  Guard 1:
+    Name: ''
+    Source: shape_env
+    Create Function: SHAPE_ENV
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 2:
+    Name: ''
+    Source: global
+    Create Function: GRAD_MODE
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 3:
+    Name: "G['__builtins_dict___7']['print']"
+    Source: global
+    Create Function: BUILTIN_MATCH
+    Guard Types: ['ID_MATCH']
+    Code List: ["___check_obj_id(G['__builtins_dict___7']['print'], 22826632269392)"]
+    Object Weakref: <weakref at 0x14c171d82610; to 'builtin_function_or_method' at 0x14c2bd4ece50>
+    Guarded Class Weakref: <weakref at 0x14c2bd4744a0; to 'type' at 0x14c2bde4f8c0 (builtin_function_or_method)>
+  Guard 4:
+    Name: ''
+    Source: global
+    Create Function: DETERMINISTIC_ALGORITHMS
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 5:
+    Name: ''
+    Source: global
+    Create Function: TORCH_FUNCTION_STATE
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 6:
+    Name: ''
+    Source: global
+    Create Function: AUTOGRAD_SAVED_TENSORS_HOOKS
+    Guard Types: ['AUTOGRAD_SAVED_TENSORS_HOOKS']
+    Code List: ['torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None']
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 7:
+    Name: "L['x']"
+    Source: local
+    Create Function: TENSOR_MATCH
+    Guard Types: ['TENSOR_MATCH']
+    Code List: ["hasattr(L['x'], '_dynamo_dynamic_indices') == False"]
+    Object Weakref: <weakref at 0x14c1721fbbf0; to 'Tensor' at 0x14c2bb7e2170>
+    Guarded Class Weakref: <weakref at 0x14c23cb46a70; to 'torch._C._TensorMeta' at 0x5588efa700f0 (Tensor)>
+  Guard 8:
+    Name: ''
+    Source: global
+    Create Function: DEFAULT_DEVICE
+    Guard Types: ['DEFAULT_DEVICE']
+    Code List: ['utils_device.CURRENT_DEVICE == None']
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 9:
+    Name: ''
+    Source: shape_env
+    Create Function: SHAPE_ENV
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 10:
+    Name: ''
+    Source: global
+    Create Function: GRAD_MODE
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 11:
+    Name: ''
+    Source: global
+    Create Function: DETERMINISTIC_ALGORITHMS
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 12:
+    Name: "L['x']"
+    Source: local
+    Create Function: TENSOR_MATCH
+    Guard Types: ['TENSOR_MATCH']
+    Code List: ["hasattr(L['x'], '_dynamo_dynamic_indices') == False"]
+    Object Weakref: <weakref at 0x14c171ec69d0; dead>
+    Guarded Class Weakref: <weakref at 0x14c23cb46a70; to 'torch._C._TensorMeta' at 0x5588efa700f0 (Tensor)>
+  Guard 13:
+    Name: ''
+    Source: global
+    Create Function: TORCH_FUNCTION_STATE
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 14:
+    Name: ''
+    Source: global
+    Create Function: AUTOGRAD_SAVED_TENSORS_HOOKS
+    Guard Types: ['AUTOGRAD_SAVED_TENSORS_HOOKS']
+    Code List: ['torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None']
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 15:
+    Name: ''
+    Source: global
+    Create Function: DEFAULT_DEVICE
+    Guard Types: ['DEFAULT_DEVICE']
+    Code List: ['utils_device.CURRENT_DEVICE == None']
+    Object Weakref: None
+    Guarded Class Weakref: None
+Compile Times: TorchDynamo compilation metrics:
+Function, Runtimes (s)
+_compile.compile_inner, 0.0164, 0.0126
+compile_attempt_0, 0.0035, 0.0058
+bytecode_tracing, 0.0024, 0.0015, 0.0019
+compile_attempt_1, 0.0061
+OutputGraph.call_user_compiler, 0.0001, 0.0001
+build_guards, 0.0057, 0.0058
+gc, 0.0004, 0.0003
+
+
+=== 3. break inside inlined function ===
+log
+Graph Count: 3
+Graph Break Count: 2
+Op Count: 3
+Break Reasons:
+  Break Reason 1:
+    Reason: Failed to trace builtin operator
+  Explanation: Dynamo does not know how to trace builtin operator `print` with argument types ['str'] (has_kwargs False)
+  Hint: Avoid calling builtin `print` with argument types ['str']. Consider using an equivalent alternative function/method to `print`.
+  Hint: If you are attempting to call a logging function (e.g. `print`), you can try adding it to `torch._dynamo.config.reorderable_logging_functions`.
+  Hint: Please report an issue to PyTorch.
+
+  Developer debug context: builtin print [<class 'torch._dynamo.variables.constant.ConstantVariable'>] False
+
+    User Stack:
+      <FrameSummary file /root/graph_break.py, line 39 in big>
+      <FrameSummary file /root/graph_break.py, line 34 in util>
+Ops per Graph:
+  Ops 1:
+    <built-in function mul>
+  Ops 2:
+    <built-in function add>
+  Ops 3:
+    <built-in function mul>
+Out Guards:
+  Guard 1:
+    Name: ''
+    Source: shape_env
+    Create Function: SHAPE_ENV
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 2:
+    Name: ''
+    Source: global
+    Create Function: GRAD_MODE
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 3:
+    Name: "L['util']"
+    Source: local
+    Create Function: CLOSURE_MATCH
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 4:
+    Name: ''
+    Source: global
+    Create Function: DETERMINISTIC_ALGORITHMS
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 5:
+    Name: ''
+    Source: global
+    Create Function: TORCH_FUNCTION_STATE
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 6:
+    Name: ''
+    Source: global
+    Create Function: AUTOGRAD_SAVED_TENSORS_HOOKS
+    Guard Types: ['AUTOGRAD_SAVED_TENSORS_HOOKS']
+    Code List: ['torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None']
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 7:
+    Name: "L['x']"
+    Source: local
+    Create Function: TENSOR_MATCH
+    Guard Types: ['TENSOR_MATCH']
+    Code List: ["hasattr(L['x'], '_dynamo_dynamic_indices') == False"]
+    Object Weakref: <weakref at 0x14c171d82930; to 'Tensor' at 0x14c2bb7e2170>
+    Guarded Class Weakref: <weakref at 0x14c23cb46a70; to 'torch._C._TensorMeta' at 0x5588efa700f0 (Tensor)>
+  Guard 8:
+    Name: ''
+    Source: global
+    Create Function: DEFAULT_DEVICE
+    Guard Types: ['DEFAULT_DEVICE']
+    Code List: ['utils_device.CURRENT_DEVICE == None']
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 9:
+    Name: ''
+    Source: shape_env
+    Create Function: SHAPE_ENV
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 10:
+    Name: ''
+    Source: global
+    Create Function: GRAD_MODE
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 11:
+    Name: ''
+    Source: global
+    Create Function: DETERMINISTIC_ALGORITHMS
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 12:
+    Name: ''
+    Source: global
+    Create Function: TORCH_FUNCTION_STATE
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 13:
+    Name: ''
+    Source: global
+    Create Function: AUTOGRAD_SAVED_TENSORS_HOOKS
+    Guard Types: ['AUTOGRAD_SAVED_TENSORS_HOOKS']
+    Code List: ['torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None']
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 14:
+    Name: ''
+    Source: global
+    Create Function: DEFAULT_DEVICE
+    Guard Types: ['DEFAULT_DEVICE']
+    Code List: ['utils_device.CURRENT_DEVICE == None']
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 15:
+    Name: "L['t']"
+    Source: local
+    Create Function: TENSOR_MATCH
+    Guard Types: ['TENSOR_MATCH']
+    Code List: ["hasattr(L['t'], '_dynamo_dynamic_indices') == False"]
+    Object Weakref: <weakref at 0x14c171dbb330; dead>
+    Guarded Class Weakref: <weakref at 0x14c23cb46a70; to 'torch._C._TensorMeta' at 0x5588efa700f0 (Tensor)>
+  Guard 16:
+    Name: ''
+    Source: shape_env
+    Create Function: SHAPE_ENV
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 17:
+    Name: ''
+    Source: global
+    Create Function: GRAD_MODE
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 18:
+    Name: ''
+    Source: global
+    Create Function: DETERMINISTIC_ALGORITHMS
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 19:
+    Name: ''
+    Source: global
+    Create Function: TORCH_FUNCTION_STATE
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 20:
+    Name: ''
+    Source: global
+    Create Function: AUTOGRAD_SAVED_TENSORS_HOOKS
+    Guard Types: ['AUTOGRAD_SAVED_TENSORS_HOOKS']
+    Code List: ['torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None']
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 21:
+    Name: "L['___stack0']"
+    Source: local
+    Create Function: TENSOR_MATCH
+    Guard Types: ['TENSOR_MATCH']
+    Code List: ["hasattr(L['___stack0'], '_dynamo_dynamic_indices') == False"]
+    Object Weakref: <weakref at 0x14c171dec9a0; dead>
+    Guarded Class Weakref: <weakref at 0x14c23cb46a70; to 'torch._C._TensorMeta' at 0x5588efa700f0 (Tensor)>
+  Guard 22:
+    Name: ''
+    Source: global
+    Create Function: DEFAULT_DEVICE
+    Guard Types: ['DEFAULT_DEVICE']
+    Code List: ['utils_device.CURRENT_DEVICE == None']
+    Object Weakref: None
+    Guarded Class Weakref: None
+Compile Times: TorchDynamo compilation metrics:
+Function, Runtimes (s)
+_compile.compile_inner, 0.0192, 0.0102, 0.0118, 0.0126
+compile_attempt_0, 0.0055, 0.0017, 0.0056, 0.0063
+bytecode_tracing, 0.0041, 0.0015, 0.0007, 0.0001, 0.0018, 0.0024
+compile_attempt_1, 0.0064, 0.0023
+OutputGraph.call_user_compiler, 0.0001, 0.0001, 0.0001
+build_guards, 0.0061, 0.0052, 0.0054, 0.0054
+gc, 0.0005, 0.0003, 0.0003, 0.0003
+
+
+=== 4. fullgraph=True ===
+Unsupported : Failed to trace builtin operator
+  Explanation: Dynamo does not know how to trace builtin operator `print` with argument types ['str'] (has_kwargs False)
+  Hint: Avoid calling builtin `print` with argument types ['str']. Consider using an equivalent alternative function/method to `print`.
+  Hint: If you are attempting to call a logging function (e.g. `print`), you can try adding it to `torch._dyna
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/guan404ming/main/ap-dnXMwafBc0tCrfaVpnualX

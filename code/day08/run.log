@@ -1,0 +1,33 @@
+✓ Initialized. View run at 
+https://modal.com/apps/guan404ming/main/ap-y6LQJ1XTNMfF4ren8Rnua9
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/wesley/Documents/GitHub/gmc-ithome/code/day08/output_graph.py
+└── 🔨 Created function run.
+torch 2.8.0+cu128
+V0820 01:43:42.451000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code] TRACED GRAPH
+V0820 01:43:42.451000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]  ===== __compiled_fn_1_6d16fdd3_2570_49c8_bb6d_cab775498b6a =====
+V0820 01:43:42.451000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]  /usr/local/lib/python3.12/site-packages/torch/fx/_lazy_graph_module.py class GraphModule(torch.nn.Module):
+V0820 01:43:42.451000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]     def forward(self, L_x_: "f32[4, 4][4, 1]cuda:0", L_y_: "f32[4, 4][4, 1]cuda:0", L_bias_: "f32[4][1]cuda:0"):
+V0820 01:43:42.451000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         l_x_ = L_x_
+V0820 01:43:42.451000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         l_y_ = L_y_
+V0820 01:43:42.451000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         l_bias_ = L_bias_
+V0820 01:43:42.451000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0820 01:43:42.451000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]          # File: /root/output_graph.py:15 in f, code: return (x @ y + bias).relu()
+V0820 01:43:42.451000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         matmul: "f32[4, 4][4, 1]cuda:0" = l_x_ @ l_y_;  l_x_ = l_y_ = None
+V0820 01:43:42.451000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         add: "f32[4, 4][4, 1]cuda:0" = matmul + l_bias_;  matmul = l_bias_ = None
+V0820 01:43:42.451000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         relu: "f32[4, 4][4, 1]cuda:0" = add.relu();  add = None
+V0820 01:43:42.451000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         return (relu,)
+V0820 01:43:42.451000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0820 01:43:42.451000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code] 
+/usr/local/lib/python3.12/site-packages/torch/_inductor/compile_fx.py:282: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+
+=== empty graph is skipped ===
+backend called: 0 times
+
+=== install_global ===
+in f.__globals__: ['__compiled_fn_1_6d16fdd3_2570_49c8_bb6d_cab775498b6a', '__compiled_fn_4_998ecab5_0914_4036_868f_7c85afdb96db']
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/guan404ming/main/ap-y6LQJ1XTNMfF4ren8Rnua9

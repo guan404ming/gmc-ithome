@@ -11,10 +11,10 @@
 - Day 4 | 沒有真值，Dynamo 怎麼把 bytecode 走完？
 - Day 5 | Dynamo 眼中的每一個 Python 值：VariableTracker 與 Source
 - Day 6 | Guard：這張圖什麼時候還能用？
-- Day 7 | SideEffects：會改東西的 Python，怎麼過純函數的圖
-- Day 8 | OutputGraph：散落的產出怎麼收成一張 FX Graph
-- Day 9 | PyCodegen：Dynamo 怎麼把新 Bytecode 寫回 CPython
-- Day 10 | Graph Break 全機制：斷在哪裡，怎麼接回來
+- Day 7 | self.counter += 1 怎麼過純函數的圖？SideEffects
+- Day 8 | OutputGraph：散落的產出怎麼收成一張圖
+- Day 9 | PyCodegen：新 bytecode 是怎麼生出來的
+- Day 10 | Graph Break：斷在哪裡，怎麼接回來
 - Day 11 | Symbolic Shapes：讓一張圖吃下所有 batch size
 
 ## Part 2：AOTAutograd
