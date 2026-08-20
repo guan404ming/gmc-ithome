@@ -19,10 +19,10 @@
 
 ## Part 2：AOTAutograd
 
-- Day 12 | AOTAutograd 總覽：為什麼 backpropagation 也要 Ahead-of-Time
-- Day 13 | Functionalization：In-place 與 View 怎麼被改寫成純函數
-- Day 14 | Decomposition 與 PrimTorch：兩千個 Operator 拆成幾百個
-- Day 15 | Joint Graph 與 Partitioner：forward 與 backpropagation 的切分
+- Day 12 | AOTAutograd：為什麼 backward 也要先編好
+- Day 13 | Functionalization：把 in-place 變不見
+- Day 14 | Decomposition：兩千個 op 拆成幾百個
+- Day 15 | Joint Graph 與 Partitioner：backward 該存什麼、該重算什麼
 - Day 16 | Min-cut Recomputation：重算還是存下來
 - Day 17 | FakeTensor 與 Meta Device：不算數值也能 Trace
 

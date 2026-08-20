@@ -1,0 +1,400 @@
+✓ Initialized. View run at 
+https://modal.com/apps/guan404ming/main/ap-KF8rhAceEP5ofprMZTCBv6
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/wesley/Documents/GitHub/gmc-ithome/code/day11/symbolic.py
+└── 🔨 Created function run.
+torch 2.8.0+cu128
+=== call 1: (4,4) static ===
+/usr/local/lib/python3.12/site-packages/torch/_inductor/compile_fx.py:282: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+V0820 05:20:22.082000 7 site-packages/torch/_dynamo/guards.py:3064] [0/0] [__guards] GUARDS:
+V0820 05:20:22.083000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] 
+V0820 05:20:22.083000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] TREE_GUARD_MANAGER:
+V0820 05:20:22.083000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] +- RootGuardManager
+V0820 05:20:22.083000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- LAMBDA_GUARD: torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None  # _dynamo/output_graph.py:633 in init_ambient_guards
+V0820 05:20:22.083000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- DEFAULT_DEVICE: utils_device.CURRENT_DEVICE == None                           # _dynamo/output_graph.py:621 in init_ambient_guards
+V0820 05:20:22.083000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GLOBAL_STATE: ___check_global_state()
+V0820 05:20:22.083000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- TORCH_FUNCTION_MODE_STACK: ___check_torch_function_mode_stack()
+V0820 05:20:22.083000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GuardManager: source=L['x'], accessed_by=FrameLocalsGuardAccessor(key='x', framelocals_idx=0)
+V0820 05:20:22.083000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- TENSOR_MATCH: check_tensor(L['x'], Tensor, DispatchKeySet(CUDA, BackendSelect, ADInplaceOrView, AutogradCUDA), torch.float32, device=0, requires_grad=False, size=[4, 4], stride=[4, 1])  # return x @ y  # oot/symbolic.py:15 in f
+V0820 05:20:22.083000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- NO_HASATTR: hasattr(L['x'], '_dynamo_dynamic_indices') == False           # return x @ y  # oot/symbolic.py:15 in f
+V0820 05:20:22.083000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- NO_TENSOR_ALIASING: check_no_aliasing(L['x'], L['y'])
+V0820 05:20:22.083000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GuardManager: source=L['y'], accessed_by=FrameLocalsGuardAccessor(key='y', framelocals_idx=1)
+V0820 05:20:22.083000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- TENSOR_MATCH: check_tensor(L['y'], Tensor, DispatchKeySet(CUDA, BackendSelect, ADInplaceOrView, AutogradCUDA), torch.float32, device=0, requires_grad=False, size=[4, 8], stride=[8, 1])  # return x @ y  # oot/symbolic.py:15 in f
+V0820 05:20:22.083000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- NO_HASATTR: hasattr(L['y'], '_dynamo_dynamic_indices') == False           # return x @ y  # oot/symbolic.py:15 in f
+V0820 05:20:22.083000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- NO_TENSOR_ALIASING
+V0820 05:20:22.083000 7 site-packages/torch/_dynamo/guards.py:2863] [0/0] [__guards] 
+V0820 05:20:22.089000 7 site-packages/torch/_dynamo/guards.py:2894] [0/0] [__guards] Guard eval latency = 61.67 us
+
+=== call 2: (8,4) -> recompile with SymInt ===
+V0820 05:20:22.157000 7 site-packages/torch/_dynamo/guards.py:3508] [0/1] [__recompiles] Recompiling function f in /root/symbolic.py:14
+V0820 05:20:22.157000 7 site-packages/torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     triggered by the following guard failure(s):
+V0820 05:20:22.157000 7 site-packages/torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     - 0/0: tensor 'x' size mismatch at index 0. expected 4, actual 8
+V0820 05:20:22.271000 7 site-packages/torch/_dynamo/guards.py:1342] [0/1] [__guards] Python shape guard function:
+V0820 05:20:22.271000 7 site-packages/torch/_dynamo/guards.py:1342] [0/1] [__guards] def ___make_guard_fn(IsNonOverlappingAndDenseIndicator, cast_symbool_to_symint_guardless, math, torch, __builtins__, ___check_type_id, ___check_obj_id, ___odict_getitem, ___key_to_id, ___dict_version, ___dict_contains, ___tuple_iterator_len, ___normalize_range_iter, ___tuple_iterator_getitem, ___dataclass_fields, ___get_torch_function_mode_stack_at, __math_isnan, __numpy_isnan, inf, __load_module, utils_device, device, ___from_numpy, ___as_tensor, inspect):
+V0820 05:20:22.271000 7 site-packages/torch/_dynamo/guards.py:1342] [0/1] [__guards]     def guard(L):
+V0820 05:20:22.271000 7 site-packages/torch/_dynamo/guards.py:1342] [0/1] [__guards]         if not (2 <= L['x'].size()[0]):
+V0820 05:20:22.271000 7 site-packages/torch/_dynamo/guards.py:1342] [0/1] [__guards]             return False
+V0820 05:20:22.271000 7 site-packages/torch/_dynamo/guards.py:1342] [0/1] [__guards]         return True
+V0820 05:20:22.271000 7 site-packages/torch/_dynamo/guards.py:1342] [0/1] [__guards]     return guard
+V0820 05:20:22.271000 7 site-packages/torch/_dynamo/guards.py:1342] [0/1] [__guards] 
+V0820 05:20:22.272000 7 site-packages/torch/_dynamo/guards.py:3064] [0/1] [__guards] GUARDS:
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] 
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] TREE_GUARD_MANAGER:
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] +- RootGuardManager
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] | +- LAMBDA_GUARD: torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None  # _dynamo/output_graph.py:633 in init_ambient_guards
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] | +- DEFAULT_DEVICE: utils_device.CURRENT_DEVICE == None                           # _dynamo/output_graph.py:621 in init_ambient_guards
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] | +- GLOBAL_STATE: ___check_global_state()
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] | +- TORCH_FUNCTION_MODE_STACK: ___check_torch_function_mode_stack()
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] | +- GuardManager: source=L['x'], accessed_by=FrameLocalsGuardAccessor(key='x', framelocals_idx=0)
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] | | +- TENSOR_MATCH: check_tensor(L['x'], Tensor, DispatchKeySet(CUDA, BackendSelect, ADInplaceOrView, AutogradCUDA), torch.float32, device=0, requires_grad=False, size=[None, 4], stride=[4, 1])  # return x @ y  # oot/symbolic.py:15 in f
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] | | +- NO_HASATTR: hasattr(L['x'], '_dynamo_dynamic_indices') == False           # return x @ y  # oot/symbolic.py:15 in f
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] | | +- NO_TENSOR_ALIASING: check_no_aliasing(L['x'], L['y'])
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] | +- GuardManager: source=L['y'], accessed_by=FrameLocalsGuardAccessor(key='y', framelocals_idx=1)
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] | | +- TENSOR_MATCH: check_tensor(L['y'], Tensor, DispatchKeySet(CUDA, BackendSelect, ADInplaceOrView, AutogradCUDA), torch.float32, device=0, requires_grad=False, size=[4, 8], stride=[8, 1])  # return x @ y  # oot/symbolic.py:15 in f
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] | | +- NO_HASATTR: hasattr(L['y'], '_dynamo_dynamic_indices') == False           # return x @ y  # oot/symbolic.py:15 in f
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] | | +- NO_TENSOR_ALIASING
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] +- LAMBDA_GUARD: 2 <= L['x'].size()[0]  # return x @ y  # oot/symbolic.py:15 in f (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.mark_unbacked(tensor, dim))
+V0820 05:20:22.273000 7 site-packages/torch/_dynamo/guards.py:2863] [0/1] [__guards] 
+V0820 05:20:22.280000 7 site-packages/torch/_dynamo/guards.py:2894] [0/1] [__guards] Guard eval latency = 57.55 us
+
+=== call 3/4: (16,4) (100,4) -> no recompile ===
+
+=== SymInt expression propagation ===
+V0820 05:20:22.404000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code] TRACED GRAPH
+V0820 05:20:22.404000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]  ===== __compiled_fn_5_579a36d0_96b8_4ff7_9958_5eacc9ce5fa0 =====
+V0820 05:20:22.404000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]  /usr/local/lib/python3.12/site-packages/torch/fx/_lazy_graph_module.py class GraphModule(torch.nn.Module):
+V0820 05:20:22.404000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]     def forward(self, s77: "Sym(s77)", s27: "Sym(s27)", L_x_: "f32[s77, s27][s27, 1]cuda:0"):
+V0820 05:20:22.404000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         l_x_ = L_x_
+V0820 05:20:22.404000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0820 05:20:22.404000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]          # File: /root/symbolic.py:40 in h, code: return x.reshape(b * 2, -1), b * 2
+V0820 05:20:22.404000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         mul: "Sym(2*s77)" = s77 * 2;  s77 = None
+V0820 05:20:22.404000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         reshape: "f32[2*s77, (s27//2)][(s27//2), 1]cuda:0" = l_x_.reshape(mul, -1);  l_x_ = None
+V0820 05:20:22.404000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         return (reshape, mul)
+V0820 05:20:22.404000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0820 05:20:22.404000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code] 
+
+=== shape if: guard on s0 ===
+V0820 05:20:22.769000 7 site-packages/torch/_dynamo/guards.py:3508] [0/1] [__recompiles] Recompiling function k in /root/symbolic.py:50
+V0820 05:20:22.769000 7 site-packages/torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     triggered by the following guard failure(s):
+V0820 05:20:22.769000 7 site-packages/torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     - 0/0: 2 <= x.size()[0] <= 10  # if x.shape[0] > 10:  # oot/symbolic.py:51 in k (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.mark_unbacked(tensor, dim)) and if x.shape[0] > 10:  # oot/symbolic.py:51 in k (_dynamo/variables/tensor.py:1410 in evaluate_expr)
+
+=== mark_dynamic + shape==4 -> ConstraintViolation ===
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0] Error while creating guard:
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0] Name: ''
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     Source: shape_env
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     Create Function: SHAPE_ENV
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     Guard Types: None
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     Code List: None
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     Object Weakref: None
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     Guarded Class Weakref: None
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0] Traceback (most recent call last):
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_guards.py", line 360, in create
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     return self.create_fn(builder, self)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/guards.py", line 2110, in SHAPE_ENV
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     python_code_parts, verbose_code_parts = _get_code_parts(
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]                                             ^^^^^^^^^^^^^^^^
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/guards.py", line 2084, in _get_code_parts
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     return output_graph.shape_env.produce_guards_verbose(
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/fx/experimental/symbolic_shapes.py", line 5932, in produce_guards_verbose
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     raise ConstraintViolationError(
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0] torch.fx.experimental.symbolic_shapes.ConstraintViolationError: Constraints violated (L['x'].size()[0])! For more information, run with TORCH_LOGS="+dynamic".
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   - You marked L['x'].size()[0] as dynamic but your code specialized it to be a constant (4). If you're using mark_dynamic, either remove it or use maybe_mark_dynamic. If you're using Dim.DYNAMIC, replace it with either Dim.STATIC or Dim.AUTO.
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0] 
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0] Framework stack:
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "<frozen runpy>", line 198, in _run_module_as_main
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "<frozen runpy>", line 88, in _run_code
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/pkg/modal/_container_entrypoint.py", line 492, in <module>
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     main(container_args, client)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/pkg/modal/_container_entrypoint.py", line 474, in main
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     run_function(container_args, client)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/pkg/modal/_container_entrypoint.py", line 467, in run_function
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     call_function(event_loop, container_io_manager, finalized_functions, batch_max_size, batch_wait_ms)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/pkg/modal/_container_entrypoint.py", line 264, in call_function
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     run_input_sync(io_context)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/pkg/modal/_container_entrypoint.py", line 189, in run_input_sync
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     values = io_context.call_function_sync()
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/pkg/modal/_runtime/container_io_manager.py", line 218, in call_function_sync
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     expected_value_or_values = self.finalized_function.callable(*args, **kwargs)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/root/symbolic.py", line 72, in run
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     torch.compile(bad)(x4)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py", line 736, in compile_wrapper
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     return fn(*args, **kwargs)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/convert_frame.py", line 1495, in __call__
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     return self._torchdynamo_orig_callable(
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/convert_frame.py", line 1272, in __call__
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     result = self._inner_convert(
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/convert_frame.py", line 629, in __call__
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     return _compile(
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/convert_frame.py", line 1111, in _compile
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     guarded_code = compile_inner(code, one_graph, hooks, transform)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_utils_internal.py", line 97, in wrapper_function
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     return function(*args, **kwargs)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/convert_frame.py", line 793, in compile_inner
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     return _compile_inner(code, one_graph, hooks, transform)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/convert_frame.py", line 832, in _compile_inner
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     out_code = transform_code_object(code, transform)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/bytecode_transformation.py", line 1424, in transform_code_object
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     transformations(instructions, code_options)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/convert_frame.py", line 267, in _fn
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     return fn(*args, **kwargs)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/convert_frame.py", line 753, in transform
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     tracer.run()
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/symbolic_convert.py", line 3497, in run
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     super().run()
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/symbolic_convert.py", line 1363, in run
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     while self.step():
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/symbolic_convert.py", line 1267, in step
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     self.dispatch_table[inst.opcode](self, inst)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/symbolic_convert.py", line 790, in inner
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     eval_result = value.evaluate_expr(self.output)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/variables/tensor.py", line 1410, in evaluate_expr
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     return guard_scalar(self.sym_num)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/fx/experimental/symbolic_shapes.py", line 1519, in guard_scalar
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     return guard_bool(a)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/fx/experimental/symbolic_shapes.py", line 1711, in guard_bool
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     return a.node.guard_bool("", 0)  # NB: uses Python backtrace
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/fx/experimental/sym_node.py", line 538, in guard_bool
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     r = self.evaluate()
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/fx/experimental/sym_node.py", line 512, in evaluate
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     return self.shape_env.evaluate_sym_node(self, size_oblivious)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/fx/experimental/symbolic_shapes.py", line 7223, in evaluate_sym_node
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     return self.evaluate_expr(
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/fx/experimental/symbolic_shapes.py", line 7323, in evaluate_expr
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     return self._inner_evaluate_expr(
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/fx/experimental/recording.py", line 272, in wrapper
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     return retlog(fn(*args, **kwargs))
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/fx/experimental/symbolic_shapes.py", line 7346, in _inner_evaluate_expr
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     return self._evaluate_expr(
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/fx/experimental/symbolic_shapes.py", line 7615, in _evaluate_expr
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     self._maybe_guard_rel(g)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/fx/experimental/symbolic_shapes.py", line 6868, in _maybe_guard_rel
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     self._refine_ranges(expr)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/fx/experimental/symbolic_shapes.py", line 7819, in _refine_ranges
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     self._set_replacement(
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/fx/experimental/symbolic_shapes.py", line 6768, in _set_replacement
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     CapturedTraceback.extract(cpp=True)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/utils/_traceback.py", line 212, in extract
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     torch._C._profiler.gather_traceback(python=True, script=script, cpp=cpp),
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _start
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in __libc_start_main
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in __libc_init_first
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in Py_BytesMain
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in Py_RunMain
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyInterpreterState_SetRunningMain
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PySequence_DelItem
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyEval_EvalCode
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "", line 0, in dynamo__custom_eval_frame
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyObject_Call
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyObject_RealIsInstance
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyObject_Call_Prepend
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyObject_FastCallDictTstate
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyObject_MakeTpCall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyObject_RealIsInstance
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyObject_Call_Prepend
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyObject_FastCallDictTstate
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyObject_MakeTpCall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyObject_RealIsInstance
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyObject_Call_Prepend
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyObject_FastCallDictTstate
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyObject_MakeTpCall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyInit__locale
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyObject_MakeTpCall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyInit__locale
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_Vectorcall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyMem_SetupAllocators
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in _PyObject_MakeTpCall
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in PyObject_GenericGetAttr
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "", line 0, in pybind11::cpp_function::dispatcher(_object*, _object*, _object*)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "", line 0, in pybind11::cpp_function::initialize<std::shared_ptr<torch::CapturedTraceback> (*&)(bool, bool, bool), std::shared_ptr<torch::CapturedTraceback>, bool, bool, bool, pybind11::name, pybind11::scope, pybind11::sibling, pybind11::arg_v, pybind11::arg_v, pybind11::arg_v>(std::shared_ptr<torch::CapturedTraceback> (*&)(bool, bool, bool), std::shared_ptr<torch::CapturedTraceback> (*)(bool, bool, bool), pybind11::name const&, pybind11::scope const&, pybind11::sibling const&, pybind11::arg_v const&, pybind11::arg_v const&, pybind11::arg_v const&)::{lambda(pybind11::detail::function_call&)#3}::operator()(pybind11::detail::function_call&) const
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in torch::CapturedTraceback::gather(bool, bool, bool)
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "??", line 0, in torch::unwind::unwind()
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0] 
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0] 
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0] User stack:
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]   File "/root/symbolic.py", line 65, in bad
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0]     if x.shape[0] == 4:
+E0820 05:20:23.621000 7 site-packages/torch/_guards.py:362] [0/0] 
+E0820 05:20:23.624000 7 site-packages/torch/_guards.py:364] [0/0] Created at:
+E0820 05:20:23.624000 7 site-packages/torch/_guards.py:364] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/convert_frame.py", line 730, in transform
+E0820 05:20:23.624000 7 site-packages/torch/_guards.py:364] [0/0]     tracer = InstructionTranslator(
+E0820 05:20:23.624000 7 site-packages/torch/_guards.py:364] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/symbolic_convert.py", line 3325, in __init__
+E0820 05:20:23.624000 7 site-packages/torch/_guards.py:364] [0/0]     output=OutputGraph(
+E0820 05:20:23.624000 7 site-packages/torch/_guards.py:364] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/output_graph.py", line 445, in __init__
+E0820 05:20:23.624000 7 site-packages/torch/_guards.py:364] [0/0]     self.init_ambient_guards()
+E0820 05:20:23.624000 7 site-packages/torch/_guards.py:364] [0/0]   File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/output_graph.py", line 613, in init_ambient_guards
+E0820 05:20:23.624000 7 site-packages/torch/_guards.py:364] [0/0]     self.guards.add(ShapeEnvSource().make_guard(GuardBuilder.SHAPE_ENV))
+ConstraintViolationError : Constraints violated (L['x'].size()[0])! For more information, run with TORCH_LOGS="+dynamic".
+  - You marked L['x'].size()[0] as dynamic but your code specialized it to be a constant (4). If you're using mark_dynamic, either remove it or use maybe_mark_dynamic. If you're using Dim.DYNAMIC, replace it with either Dim.STATIC or Dim.AUTO.
+
+Framework stack:
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/pkg/modal/_container_entrypoi
+
+=== unbacked: item() ===
+W0820 05:20:23.639000 7 site-packages/torch/_dynamo/variables/tensor.py:1047] [0/0] Graph break from `Tensor.item()`, consider setting:
+W0820 05:20:23.639000 7 site-packages/torch/_dynamo/variables/tensor.py:1047] [0/0]     torch._dynamo.config.capture_scalar_outputs = True
+W0820 05:20:23.639000 7 site-packages/torch/_dynamo/variables/tensor.py:1047] [0/0] or:
+W0820 05:20:23.639000 7 site-packages/torch/_dynamo/variables/tensor.py:1047] [0/0]     env TORCHDYNAMO_CAPTURE_SCALAR_OUTPUTS=1
+W0820 05:20:23.639000 7 site-packages/torch/_dynamo/variables/tensor.py:1047] [0/0] to include these operations in the captured graph.
+W0820 05:20:23.639000 7 site-packages/torch/_dynamo/variables/tensor.py:1047] [0/0] 
+W0820 05:20:23.639000 7 site-packages/torch/_dynamo/variables/tensor.py:1047] [0/0] Graph break: from user code at:
+W0820 05:20:23.639000 7 site-packages/torch/_dynamo/variables/tensor.py:1047] [0/0]   File "/root/symbolic.py", line 80, in ub
+W0820 05:20:23.639000 7 site-packages/torch/_dynamo/variables/tensor.py:1047] [0/0]     n = int(x.sum().item())
+W0820 05:20:23.639000 7 site-packages/torch/_dynamo/variables/tensor.py:1047] [0/0] 
+W0820 05:20:23.639000 7 site-packages/torch/_dynamo/variables/tensor.py:1047] [0/0] 
+Graph Count: 1
+Graph Break Count: 0
+Op Count: 0
+Break Reasons:
+  Break Reason 1:
+    Reason: Unsupported Tensor.item() call with capture_scalar_outputs=False
+  Explanation: Dynamo does not support tracing `Tensor.item()` with config.capture_scalar_outputs=False.
+  Hint: Set `torch._dynamo.config.capture_scalar_outputs = True` or `export TORCHDYNAMO_CAPTURE_SCALAR_OUTPUTS=1` to include these operations in the captured graph.
+
+  Developer debug context: call_method TensorVariable() item () {}
+
+    User Stack:
+      <FrameSummary file /root/symbolic.py, line 80 in ub>
+Ops per Graph:
+  Ops 1:
+Out Guards:
+  Guard 1:
+    Name: ''
+    Source: global
+    Create Function: TORCH_FUNCTION_STATE
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 2:
+    Name: ''
+    Source: global
+    Create Function: AUTOGRAD_SAVED_TENSORS_HOOKS
+    Guard Types: ['AUTOGRAD_SAVED_TENSORS_HOOKS']
+    Code List: ['torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None']
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 3:
+    Name: "L['x'].sum"
+    Source: local
+    Create Function: HASATTR
+    Guard Types: ['HASATTR']
+    Code List: ["hasattr(L['x'], 'sum')"]
+    Object Weakref: <weakref at 0x14a4c04a7bf0; dead>
+    Guarded Class Weakref: <weakref at 0x14a56f8eec50; to 'torch._C._TensorMeta' at 0x55e0ee2f5190 (Tensor)>
+  Guard 4:
+    Name: "L['x']"
+    Source: local
+    Create Function: TENSOR_MATCH
+    Guard Types: ['TENSOR_MATCH']
+    Code List: ["hasattr(L['x'], '_dynamo_dynamic_indices') == False"]
+    Object Weakref: <weakref at 0x14a4c04a7bf0; dead>
+    Guarded Class Weakref: <weakref at 0x14a56f8eec50; to 'torch._C._TensorMeta' at 0x55e0ee2f5190 (Tensor)>
+  Guard 5:
+    Name: "G['__builtins_dict___13']['int']"
+    Source: global
+    Create Function: BUILTIN_MATCH
+    Guard Types: ['ID_MATCH']
+    Code List: ["___check_obj_id(G['__builtins_dict___13']['int'], 22702931492576)"]
+    Object Weakref: <weakref at 0x14a5ef8fdc10; to 'type' at 0x14a5f02abee0>
+    Guarded Class Weakref: <weakref at 0x14a5ef8acc20; to 'type' at 0x14a5f02a7280 (type)>
+  Guard 6:
+    Name: ''
+    Source: global
+    Create Function: DEFAULT_DEVICE
+    Guard Types: ['DEFAULT_DEVICE']
+    Code List: ['utils_device.CURRENT_DEVICE == None']
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 7:
+    Name: ''
+    Source: global
+    Create Function: GRAD_MODE
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 8:
+    Name: ''
+    Source: shape_env
+    Create Function: SHAPE_ENV
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 9:
+    Name: ''
+    Source: global
+    Create Function: DETERMINISTIC_ALGORITHMS
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+Compile Times: TorchDynamo compilation metrics:
+Function, Runtimes (s)
+_compile.compile_inner, 0.0250
+compile_attempt_0, 0.0077
+bytecode_tracing, 0.0058, 0.0026
+compile_attempt_1, 0.0097
+OutputGraph.call_user_compiler, 0.0002
+build_guards, 0.0062
+gc, 0.0006
+
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/guan404ming/main/ap-KF8rhAceEP5ofprMZTCBv6

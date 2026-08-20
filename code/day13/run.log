@@ -1,0 +1,83 @@
+✓ Initialized. View run at 
+https://modal.com/apps/guan404ming/main/ap-9TABGh8OvdWm7lZJjpsfoK
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/wesley/Documents/GitHub/gmc-ithome/code/day13/functionalization.py
+└── 🔨 Created function run.
+torch 2.8.0+cu128
+=== dynamo graph: in-place ops kept ===
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code] TRACED GRAPH
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]  ===== __compiled_fn_1_5c0d7505_36fa_4600_b74e_c9b520642da1 =====
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]  /usr/local/lib/python3.12/site-packages/torch/fx/_lazy_graph_module.py class GraphModule(torch.nn.Module):
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]     def forward(self, L_x_: "f32[4, 4][4, 1]cuda:0"):
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         l_x_ = L_x_
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]          # File: /root/functionalization.py:14 in f, code: y = x.view(2, 8)
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         y: "f32[2, 8][8, 1]cuda:0" = l_x_.view(2, 8)
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]          # File: /root/functionalization.py:15 in f, code: y.add_(1)
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         add_: "f32[2, 8][8, 1]cuda:0" = y.add_(1);  add_ = None
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]          # File: /root/functionalization.py:16 in f, code: y.relu_()
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         relu_: "f32[2, 8][8, 1]cuda:0" = y.relu_();  y = relu_ = None
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]          # File: /root/functionalization.py:17 in f, code: return x * 2
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         mul: "f32[4, 4][4, 1]cuda:0" = l_x_ * 2;  l_x_ = None
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         return (mul,)
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0820 05:21:34.301000 7 site-packages/torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code] 
+
+=== aot graph: functionalized ===
+/usr/local/lib/python3.12/site-packages/torch/_dynamo/pgo.py:525: UserWarning: dynamo_pgo force disabled by torch._inductor.config.force_disable_caches
+  warn_once(
+V0820 05:21:35.398000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:123] [0/0] [__aot_graphs] aot_config id: 1, fw_metadata=ViewAndMutationMeta(input_info=[InputAliasInfo(is_leaf=True, mutates_data=True, mutates_metadata=False, mutations_hidden_from_autograd=False, mutations_under_no_grad_or_inference_mode=False, mutation_inductor_storage_resize=False, mutates_storage_metadata=False, requires_grad=False, keep_input_mutations=True)], output_info=[OutputAliasInfo(output_type=<OutputType.non_alias: 1>, raw_type=<class 'torch._subclasses.functional_tensor.FunctionalTensor'>, base_idx=None, dynamic_dims=set(), requires_grad=False, functional_tensor=None)], num_intermediate_bases=0, keep_input_mutations=True, traced_tangents=[], subclass_inp_meta=[PlainTensorMeta(unwrapped_idx=0, memory_format=None)], subclass_fw_graph_out_meta=[PlainTensorMeta(unwrapped_idx=0, memory_format=None)], subclass_tangent_meta=[], is_train=False, traced_tangent_metas=None, num_symints_saved_for_bw=None, grad_enabled_mutation=None, deterministic=None, static_input_indices=[], tokens={}, indices_of_inputs_that_requires_grad_with_mutations_in_bw=[], bw_donated_idxs=None, num_backward_tokens=0, num_graphsafe_rng_states=0, graphsafe_rng_state_index=None),subclass_metadata=None
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs] TRACED GRAPH
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]  ===== Forward graph 1 =====
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]  /usr/local/lib/python3.12/site-packages/torch/fx/_lazy_graph_module.py class <lambda>(torch.nn.Module):
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]     def forward(self, arg0_1: "f32[4, 4][4, 1]cuda:0"):
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]          # File: /root/functionalization.py:14 in f, code: y = x.view(2, 8)
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         view: "f32[2, 8][8, 1]cuda:0" = torch.ops.aten.view.default(arg0_1, [2, 8])
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]          # File: /root/functionalization.py:15 in f, code: y.add_(1)
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         add: "f32[2, 8][8, 1]cuda:0" = torch.ops.aten.add.Tensor(view, 1);  view = None
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         view_1: "f32[4, 4][4, 1]cuda:0" = torch.ops.aten.view.default(add, [4, 4]);  add = None
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         view_2: "f32[2, 8][8, 1]cuda:0" = torch.ops.aten.view.default(view_1, [2, 8]);  view_1 = None
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]          # File: /root/functionalization.py:16 in f, code: y.relu_()
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         relu: "f32[2, 8][8, 1]cuda:0" = torch.ops.aten.relu.default(view_2);  view_2 = None
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         view_3: "f32[4, 4][4, 1]cuda:0" = torch.ops.aten.view.default(relu, [4, 4]);  relu = None
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]          # File: /root/functionalization.py:17 in f, code: return x * 2
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         mul: "f32[4, 4][4, 1]cuda:0" = torch.ops.aten.mul.Tensor(view_3, 2)
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]          # File: /root/functionalization.py:16 in f, code: y.relu_()
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         copy_: "f32[4, 4][4, 1]cuda:0" = torch.ops.aten.copy_.default(arg0_1, view_3);  arg0_1 = view_3 = copy_ = None
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         return (mul,)
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         
+I0820 05:21:35.410000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs] 
+
+=== semantics preserved ===
+outputs equal: True | inputs equal after mutation: True
+
+=== input mutation becomes copy_ at the end ===
+/usr/local/lib/python3.12/site-packages/torch/_dynamo/pgo.py:525: UserWarning: dynamo_pgo force disabled by torch._inductor.config.force_disable_caches
+  warn_once(
+V0820 05:21:35.668000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:123] [0/0] [__aot_graphs] aot_config id: 2, fw_metadata=ViewAndMutationMeta(input_info=[InputAliasInfo(is_leaf=True, mutates_data=True, mutates_metadata=False, mutations_hidden_from_autograd=False, mutations_under_no_grad_or_inference_mode=False, mutation_inductor_storage_resize=False, mutates_storage_metadata=False, requires_grad=False, keep_input_mutations=True)], output_info=[OutputAliasInfo(output_type=<OutputType.non_alias: 1>, raw_type=<class 'torch._subclasses.functional_tensor.FunctionalTensor'>, base_idx=None, dynamic_dims=set(), requires_grad=False, functional_tensor=None)], num_intermediate_bases=0, keep_input_mutations=True, traced_tangents=[], subclass_inp_meta=[PlainTensorMeta(unwrapped_idx=0, memory_format=None)], subclass_fw_graph_out_meta=[PlainTensorMeta(unwrapped_idx=0, memory_format=None)], subclass_tangent_meta=[], is_train=False, traced_tangent_metas=None, num_symints_saved_for_bw=None, grad_enabled_mutation=None, deterministic=None, static_input_indices=[], tokens={}, indices_of_inputs_that_requires_grad_with_mutations_in_bw=[], bw_donated_idxs=None, num_backward_tokens=0, num_graphsafe_rng_states=0, graphsafe_rng_state_index=None),subclass_metadata=None
+I0820 05:21:35.676000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs] TRACED GRAPH
+I0820 05:21:35.676000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]  ===== Forward graph 2 =====
+I0820 05:21:35.676000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]  /usr/local/lib/python3.12/site-packages/torch/fx/_lazy_graph_module.py class <lambda>(torch.nn.Module):
+I0820 05:21:35.676000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]     def forward(self, arg0_1: "f32[4][1]cuda:0"):
+I0820 05:21:35.676000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]          # File: /root/functionalization.py:44 in g, code: x.mul_(2)
+I0820 05:21:35.676000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         mul: "f32[4][1]cuda:0" = torch.ops.aten.mul.Tensor(arg0_1, 2)
+I0820 05:21:35.676000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         
+I0820 05:21:35.676000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]          # File: /root/functionalization.py:45 in g, code: return x + 1
+I0820 05:21:35.676000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         add: "f32[4][1]cuda:0" = torch.ops.aten.add.Tensor(mul, 1)
+I0820 05:21:35.676000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         
+I0820 05:21:35.676000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]          # File: /root/functionalization.py:44 in g, code: x.mul_(2)
+I0820 05:21:35.676000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         copy_: "f32[4][1]cuda:0" = torch.ops.aten.copy_.default(arg0_1, mul);  arg0_1 = mul = copy_ = None
+I0820 05:21:35.676000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         return (add,)
+I0820 05:21:35.676000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs]         
+I0820 05:21:35.676000 7 site-packages/torch/_functorch/_aot_autograd/dispatch_and_compile_graph.py:202] [0/0] [__aot_graphs] 
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/guan404ming/main/ap-9TABGh8OvdWm7lZJjpsfoK
