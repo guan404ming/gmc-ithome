@@ -26,10 +26,6 @@ def T(txt, font_size, **kw):
     return Text(txt, font_size=font_size * 4, **kw).scale(0.25)
 
 
-def label(s, size=15, color=MUTED):
-    return T(s, font=MONO, font_size=size, color=color)
-
-
 def panel(w, h, fill=CARD, edge=EDGE, r=0.12, sw=1.5):
     return RoundedRectangle(corner_radius=r, width=w, height=h, stroke_color=edge, stroke_width=sw, fill_color=fill, fill_opacity=1)
 
@@ -54,7 +50,7 @@ def pill(name, zh):
     return VGroup(bg, t.move_to(bg))
 
 
-def rows(lines, size=12, color=TXT, buff=0.12):
+def rows(lines, size=12, color=TXT, buff=0.1):
     return VGroup(*[T(l, font=MONO, font_size=size, color=color) for l in lines]).arrange(DOWN, aligned_edge=LEFT, buff=buff)
 
 
@@ -62,9 +58,15 @@ def arrow(a, b, color=MUTED, w=2):
     return Arrow(a, b, buff=0.06, color=color, stroke_width=w, tip_length=0.14, max_tip_length_to_length_ratio=1, max_stroke_width_to_length_ratio=20)
 
 
+def card(w, h, name, sub, lines, edge=EDGE, sw=1.5, fill=CARD, size=12):
+    t = titled(w, h, name, sub, edge=edge, sw=sw, fill=fill)
+    body = rows(lines, size=size, buff=0.08).next_to(t[1], DOWN, buff=0.18).align_to(t[1], LEFT)
+    return VGroup(t, body)
+
+
 class Break(Scene):
     def construct(self):
-        title = T("def f(x):  x = x * 2;  print('mid');  return x + 1", font=MONO, font_size=20, color=TXT).to_corner(UL, buff=0.5)
+        title = T("def f(x): x = x * 2; print('mid'); return x + 1", font=MONO, font_size=18, color=TXT).to_corner(UL, buff=0.5)
         self.play(FadeIn(title), run_time=0.4)
         cur = [None, None]
 
@@ -76,54 +78,72 @@ class Break(Scene):
             self.play(FadeIn(p), FadeIn(c, shift=UP * 0.1), run_time=0.3)
             cur[0], cur[1] = p, c
 
-        # left: source with three lines
-        W = 4.07
-        TOP, BOT = 2.45, -2.85
-        H = TOP - BOT
-        src_card = titled(W, H, "f", "翻譯進行中").move_to([-4.575, (TOP + BOT) / 2, 0])
-        lbl0 = label("TRACE  ·  bytecode").next_to(src_card, UP, buff=0.22).align_to(src_card, LEFT)
-        src = rows(["x = x * 2", "print('mid')", "return x + 1"], size=14, buff=0.55).next_to(src_card[1], DOWN, buff=0.5).align_to(src_card[1], LEFT)
-        switch("TRACE", "翻譯到 print", "InstructionTranslator 逐條翻譯，走到 print：builtin、有 side effect，符號值走不下去")
-        self.play(FadeIn(lbl0), FadeIn(src_card), FadeIn(src), run_time=0.5)
-        self.play(src[0].animate.set_color(MUTED), run_time=0.3)
-        self.play(src[1].animate.set_color(ACCENT), run_time=0.3)
-        gb = T("Unsupported!", font=MONO, font_size=13, color=ACCENT, weight=BOLD).next_to(src[1], DOWN, buff=0.18).align_to(src[1], LEFT)
+        Y_SEG, Y_BOT = 1.24, -1.96
+        lane_top = titled(12.9, 2.3, "COMPILED", "圖的世界，Inductor 接手", fill=CARD_DIM).move_to([0, 1.45, 0])
+        lane_bot = titled(12.9, 2.3, "EAGER", "CPython 逐條執行", fill=CARD_DIM).move_to([0, -1.75, 0])
+
+        codes = ["x = x * 2", "print('mid')", "return x + 1"]
+        segs = []
+        for code, x in zip(codes, [-4.1, 0.0, 4.1]):
+            p = panel(3.9, 1.0, r=0.08)
+            t = T(code, font=MONO, font_size=14, color=TXT).move_to(p)
+            segs.append(VGroup(p, t).move_to([x, Y_SEG, 0]))
+        j1 = Line([-2.15, Y_SEG, 0], [-1.95, Y_SEG, 0], color=EDGE, stroke_width=4)
+        j2 = Line([1.95, Y_SEG, 0], [2.15, Y_SEG, 0], color=EDGE, stroke_width=4)
+
+        switch("TRACE", "逐條往右翻", "InstructionTranslator 沿著 bytecode 時間軸往右走，Tensor 運算一路收進同一張圖")
+        self.play(FadeIn(lane_top), FadeIn(lane_bot), *[FadeIn(s) for s in segs], FadeIn(j1), FadeIn(j2), run_time=0.5)
+        dot = Dot(radius=0.07, color=ACCENT).move_to([-5.9, 0.52, 0])
+        self.play(FadeIn(dot), run_time=0.2)
+        self.play(dot.animate.move_to([-2.3, 0.52, 0]), segs[0][0].animate.set_fill(ACTIVE_FILL), run_time=1.2)
+        self.wait(2.5)
+
+        switch("BREAK", "handler 舉手", "走到 print：builtin、有 side effect，符號值走不下去，unimplemented_v2 丟出 Unsupported")
+        self.play(dot.animate.move_to([-1.7, 0.52, 0]), run_time=0.4)
+        self.play(segs[1][0].animate.set_stroke(ACCENT, width=2), j1.animate.set_color(ACCENT), j2.animate.set_color(ACCENT), run_time=0.3)
+        gb = T("raise Unsupported", font=MONO, font_size=13, color=ACCENT, weight=BOLD).move_to([0, -0.15, 0])
         self.play(FadeIn(gb, shift=UP * 0.1), run_time=0.3)
-        self.wait(1.5)
-
-        # right: three segments
-        RX, RW = 2.3, 8.6
-        seg_h = 1.55
-        ys = [TOP - seg_h / 2, TOP - seg_h * 1.5 - 0.25, TOP - seg_h * 2.5 - 0.5]
-        lbl1 = label("RESULT  ·  兩張圖夾一段 eager").move_to([RX - RW / 2, TOP + 0.32, 0], aligned_edge=LEFT)
-
-        s1 = titled(RW, seg_h, "GRAPH 1", "__compiled_fn_2", edge=ACCENT, sw=2, fill=ACTIVE_FILL).move_to([RX, ys[0], 0])
-        s1b = rows(["x = L_x_ * 2   ->  Inductor kernel"], size=12).next_to(s1[1], DOWN, buff=0.18).align_to(s1[1], LEFT)
-        switch("STEP 1", "收前半段", "斷點之前的節點照常收圖、結帳、編譯成 __compiled_fn_2")
-        self.play(FadeIn(lbl1), FadeIn(s1), FadeIn(s1b), src[0].animate.set_color(ACCENT), run_time=0.5)
-        a1 = arrow(src_card[0].get_right() + UP * (ys[0] - (TOP + BOT) / 2) * 0 + UP * 1.6, s1[0].get_left(), color=ACCENT)
-        self.play(GrowArrow(a1), run_time=0.3)
-        self.wait(1.5)
-        self.play(src[0].animate.set_color(MUTED), run_time=0.2)
-
-        s2 = titled(RW, seg_h, "EAGER", "斷點指令原樣保留", edge=EDGE, sw=1.5).move_to([RX, ys[1], 0])
-        s2b = rows(["LOAD print ('mid') / CALL   ->  CPython 自己跑"], size=12).next_to(s2[1], DOWN, buff=0.18).align_to(s2[1], LEFT)
-        switch("STEP 2", "斷點回 eager", "print 那條指令留在改寫後的 bytecode 裡，CPython 照常執行")
-        a2 = arrow(src_card[0].get_right() + UP * 0.0, s2[0].get_left(), color=MUTED)
-        self.play(FadeIn(s2), FadeIn(s2b), GrowArrow(a2), run_time=0.5)
-        self.wait(1.5)
-
-        s3 = titled(RW, seg_h, "RESUME", "__resume_at_32_3", edge=ACCENT, sw=2, fill=ACTIVE_FILL).move_to([RX, ys[2], 0])
-        s3b = rows(["JUMP 進函式中間, return x + 1  ->  被 eval hook 再攔截", "編成 GRAPH 2:  add = L_x_ + 1"], size=12, buff=0.1).next_to(s3[1], DOWN, buff=0.18).align_to(s3[1], LEFT)
-        switch("STEP 3", "剩下包成 resume fn", "斷點之後的 bytecode 包成新函式，一被呼叫又被攔截，編成第二張圖")
-        self.play(src[2].animate.set_color(ACCENT), run_time=0.25)
-        a3 = arrow(src_card[0].get_right() + DOWN * 1.6, s3[0].get_left(), color=ACCENT)
-        self.play(FadeIn(s3), FadeIn(s3b), GrowArrow(a3), run_time=0.5)
-        self.wait(1.5)
-        self.play(src[2].animate.set_color(MUTED), run_time=0.2)
-
-        switch("COST", "break 為什麼貴", "圖被切小 fusion 沒了、eager 段本身慢、帳本提前結算、resume fn 多編一次")
-        for s in (s1, s2, s3):
-            self.play(s[0].animate.set_stroke(ACCENT, width=2.5), run_time=0.15)
-            self.play(s[0].animate.set_stroke(EDGE if s is s2 else ACCENT, width=1.5 if s is s2 else 2), run_time=0.15)
         self.wait(3.5)
+
+        g1 = card(3.9, 1.4, "GRAPH 1", "__compiled_fn_2", ["x = l_x_ * 2"], edge=ACCENT, sw=2, fill=ACTIVE_FILL).move_to([-4.1, Y_SEG, 0])
+        switch("GRAPH 1", "收前半段", "斷點之前的節點照常收圖、結帳，編成 __compiled_fn_2 交給 Inductor")
+        self.play(FadeOut(j1), ReplacementTransform(segs[0], g1), run_time=0.5)
+        self.wait(3.5)
+
+        e = card(3.6, 1.4, "EAGER", "斷點指令原樣保留", ["LOAD print · CALL 1"]).move_to([0, Y_BOT, 0])
+        switch("EAGER", "print 回 eager", "斷點那條指令在改寫後的 bytecode 裡原樣保留，掉回 eager 讓 CPython 自己跑")
+        self.play(FadeOut(gb), FadeOut(dot), FadeOut(j2), ReplacementTransform(segs[1], e), run_time=0.6)
+        self.wait(2.5)
+
+        r = card(3.6, 1.4, "RESUME", "__resume_at_32_3", ["___stack0 · JUMP_FORWARD", "return x + 1"], edge=ACCENT, sw=2).move_to([4.1, Y_BOT, 0])
+        switch("RESUME", "從中間接手", "斷點之後的 bytecode 包成 __resume_at_32_3，開場一條 JUMP_FORWARD 跳進函式中間")
+        self.play(ReplacementTransform(segs[2], r), run_time=0.6)
+        self.wait(3.5)
+
+        g2 = card(3.9, 1.4, "GRAPH 2", "__compiled_fn_5", ["add = l_x_ + 1"], edge=ACCENT, sw=2, fill=ACTIVE_FILL).move_to([4.1, Y_SEG, 0])
+        switch("HOOK", "又被攔截", "resume fn 也是函式：eval hook 照樣攔下它，把斷點之後編成第二張圖")
+        a3 = arrow(r[0][0].get_top(), g2[0][0].get_bottom(), color=ACCENT)
+        hook = VGroup(panel(2.0, 0.5, fill=CARD, edge=ACCENT, r=0.25), T("eval hook", font=MONO, font_size=12, color=ACCENT))
+        hook[1].move_to(hook[0])
+        hook.move_to([4.1, -0.15, 0])
+        self.play(GrowArrow(a3), run_time=0.3)
+        self.play(FadeIn(hook), run_time=0.3)
+        self.play(FadeIn(g2, shift=UP * 0.1), run_time=0.4)
+        self.wait(3.5)
+
+        switch("RUN", "縫回一條路", "執行順序：圖一、掉到 eager 跑 print、呼叫 resume fn、接上被攔截編好的圖二")
+        a1 = arrow(g1[0][0].get_bottom(), e[0][0].get_top(), color=MUTED)
+        a2 = arrow(e[0][0].get_right(), r[0][0].get_left(), color=MUTED)
+        self.play(GrowArrow(a1), run_time=0.3)
+        self.play(GrowArrow(a2), run_time=0.3)
+        rd = Dot(radius=0.09, color=ACCENT).move_to(g1[0][0].get_center())
+        self.play(FadeIn(rd), run_time=0.2)
+        self.play(rd.animate.move_to(e[0][0].get_center()), run_time=0.5)
+        self.play(rd.animate.move_to(r[0][0].get_center()), run_time=0.5)
+        self.play(rd.animate.move_to(g2[0][0].get_center()), run_time=0.5)
+        self.play(Flash(rd, color=ACCENT, line_length=0.15), run_time=0.4)
+        self.wait(3.5)
+        self.play(FadeOut(rd), run_time=0.2)
+
+        switch("RULE", "兩張圖夾一段 eager", "一次 break：fusion 消失、中段 eager、resume fn 多編一次，效能調校第一課是先數 break")
+        self.wait(5.5)

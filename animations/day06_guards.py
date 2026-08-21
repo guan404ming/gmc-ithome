@@ -85,7 +85,7 @@ class Guards(Scene):
         W = 4.07
         XS = [-4.575, 0.0, 4.575]
         call_card = titled(W, H, "CALL", "這次呼叫的輸入").move_to([XS[0], (TOP + BOT) / 2, 0])
-        cache_card = titled(W, H, "CACHE ENTRIES", "f.__code__ 上掛的圖").move_to([XS[1], (TOP + BOT) / 2, 0])
+        cache_card = titled(W, H, "CACHE ENTRIES", "f.__code__").move_to([XS[1], (TOP + BOT) / 2, 0])
         out_card = titled(W, H, "OUTCOME", "驗票結果").move_to([XS[2], (TOP + BOT) / 2, 0])
         lbls = [label("INPUT  ·  frame locals").next_to(call_card, UP, buff=0.22).align_to(call_card, LEFT),
                 label("GUARD TREE  ·  C++").next_to(cache_card, UP, buff=0.22).align_to(cache_card, LEFT),
@@ -129,7 +129,7 @@ class Guards(Scene):
         check(e0)
         o1 = outcome(["reuse entry 0", "no recompile", "guard eval ~10 us"], color=TXT)
         self.play(FadeIn(o1, shift=RIGHT * 0.1), run_time=0.3)
-        self.wait(1.5)
+        self.wait(3.5)
         self.play(FadeOut(c1), FadeOut(o1), run_time=0.25)
 
         # ---- call 2: fail on n -> recompile, new entry prepended ----
@@ -139,14 +139,14 @@ class Guards(Scene):
         check(e0, idx_fail=2)
         o2 = outcome(["entry 0: n == 3  x", "no entry left", "-> RECOMPILE"], color=ACCENT)
         self.play(FadeIn(o2, shift=RIGHT * 0.1), run_time=0.3)
-        self.wait(0.8)
+        self.wait(2.5)
         G1 = ["GLOBAL_STATE   grad on", "L['x']  TENSOR_MATCH  f32 [4,4]", "L['n']  TYPE_MATCH  int"]
         e1 = entry_card(cw, "entry 0", G1, "n 改成符號整數").next_to(cache_card[1], DOWN, buff=0.3).align_to(cache_card[1], LEFT)
         self.play(e0.animate.next_to(e1, DOWN, buff=0.15).align_to(e1, LEFT), run_time=0.4)
         t = T("entry 1", font=MONO, font_size=12, color=TXT).move_to(e0[1][0][0], aligned_edge=LEFT)
         self.play(FadeIn(e1, shift=DOWN * 0.1), Transform(e0[1][0][0], t), run_time=0.4)
         switch("CALL 2", "recompile", "新圖掛到最前面。注意 Dynamo 這次不再 bake n，改押符號整數：automatic dynamic")
-        self.wait(1.5)
+        self.wait(3.5)
         self.play(FadeOut(c2), FadeOut(o2), run_time=0.25)
 
         # ---- call 3: no_grad -> both fail ----
@@ -157,14 +157,14 @@ class Guards(Scene):
         check(e0, idx_fail=0, hold=0.3)
         o3 = outcome(["entry 0: GLOBAL_STATE  x", "entry 1: GLOBAL_STATE  x", "-> RECOMPILE (3rd graph)"], color=ACCENT)
         self.play(FadeIn(o3, shift=RIGHT * 0.1), run_time=0.3)
-        self.wait(0.8)
+        self.wait(2.5)
         G2 = ["GLOBAL_STATE   grad OFF", "L['x']  TENSOR_MATCH  f32 [4,4]", "L['n']  EQUALS_MATCH  n == 3"]
         e2 = entry_card(cw, "entry 0", G2, "no_grad 的那張圖").next_to(cache_card[1], DOWN, buff=0.3).align_to(cache_card[1], LEFT)
         self.play(e1.animate.next_to(e2, DOWN, buff=0.15).align_to(e2, LEFT), e0.animate.next_to(e2, DOWN, buff=0.15 * 2 + e1.height).align_to(e2, LEFT), run_time=0.4)
         t1 = T("entry 1", font=MONO, font_size=12, color=TXT).move_to(e1[1][0][0], aligned_edge=LEFT)
         t2 = T("entry 2", font=MONO, font_size=12, color=TXT).move_to(e0[1][0][0], aligned_edge=LEFT)
         self.play(FadeIn(e2, shift=DOWN * 0.1), Transform(e1[1][0][0], t1), Transform(e0[1][0][0], t2), run_time=0.4)
-        self.wait(1.2)
+        self.wait(3)
         self.play(FadeOut(c3), FadeOut(o3), run_time=0.25)
 
         # ---- call 4: hits older entry, moved to front ----
@@ -175,11 +175,11 @@ class Guards(Scene):
         check(e1)
         o4 = outcome(["entry 0: GLOBAL_STATE  x", "entry 1: all pass", "-> reuse entry 1", "-> move to front"], color=TXT)
         self.play(FadeIn(o4, shift=RIGHT * 0.1), run_time=0.3)
-        self.wait(0.6)
+        self.wait(2)
         self.play(e1.animate.next_to(cache_card[1], DOWN, buff=0.3).align_to(cache_card[1], LEFT), e2.animate.next_to(cache_card[1], DOWN, buff=0.3 + e1.height + 0.15).align_to(cache_card[1], LEFT), run_time=0.5)
         t3 = T("entry 0", font=MONO, font_size=12, color=TXT).move_to(e1[1][0][0], aligned_edge=LEFT)
         t4 = T("entry 1", font=MONO, font_size=12, color=TXT).move_to(e2[1][0][0], aligned_edge=LEFT)
         self.play(Transform(e1[1][0][0], t3), Transform(e2[1][0][0], t4), run_time=0.3)
-        self.wait(1.5)
-        switch("RULE", "圖有多特化，Guard 就有多少條", "Guard 是翻譯時押注的帳單：全過才重用、全敗才重編、超過 recompile_limit 就放棄改跑 eager")
         self.wait(3.5)
+        switch("RULE", "圖有多特化，Guard 就有多少條", "Guard 是翻譯時押注的帳單：全過才重用、全敗才重編、超過 recompile_limit 就放棄改跑 eager")
+        self.wait(5.5)
