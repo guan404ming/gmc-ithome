@@ -78,7 +78,7 @@ ROWS = [
 
 class VT(Scene):
     def construct(self):
-        title = T("f(x, n, items, cfg)", font=MONO, font_size=26, color=TXT).to_corner(UL, buff=0.5)
+        title = T("f(x, n, items, cfg)", font=MONO, font_size=26, color=TXT).to_corner(UL, buff=0.5).shift(UP * 0.15)
         self.play(FadeIn(title), run_time=0.4)
         cur = [None, None]
 
@@ -117,6 +117,6 @@ class VT(Scene):
             self.play(FadeIn(c1, shift=RIGHT * 0.1), run_time=0.3)
             self.play(GrowArrow(a1), FadeIn(c2, shift=RIGHT * 0.1), run_time=0.35)
             self.play(GrowArrow(a2), FadeIn(c3, shift=RIGHT * 0.1), run_time=0.35)
-            self.wait(1.5)
+            self.wait(2.5)
         switch("RULE", "Guard 守邊界", "有 Source 的值走 VariableBuilder 並裝 Guard；追蹤中途生出的值走 SourcelessBuilder，不需要 Guard")
-        self.wait(3.5)
+        self.wait(4.5)
