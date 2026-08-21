@@ -1,16 +1,12 @@
-# Day 6 | Guard：這張圖什麼時候還能用？
+# Day 6 | TorchDynamo 的高速驗票員：Guard
 
 ## 前言
 
 Day 4 說 `InstructionTranslator` 翻譯時會「順手記下這張圖的前提」，Day 5 說 bake 常數的代價「由 Guard 記帳」。今天就準備來補前面兩天留下來的洞啦！
 
-Guard 是 Dynamo 整個快取機制的靈魂。它決定了一張編好的圖能不能被下一次呼叫重用，也是 `torch.compile` 很多「為什麼又變慢了」「為什麼一直在重編」的答案所在。今天用 `TORCH_LOGS="guards"` 逐行讀它裝了什麼、實際改幾個輸入看哪條會失敗、看一個函式怎麼同時掛好幾張圖，最後看它為什麼要被編成一棵 C++ 的樹。
+Guard 是 Dynamo 整個快取機制的靈魂。它決定了一張編好的圖能不能被下一次呼叫重用，也是 `torch.compile` 很多「為什麼又變慢了」「為什麼一直在重編」的答案所在。今天會用 `TORCH_LOGS="guards"` 逐行讀它裝了什麼、實際改幾個輸入看哪條會失敗、看一個函式怎麼同時掛好幾張圖，最後看它為什麼要被編成一棵 C++ 的樹。
 
 正文開始！
-
-![每次呼叫先在 cache entry 上驗票，全過才重用，全敗才重編](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day06/guards.gif)
-
-*圖一：同一個 `f` 連續四次呼叫的驗票過程。左邊是這次呼叫的輸入，中間是 `f.__code__` 上掛的 cache entry 與各自的 Guard 樹，右邊是結果。新 Tensor 同 shape 同 dtype 全過；`n` 從 3 變 4 讓 `EQUALS_MATCH` 失敗、重編、新圖掛到最前面且改押符號整數；`no_grad` 讓每張圖的 `GLOBAL_STATE` 都失敗、再編第三張；最後 `f(x, 3)` 逐個驗到全過的那張，命中的 entry 被搬到最前面。*
 
 ## 為什麼躲不掉 Guard？
 
@@ -28,16 +24,14 @@ install_guard(source.make_guard(GuardBuilder.TYPE_MATCH))
 
 `GuardBuilder` 定義在 [`torch/_dynamo/guards.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/guards.py)，上面每個大寫方法就是一種檢查。最常見的幾種：
 
-
-| Guard             | 檢查什麼                                    | 典型來源                |
-| ----------------- | --------------------------------------- | ------------------- |
-| `TYPE_MATCH`      | 型別一樣（比 type 的 id）                       | 大多數物件               |
-| `ID_MATCH`        | 還是同一個物件（比 id）                           | 函式、模組這類「不該換人」的      |
-| `EQUALS_MATCH`    | 值相等                                     | 被 bake 成常數的 int、str |
-| `TENSOR_MATCH`    | dtype、device、shape、stride、requires_grad | 每一個 Tensor 輸入       |
-| `SEQUENCE_LENGTH` | list、tuple 長度                           | 被展開的容器              |
-| `GLOBAL_STATE`    | grad mode、autocast 等全域開關                | 每張圖都有               |
-
+| Guard | 檢查什麼 | 典型來源 |
+|----|----|----|
+| `TYPE_MATCH` | 型別一樣（比 type 的 id） | 大多數物件 |
+| `ID_MATCH` | 還是同一個物件（比 id） | 函式、模組這類「不該換人」的 |
+| `EQUALS_MATCH` | 值相等 | 被 bake 成常數的 int、str |
+| `TENSOR_MATCH` | dtype、device、shape、stride、requires_grad | 每一個 Tensor 輸入 |
+| `SEQUENCE_LENGTH` | list、tuple 長度 | 被展開的容器 |
+| `GLOBAL_STATE` | grad mode、autocast 等全域開關 | 每張圖都有 |
 
 `TENSOR_MATCH` 值得注意：它守的不只是「是個 Tensor」，而是 dtype、device、shape、stride、requires_grad 一整組，唯獨不守數值。任何一項變了，這張圖的假設就塌了 ex. Inductor 按 float32 生的 kernel 拿到 float64 就是錯的。
 
@@ -59,22 +53,20 @@ g(x, 3)
 
 在 L40S 上印出來的（整理過縮排）：
 
-```
-TREE_GUARD_MANAGER:
-+- RootGuardManager
-| +- DEFAULT_DEVICE: utils_device.CURRENT_DEVICE == None
-| +- GLOBAL_STATE: ___check_global_state()
-| +- TORCH_FUNCTION_MODE_STACK: ___check_torch_function_mode_stack()
-| +- GuardManager: source=L['n'], accessed_by=FrameLocalsGuardAccessor(key='n', framelocals_idx=1)
-| | +- EQUALS_MATCH: L['n'] == 3
-| +- GuardManager: source=L['x'], accessed_by=FrameLocalsGuardAccessor(key='x', framelocals_idx=0)
-| | +- TENSOR_MATCH: check_tensor(L['x'], Tensor, ..., torch.float32, device=0,
-|                     requires_grad=False, size=[4, 4], stride=[4, 1])
-| +- GuardManager: source=L['cfg_scale'], accessed_by=FrameLocalsGuardAccessor(key='cfg_scale', framelocals_idx=2)
-| | +- EQUALS_MATCH: L['cfg_scale'] == 2
+    TREE_GUARD_MANAGER:
+    +- RootGuardManager
+    | +- DEFAULT_DEVICE: utils_device.CURRENT_DEVICE == None
+    | +- GLOBAL_STATE: ___check_global_state()
+    | +- TORCH_FUNCTION_MODE_STACK: ___check_torch_function_mode_stack()
+    | +- GuardManager: source=L['n'], accessed_by=FrameLocalsGuardAccessor(key='n', framelocals_idx=1)
+    | | +- EQUALS_MATCH: L['n'] == 3
+    | +- GuardManager: source=L['x'], accessed_by=FrameLocalsGuardAccessor(key='x', framelocals_idx=0)
+    | | +- TENSOR_MATCH: check_tensor(L['x'], Tensor, ..., torch.float32, device=0,
+    |                     requires_grad=False, size=[4, 4], stride=[4, 1])
+    | +- GuardManager: source=L['cfg_scale'], accessed_by=FrameLocalsGuardAccessor(key='cfg_scale', framelocals_idx=2)
+    | | +- EQUALS_MATCH: L['cfg_scale'] == 2
 
-Guard eval latency = 9.60 us
-```
+    Guard eval latency = 9.60 us
 
 逐行讀：
 
@@ -84,7 +76,7 @@ Guard eval latency = 9.60 us
 - `cfg_scale` 在這個實驗裡是 closure 變數，所以也印成 `L[...]`；如果是模組層全域就會是 `G['cfg_scale'] == 2`。
 - 最後一行 `Guard eval latency = 9.60 us`：整棵樹跑一遍不到 10 微秒。這個數字後面會回來。
 
-每一條後面其實還帶著註解，指出它是因為哪一行使用者程式碼裝上的（`# return x * n * cfg_scale  # guards.py:16 in f`），除錯時很好用，這裡先省略以保持版面整潔。
+每一條後面其實還帶著註解，指出它是因為哪一行使用者程式碼裝上的（`# return x * n * cfg_scale # guards.py:16 in f`），除錯時很好用，這裡先省略以保持版面整潔。
 
 ## 實際試試 Recompile 機制
 
@@ -99,13 +91,11 @@ with torch.no_grad():
     g(x, 3)                              # grad mode 變了
 ```
 
-```
-(第一次呼叫沒有任何輸出)
-Recompiling function f ... - 0/0: tensor 'x' size mismatch at index 0. expected 4, actual 8
-Recompiling function f ... - 0/1: n == 3
-Recompiling function f ... - 0/2: tensor 'x' dtype mismatch. expected Float, actual Double
-Recompiling function f ... - 0/3: GLOBAL_STATE changed: grad_mode
-```
+    (第一次呼叫沒有任何輸出)
+    Recompiling function f ... - 0/0: tensor 'x' size mismatch at index 0. expected 4, actual 8
+    Recompiling function f ... - 0/1: n == 3
+    Recompiling function f ... - 0/2: tensor 'x' dtype mismatch. expected Float, actual Double
+    Recompiling function f ... - 0/3: GLOBAL_STATE changed: grad_mode
 
 第一次呼叫換了一顆全新的隨機 Tensor，什麼都沒發生，因為 `TENSOR_MATCH` 不看數值。後面四次每一次都重編，而且 log 直接告訴你是哪一條 Guard 沒過。這是最常見的幾種 recompile 原因：把會變的東西當純量參數傳、shape 一直換、dtype 混用、`no_grad` 裡外交替呼叫同一個函式。
 
@@ -126,7 +116,11 @@ print(len(entries))     # 5
 
 五個 cache entry，每個是一組（Guard 樹、編譯好的 code）。呼叫進來時，逐個 entry 驗票，第一個全過的就用它；全部失敗，才輪到重新編譯，編完把新 entry 掛到最前面（`extra_state.cpp` 裡的 `emplace_front`），命中的 entry 也會被搬到最前面，讓下次先檢查最近用過的那個。所以再呼叫一次 `g(x, 3)`、`g(x, 4)`、`g(torch.randn(8, 4), 3)`，`recompiles` 完全安靜，entry 數還是 5，各自命中各自的圖。
 
-Entry 有數量上限，`torch._dynamo.config.recompile_limit` 預設 8（舊名 `cache_size_limit`），超過就放棄編譯這個 frame、退回 eager 跑，這就是在之後 Recompilation 爆炸那篇要處理的問題。
+Entry 有數量上限，`torch._dynamo.config.recompile_limit` 預設 8（舊名 `cache_size_limit`），超過就放棄編譯這個 frame、退回 eager 跑，這就是在之後 Recompilation 爆炸那篇要處理的問題。以下就是剛剛所提到 Guard 運作的流程：
+
+![每次呼叫先在 cache entry 上驗票，全過才重用，全敗才重編](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day06/guards.gif)
+
+*圖一：同一個 `f` 連續四次呼叫的驗票過程。左邊是這次呼叫的輸入，中間是 `f.__code__` 上掛的 cache entry 與各自的 Guard 樹，右邊是結果。新 Tensor 同 shape 同 dtype 全過；`n` 從 3 變 4 讓 `EQUALS_MATCH` 失敗、重編、新圖掛到最前面且改押符號整數；`no_grad` 讓每張圖的 `GLOBAL_STATE` 都失敗、再編第三張；最後 `f(x, 3)` 逐個驗到全過的那張，命中的 entry 被搬到最前面。*
 
 ## 跟 Guard 相處的幾個開關
 
@@ -165,4 +159,3 @@ Guard 的數量不是看輸入有幾個，是看翻譯時押了多少注：每 b
 - [torch._dynamo.config（recompile_limit）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/config.py)
 - [Dynamo Deep-Dive（PyTorch 官方文件）](https://pytorch.org/docs/stable/torch.compiler_dynamo_deepdive.html)
 - [torch.compile 疑難排解：Recompilation](https://pytorch.org/docs/stable/torch.compiler_troubleshooting.html)
-

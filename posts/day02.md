@@ -71,13 +71,11 @@ print("compiled", bench10(compiled))
 
 在 L40S 上跑出來的結果：
 
-```
-torch 2.8.0+cu128 | NVIDIA L40S
-first call (compile + run): 1592.9 ms
-eager    1.171 ms (+/- 0.001)
-compiled 0.191 ms (+/- 0.001)
-speedup  6.12x
-```
+    torch 2.8.0+cu128 | NVIDIA L40S
+    first call (compile + run): 1592.9 ms
+    eager    1.171 ms (+/- 0.001)
+    compiled 0.191 ms (+/- 0.001)
+    speedup  6.12x
 
 同一個函式、同一張卡，編譯後快了六倍，十輪的標準差只有 0.001 ms，數字的表現很穩定。但更值得注意的是第一行：第一次呼叫花了 1.5 秒，是之後每次呼叫的八千倍。這段程式裡有兩個細節，而正是之後每一篇都有可能會踩到的坑，我們先筆記起來：
 
@@ -97,21 +95,19 @@ f_aot    = torch.compile(f, backend="aot_eager")  # Dynamo + AOTAutograd
 f_full   = torch.compile(f, backend="inductor")   # 完整 pipeline，這是預設值
 ```
 
-| backend | Dynamo 擷取 | AOTAutograd 展開 | Inductor 生成程式碼 |
-| --- | --- | --- | --- |
-| `"eager"` | 有 | 無 | 無 |
-| `"aot_eager"` | 有 | 有 | 無 |
-| `"inductor"` | 有 | 有 | 有 |
+| backend       | Dynamo 擷取 | AOTAutograd 展開 | Inductor 生成程式碼 |
+|---------------|-------------|------------------|---------------------|
+| `"eager"`     | 有          | 無               | 無                  |
+| `"aot_eager"` | 有          | 有               | 無                  |
+| `"inductor"`  | 有          | 有               | 有                  |
 
 三個名字很容易誤導，這邊先給個簡單的解釋。`backend="eager"` 不是「不編譯」。Dynamo 照樣攔截你的 Bytecode、建圖、裝 Guard，只是最後不生成新的 Kernel，而是把圖裡的 Operator 照原樣用 Eager 跑。所以它跑起來跟原生差不多快，但該 Graph Break 的地方一樣會斷、該 Recompile 的地方一樣會重編。`backend="aot_eager"` 則是多接一段 AOTAutograd：圖被展開、正規化、拆解，但還是用 Eager 執行每個 Operator。
 
 實際跑一次三個 backend：
 
-```
-backend=eager      1.171 ms (+/- 0.001)
-backend=aot_eager  1.172 ms (+/- 0.001)
-backend=inductor   0.191 ms (+/- 0.000)
-```
+    backend=eager      1.171 ms (+/- 0.001)
+    backend=aot_eager  1.172 ms (+/- 0.001)
+    backend=inductor   0.191 ms (+/- 0.000)
 
 前兩個跟原生 eager 的 1.171 ms 幾乎一樣，因為它們最後都還是一個一個 Operator 用 eager 跑，Dynamo 和 AOTAutograd 做的事都在編譯期，執行期看不出差別。加速全部發生在最後一段，也就是 Inductor 真的生出融合 Kernel 的那一刻。
 
@@ -128,28 +124,26 @@ print(explanation)
 
 輸出很長，前面幾行是重點：
 
-```
-Graph Count: 1
-Graph Break Count: 0
-Op Count: 5
-Break Reasons:
-Ops per Graph:
-  Ops 1:
-    <built-in method sin of type object ...>
-    <built-in method cos of type object ...>
-    <built-in function mul>
-    <built-in method tanh of type object ...>
-    <built-in function add>
-Out Guards:
-  Guard 2:
-    Name: "L['x']"
-    Create Function: TENSOR_MATCH
-  Guard 4:
-    Name: "L['torch'].cos"
-    Create Function: FUNCTION_MATCH
-    Code List: ["___check_obj_id(L['torch'].cos, 22515628001936)"]
-  ...
-```
+    Graph Count: 1
+    Graph Break Count: 0
+    Op Count: 5
+    Break Reasons:
+    Ops per Graph:
+      Ops 1:
+        
+        
+        
+        
+        
+    Out Guards:
+      Guard 2:
+        Name: "L['x']"
+        Create Function: TENSOR_MATCH
+      Guard 4:
+        Name: "L['torch'].cos"
+        Create Function: FUNCTION_MATCH
+        Code List: ["___check_obj_id(L['torch'].cos, 22515628001936)"]
+      ...
 
 像 `f` 這種乾淨的純 Tensor 運算，一張圖、零個 Graph Break、五個 Operator 全部進圖，這是最理想的情況。後面的 `Out Guards` 就是這張圖成立的前提：`x` 要是 Tensor 且 shape、dtype 對得上（`TENSOR_MATCH`），`torch.sin`、`torch.cos`、`torch.tanh` 要還是同一個函式物件（`FUNCTION_MATCH`，用 id 比對），還有 grad mode、預設 device 之類的全域狀態。下次呼叫時這些檢查全過，才會直接用編好的 Kernel。接下來在 Dynamo 那幾篇講的，就是什麼樣的 operator 或是函數會導致 Graph Break、什麼會讓 Guard 檢查失敗而重編，以及到底該怎麼修。
 
@@ -185,7 +179,7 @@ class GraphModule(torch.nn.Module):
 
 ```python
  ===== Forward graph 2 =====
-class <lambda>(torch.nn.Module):
+class (torch.nn.Module):
     def forward(self, arg0_1: "f32[4096, 4096][4096, 1]cuda:0"):
         sin: "f32[4096, 4096][4096, 1]cuda:0" = torch.ops.aten.sin.default(arg0_1)
         cos: "f32[4096, 4096][4096, 1]cuda:0" = torch.ops.aten.cos.default(arg0_1)
@@ -230,7 +224,7 @@ Kernel 的名字 `triton_poi_fused_add_cos_mul_sin_tanh_0` 已經把事情說完
 
 今天透過從使用者的角度來畫我們 landscape，簡單的理解了這個神秘黑盒子的骨架。`torch.compile` 從你寫的 Python 到 GPU 上的 Kernel，中間是 Dynamo、AOTAutograd、Inductor、Runtime 四段 pipeline。另一個值得記得的是 PyTorch 編譯是延遲的，第一次帶真實輸入呼叫時才一口氣跑完，所以第一次慢是正常的，通常在生產環境都會需要先 warm up 才可以測得比較準確的數據。`backend` 參數對應 pipeline 的斷點，`eager`、`aot_eager`、`inductor` 是層層包住的關係，也因此也成為定位問題最直接的工具。
 
-明天即將正式進入我們第一個重要的 component --> TorchDynamo！我們會來聊聊它到底是怎麼「在 Python 跑的當下」攔截你的程式的？這個答案基本上是藏在 CPython 的 Frame Evaluation Hook 裡。我們會用 `dis` 把 Bytecode 攤開，看 Dynamo 是在哪一層動的手腳，以及為什麼這個設計讓它能吃下幾乎任何 Python，卻又總在某些地方不得不斷開。那我們明天見！
+明天即將正式進入我們第一個重要的 component --\> TorchDynamo！我們會來聊聊它到底是怎麼「在 Python 跑的當下」攔截你的程式的？這個答案基本上是藏在 CPython 的 Frame Evaluation Hook 裡。我們會用 `dis` 把 Bytecode 攤開，看 Dynamo 是在哪一層動的手腳，以及為什麼這個設計讓它能吃下幾乎任何 Python，卻又總在某些地方不得不斷開。那我們明天見！
 
 ## 參考資料
 

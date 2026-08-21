@@ -28,15 +28,13 @@ dis.dis(f)
 
 在 Python 3.12 上會印出這樣：
 
-```
- 18           4 LOAD_DEREF               1 (torch)
-              6 LOAD_ATTR                1 (NULL|self + sin)
-             26 LOAD_FAST                0 (x)
-             28 CALL                     1
-             36 LOAD_CONST               1 (1)
-             38 BINARY_OP                0 (+)
-             42 RETURN_VALUE
-```
+     18           4 LOAD_DEREF               1 (torch)
+                  6 LOAD_ATTR                1 (NULL|self + sin)
+                 26 LOAD_FAST                0 (x)
+                 28 CALL                     1
+                 36 LOAD_CONST               1 (1)
+                 38 BINARY_OP                0 (+)
+                 42 RETURN_VALUE
 
 讀法很直覺：把 `torch` 推上 stack，取 `sin` 屬性，把 `x` 推上去，呼叫一次，推常數 `1`，做加法，回傳。CPython 拿到一個 frame，就交給一個 C 函式 `_PyEval_EvalFrameDefault` 去跑，它就是那個大 switch 迴圈，一條一條指令讀過去、執行、更新 stack。這是 Python 的心臟。
 
@@ -50,7 +48,6 @@ dis.dis(f)
 
 ```python
 >>> torch._C._dynamo.eval_frame.set_eval_frame
-<built-in function set_eval_frame>
 ```
 
 它的實作在 [`torch/csrc/dynamo/eval_frame.c`](https://github.com/pytorch/pytorch/blob/main/torch/csrc/dynamo/eval_frame.c)，Python 這一側的包裝在 [`torch/_dynamo/eval_frame.py`](https://github.com/pytorch/pytorch/blob/main/torch/_dynamo/eval_frame.py)。`torch.compile` 回傳的那個物件，被呼叫時做的第一件事就是把 `eval_frame` 換成 Dynamo 的版本，函式跑完再換回來。所以 Dynamo 只在你呼叫 compiled function 的期間接管，其他時候 CPython 照舊。
@@ -63,31 +60,29 @@ dis.dis(f)
 
 當你 `torch.compile(f)` 之後第一次呼叫，`f` 的 frame 送到 Dynamo 的自訂 evaluator。它先做一次快篩：這個 frame 有沒有可能含 Tensor 運算？如果是 Python 內建、標準函式庫、或者明確被標成 skip 的模組，直接原樣交回 `_PyEval_EvalFrameDefault`，不浪費時間。過了快篩的 frame 才會走完整的流程，大致是這幾步：
 
-1. **拿到 code object 和 bytecode**，順便把這次呼叫的區域變數、全域變數、closure 收進來，接下來「假裝執行」時才知道每個名字對到什麼。
-2. **符號式地執行 bytecode**。這是 Dynamo 的本體：一個 Python 層的 bytecode 直譯器，一條指令一個 handler，維護一個跟 CPython 一樣的 value stack。差別在 stack 上放的不是真值而是符號：Tensor 用 FakeTensor 代替，只有 shape、dtype、device；Python 物件被包成 `VariableTracker`，記著自己從哪裡來。碰到 Tensor 運算就往 FX Graph 加節點，碰到純 Python 的東西就在符號層直接算掉。
-3. **記下成立的前提，也就是 Guard**。每做一個假設就寫一條：`x` 是 f32、shape 是 `[8]`、`torch.sin` 還是同一個函式物件。這張圖只在這些條件全部成立時才是對的。
-4. **處理 side effect**。對 list `append`、對物件設屬性、寫全域變數，這些不能塞進純函數式的圖，先記在一本帳（`SideEffects`）上，等圖跑完再用 Python 補做。
-5. **把散落的產出收成一張 FX Graph**（`OutputGraph`），交給後端編譯，拿回一個可以呼叫的函式。
-6. **生成新的 bytecode**（`PyCodegen`）：原本那段運算換成「載入編譯產物、推參數、呼叫、把回傳值放回變數」，再接上第 4 步的 side effect 補做。
-7. **把新 bytecode 和 Guard 一起快取在 code object 上**。下次進來先跑 Guard，全過就直接執行改寫過的 bytecode；有一條不過就重來一次，也就是 Recompile。
+1.  **拿到 code object 和 bytecode**，順便把這次呼叫的區域變數、全域變數、closure 收進來，接下來「假裝執行」時才知道每個名字對到什麼。
+2.  **符號式地執行 bytecode**。這是 Dynamo 的本體：一個 Python 層的 bytecode 直譯器，一條指令一個 handler，維護一個跟 CPython 一樣的 value stack。差別在 stack 上放的不是真值而是符號：Tensor 用 FakeTensor 代替，只有 shape、dtype、device；Python 物件被包成 `VariableTracker`，記著自己從哪裡來。碰到 Tensor 運算就往 FX Graph 加節點，碰到純 Python 的東西就在符號層直接算掉。
+3.  **記下成立的前提，也就是 Guard**。每做一個假設就寫一條：`x` 是 f32、shape 是 `[8]`、`torch.sin` 還是同一個函式物件。這張圖只在這些條件全部成立時才是對的。
+4.  **處理 side effect**。對 list `append`、對物件設屬性、寫全域變數，這些不能塞進純函數式的圖，先記在一本帳（`SideEffects`）上，等圖跑完再用 Python 補做。
+5.  **把散落的產出收成一張 FX Graph**（`OutputGraph`），交給後端編譯，拿回一個可以呼叫的函式。
+6.  **生成新的 bytecode**（`PyCodegen`）：原本那段運算換成「載入編譯產物、推參數、呼叫、把回傳值放回變數」，再接上第 4 步的 side effect 補做。
+7.  **把新 bytecode 和 Guard 一起快取在 code object 上**。下次進來先跑 Guard，全過就直接執行改寫過的 bytecode；有一條不過就重來一次，也就是 Recompile。
 
 如果第 2 步走到一半碰到符號執行走不下去的指令（後面會看到），Dynamo 不會整個放棄，而是在那裡切一刀：前半段照上面的流程收成一張圖並編譯，斷點處交還 CPython 用真值執行，之後再從下一條指令開始新的一輪。這就是 Graph Break。
 
 上面每一步在 `torch/_dynamo/` 裡都對到一個具體的元件，接下來 Dynamo 這幾篇就是沿著這張表一格一格拆：
 
-
-| 步驟                | 元件                              | 原始碼位置                                               |
-| ----------------- | ------------------------------- | --------------------------------------------------- |
-| 攔下 frame，決定要不要處理  | eval_frame hook、`convert_frame` | `torch/csrc/dynamo/eval_frame.c`、`convert_frame.py` |
-| 符號執行 bytecode     | `InstructionTranslator`         | `symbolic_convert.py`                               |
-| 追蹤每一個 Python 值與來源 | `VariableTracker`、`Source`      | `variables/`、`source.py`                            |
-| 記下成立的前提           | `Guard`、`GuardBuilder`          | `guards.py`                                         |
-| 記帳、補做 side effect          | `SideEffects`                   | `side_effects.py`                                   |
-| 收成一張圖並送去編譯        | `OutputGraph`                   | `output_graph.py`                                   |
-| 生成新的 bytecode     | `PyCodegen`                     | `codegen.py`、`bytecode_transformation.py`           |
-| 走不下去就斷開、再接回來      | Graph Break、resume function     | `resume_execution.py`                               |
-| 形狀不固定時怎麼辦         | Symbolic Shapes                 | `torch/fx/experimental/symbolic_shapes.py`          |
-
+| 步驟 | 元件 | 原始碼位置 |
+|----|----|----|
+| 攔下 frame，決定要不要處理 | eval_frame hook、`convert_frame` | `torch/csrc/dynamo/eval_frame.c`、`convert_frame.py` |
+| 符號執行 bytecode | `InstructionTranslator` | `symbolic_convert.py` |
+| 追蹤每一個 Python 值與來源 | `VariableTracker`、`Source` | `variables/`、`source.py` |
+| 記下成立的前提 | `Guard`、`GuardBuilder` | `guards.py` |
+| 記帳、補做 side effect | `SideEffects` | `side_effects.py` |
+| 收成一張圖並送去編譯 | `OutputGraph` | `output_graph.py` |
+| 生成新的 bytecode | `PyCodegen` | `codegen.py`、`bytecode_transformation.py` |
+| 走不下去就斷開、再接回來 | Graph Break、resume function | `resume_execution.py` |
+| 形狀不固定時怎麼辦 | Symbolic Shapes | `torch/fx/experimental/symbolic_shapes.py` |
 
 所以 Dynamo 的「即時」不是它跑在旁邊監看，而是它就站在 CPython 執行每個 frame 的必經之路上，而且只在第一次真的動手，之後靠 Guard 決定要不要再動。
 
@@ -102,19 +97,17 @@ torch.compile(f)(torch.randn(8, device="cuda"))
 
 改寫前就是上面 `dis` 看到的那七條。改寫後長這樣（節錄）：
 
-```
-MODIFIED BYTECODE f bytecode.py line 17
-   4 LOAD_GLOBAL              3 (NULL + __compiled_fn_1_f0966bae_...)
-  ...
-  58 LOAD_FAST                0 (x)
-  ...
- 106 CALL                     1
- 114 STORE_FAST               1 (graph_out_0)
- 116 LOAD_FAST                1 (graph_out_0)
- 118 LOAD_CONST               2 (0)
- 120 BINARY_SUBSCR
- 126 RETURN_VALUE
-```
+    MODIFIED BYTECODE f bytecode.py line 17
+       4 LOAD_GLOBAL              3 (NULL + __compiled_fn_1_f0966bae_...)
+      ...
+      58 LOAD_FAST                0 (x)
+      ...
+     106 CALL                     1
+     114 STORE_FAST               1 (graph_out_0)
+     116 LOAD_FAST                1 (graph_out_0)
+     118 LOAD_CONST               2 (0)
+     120 BINARY_SUBSCR
+     126 RETURN_VALUE
 
 原本的 `LOAD_ATTR sin`、`CALL`、`BINARY_OP +` 全都不見了，換成 `LOAD_GLOBAL __compiled_fn_1_...`：把編譯好的產物當一個全域函式載進來，把 `x` 當參數呼叫它，拿回傳 tuple 的第 0 個元素回傳。整個 `f` 的計算被折疊成「呼叫一個編好的函式」。中間省略的幾條是 PyTorch 2.8 加的 `record_pregraph_bytecode_enter/exit`，只是給 profiler 用的標記，可以忽略。
 
@@ -141,14 +134,12 @@ def g(x):
 
 `x.sum() > 0` 要落地成一個 Python bool 才知道往哪跳，但 Dynamo 手上是符號 Tensor，它不知道該走哪條分支。這時它不會硬猜，而是斷開。用 `TORCH_LOGS="graph_breaks"` 看：
 
-```
-Graph break in user code at bytecode.py:35
-Graph Break Reason: Data-dependent branching
-  Explanation: Detected data-dependent branching (e.g. `if my_tensor.sum() > 0:`).
-               Dynamo does not support tracing dynamic control flow.
-  Hint: Use `torch.cond` to express dynamic control flow.
-  Developer debug context: attempted to jump with TensorVariable()
-```
+    Graph break in user code at bytecode.py:35
+    Graph Break Reason: Data-dependent branching
+      Explanation: Detected data-dependent branching (e.g. `if my_tensor.sum() > 0:`).
+                   Dynamo does not support tracing dynamic control flow.
+      Hint: Use `torch.cond` to express dynamic control flow.
+      Developer debug context: attempted to jump with TensorVariable()
 
 `dynamo.explain(g)(x)` 的摘要則是 `Graph Count: 2`、`Graph Break Count: 1`：`if` 之前能捕獲的部分收成第一張圖，控制權交還 CPython 去真的跑那個 `if`，等分支確定後再從後面接著捕獲第二張圖。最後那行 debug context 很有意思，`attempted to jump with TensorVariable()`，它說的是 Dynamo 的符號直譯器走到一條跳躍指令（`POP_JUMP_IF_FALSE`），發現 stack 頂端是一個 Tensor 而不是能判斷真假的常數，於是放棄。這正好是明天的主題。
 
@@ -172,4 +163,3 @@ Dynamo 的攔截點在 frame，不在函式。PEP 523 在 CPython 的 interprete
 - [torch/_dynamo/eval_frame.py](https://github.com/pytorch/pytorch/blob/main/torch/_dynamo/eval_frame.py)
 - [Dynamo Deep-Dive（PyTorch 官方文件）](https://pytorch.org/docs/stable/torch.compiler_dynamo_deepdive.html)
 - [torch.compile 的 logging 選項](https://pytorch.org/docs/stable/logging.html)
-
