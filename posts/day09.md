@@ -16,7 +16,7 @@ Day 3 的時候我們說過，eval hook 最後會還給 CPython 一段改寫過�
 2. 把圖的每個輸入按 Source 載上 stack
 3. `CALL`，拿回輸出 tuple
 4. 拆包，把每個輸出放回該在的位置
-5. 重播 side effect（Day 7 的帳本）
+5. replay side effect（Day 7 的帳本）
 6. `RETURN_VALUE`
 
 注意這張清單，裡面沒有任何一項是「計算」。乘法、加法、`torch.sin`，全都已經被搬進 `__compiled_fn_1` 裡了，留在 bytecode 層的只剩下搬運，把值從原本的位置搬上 stack、把結果搬回該在的位置、把記過的帳搬回真實世界。所以 PyCodegen 生出來的碼幾乎清一色是 `LOAD_*`、`STORE_*`、`CALL`、`BUILD_*` 這幾類指令，這也是它能做得這麼小的原因。CPython 拿到這段就照著跑，完全不知道自己正在執行一個編譯器的輸出。
@@ -85,7 +85,7 @@ RETURN_VALUE                     <- 任務 6
 
 - **`n` 沒被傳給 `__compiled_fn_1`**。它是 Python int，Day 5 已經被 bake 成常數了，圖的輸入只剩 `x`，所以擺輸入只需要一條 `LOAD_FAST x`，而這條指令就是 `LocalSource("x")` 的 `reconstruct()` 生出來的。
 - **輸出永遠是 tuple**。就算只有一個回傳值，圖的輸出也是 `(add,)`（Day 8 看過），所以要 `BINARY_SUBSCR` 取下標 0。`graph_out_0` 是現配的暫存區域變數，用完立刻 `DELETE_FAST` 歸還引用，跟圖裡中間值用完就 `= None` 是同一個潔癖。
-- **沒有任務 5**。這個 `f` 沒有 side effect，帳本是空的。Day 7 那個例子裡，重播碼就插在 `RETURN_VALUE` 之前。
+- **沒有任務 5**。這個 `f` 沒有 side effect，帳本是空的。Day 7 那個例子裡，replay 的 bytecode就插在 `RETURN_VALUE` 之前。
 - profiler 那段順便示範了 PyCodegen 的另外兩招。`tmp_2` 存的是 `enter` 回傳的物件，先收起來、等輸入擺完再交給 `exit` 用。`COPY 1` 加 `STORE_FAST tmp_1` 則是把剛載上來的函式順手快取一份。而快取正好就是下一節的主題。
 
 這段「原碼進、新碼出」的改寫現場，動起來就是下面這張圖。
@@ -108,7 +108,7 @@ RETURN_VALUE                     <- 任務 6
 
 乖乖翻完的情況確實沒什麼好重建的。但 `compile_subgraph` 的另一個觸發點是 graph break。斷點可以落在任何一條指令前，那一刻符號 stack 上可能疊著好幾個算到一半的值，locals 裡還有一堆斷點之後要用的變數。CPython 從斷點接手的前提，是真實 frame 的狀態要跟 Dynamo 模擬到那一刻的狀態一模一樣，所以生成的 bytecode 得把這個狀態原樣排出來。符號 stack 上的每個值逐個丟給 PyCodegen（`restore_stack`），有 Source 的從原位置載、是圖輸出的從 `graph_out_0` 取、常數直接 `LOAD_CONST`。活著的區域變數再一人一條 `STORE_FAST` 放回去。明天就會看到，resume function 的參數表接的就是這裡排好的東西。
 
-整段後綴的順序也是固定的。先把翻譯期新生、又逃出去的物件蓋出來存好，再排 stack，然後重播 side effect 帳本，最後 `STORE_FAST` 活變數、`DELETE_FAST graph_out_0`、交出控制權。原始碼裡其實另有一條快速通道，回傳值全是彼此不同的 Tensor、帳本乾淨等一串條件都滿足時，呼叫完直接 `UNPACK_SEQUENCE` 拆包，連 `graph_out_0` 都省。
+整段後綴的順序也是固定的。先把翻譯期新生、又逃出去的物件蓋出來存好，再排 stack，然後 replay side effect 帳本，最後 `STORE_FAST` 活變數、`DELETE_FAST graph_out_0`、交出控制權。原始碼裡其實另有一條快速通道，回傳值全是彼此不同的 Tensor、帳本乾淨等一串條件都滿足時，呼叫完直接 `UNPACK_SEQUENCE` 拆包，連 `graph_out_0` 都省。
 
 ## 底層工具箱：bytecode_transformation.py
 

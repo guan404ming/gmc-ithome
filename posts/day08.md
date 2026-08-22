@@ -117,7 +117,7 @@ def current_tracer(self):
 那倉庫收貨要收到什麼時候呢？時機只有兩種，RETURN（整個 frame 翻完了）或 Graph Break（翻不下去了）。兩條路殊途同歸，都走進 `compile_subgraph`，它的 docstring 把要做的事列得很白，呼叫編好的子圖、補做 side effect、生成 stack 和 locals 的重建碼、存回 locals。展開來是一連串動作。
 
 1. **算活性**：symbolic stack 和 locals 裡哪些值在這之後還會被用到（`_get_stack_values_to_restore`），它們得成為圖的輸出，不然斷點之後接不上。RETURN 時這很簡單，就是回傳值。Graph Break 時才是重頭戲，翻到一半的中間狀態全要保住。
-2. **side_effects 結帳**（Day 7）：`codegen_suffix` 請帳本把每筆修改的重播碼生出來。
+2. **side_effects 結帳**（Day 7）：`codegen_suffix` 請帳本把每筆修改的 replay 的 bytecode生出來。
 3. **收圖**：把活值接上 `output` 節點，`remove_unused_graphargs` 清掉沒用到的輸入，`_make_graph_module` 把 fx.Graph 包成 GraphModule。
 4. **`call_user_compiler`**：把 GraphModule 交給 backend（inductor、eager、或你自訂的），拿回一個可呼叫的函式。這一步被 `restore_global_state()` 包著，確保後端是在「編譯當下的全域狀態」下工作的。後端炸了會被包成 `BackendCompilerFailed` 丟出來。這就是 Day 2 說「第三站可以換」的接口。
 5. **`install_global`**：編譯結果塞進 frame 的 globals。名字來自 `unique_id("__compiled_fn", with_uuid=True)`，所以長成 `__compiled_fn_1_6d16fdd3_...` 這樣，帶 uuid 是為了讓不同 `torch.compile` 實例互不踩腳。實際印出來就看得到。
@@ -168,7 +168,7 @@ return cg.get_instructions()
 
 OutputGraph 就是一個 frame 一次編譯的收集點。節點經 SubgraphTracer 寫進 fx.Graph 並帶上出生證明、輸入按 Source 用到才登記且清單就是 placeholder 本身、Guard 住在 TracingContext 裡且環境前提出生就裝好、修改帳則掛在旁邊。RETURN 或 Graph Break 時 `compile_subgraph` 收攏一切，算活性、結帳、清輸入、交給後端、把 `__compiled_fn` 塞進 globals，空圖則直接放行。
 
-到這裡 `__compiled_fn_1` 已經躺在 globals 裡了，但 CPython 不會自己知道怎麼用它。所以還缺最後一步，生一段新的 bytecode，把「載入、擺參數、呼叫、拆輸出、重播帳本、return」寫出來。明天我們就來看看 PyCodegen 和它底下的 bytecode 工具箱。那我們明天見！
+到這裡 `__compiled_fn_1` 已經躺在 globals 裡了，但 CPython 不會自己知道怎麼用它。所以還缺最後一步，生一段新的 bytecode，把「載入、擺參數、呼叫、拆輸出、replay 帳本、return」寫出來。明天我們就來看看 PyCodegen 和它底下的 bytecode 工具箱。那我們明天見！
 
 ## 參考資料
 

@@ -118,7 +118,7 @@ def forward(self, mm, permute, tangents_1):
 
 ![min-cut partitioner 在 joint graph 上比較兩種切法後選擇存 mm，節點各自歸隊成 forward 與 backward 兩張圖，最後把旋鈕轉到底變成 checkpoint](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day15/min_cut.gif)
 
-*圖一：分家公證人的完整流程。上半是 `tanh(x @ w).sum()` 的 joint graph，forward 與 backward 靠資料流相連。先標出 backward 需要的值與各條邊的保存成本，一刀落在 `tanh` 右側（存 tanh）與左側（存 mm）同為 16 KB，但 pointwise 可以免費重算，於是刀往輸入方向推、`tanh` 複製一份歸隊到 backward。接著節點各自歸隊成 FORWARD 與 BACKWARD 兩張圖，中間跨線的 `mm` 與 `permute` 就是保存值。最後把旋鈕轉到底，checkpoint 只存 `primals`，backward 開頭重播整段 forward。*
+*圖一：分家公證人的完整流程。上半是 `tanh(x @ w).sum()` 的 joint graph，forward 與 backward 靠資料流相連。先標出 backward 需要的值與各條邊的保存成本，一刀落在 `tanh` 右側（存 tanh）與左側（存 mm）同為 16 KB，但 pointwise 可以免費重算，於是刀往輸入方向推、`tanh` 複製一份歸隊到 backward。接著節點各自歸隊成 FORWARD 與 BACKWARD 兩張圖，中間跨線的 `mm` 與 `permute` 就是保存值。最後把旋鈕轉到底，checkpoint 只存 `primals`，backward 開頭 replay 整段 forward。*
 
 ## 轉到底就是 activation checkpointing
 
