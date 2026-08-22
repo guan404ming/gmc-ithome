@@ -10,7 +10,7 @@ Dynamo 的故事在昨天正式收尾，今天進入 pipeline 的第二站。先
 
 正文開始！
 
-## 先看交接現場
+## Dynamo 交給 AOTAutograd 什麼
 
 整個系列的實驗一樣跑在 Modal 的 L40S、PyTorch 2.8.0 上，拿一個最小的訓練形狀。
 
@@ -40,7 +40,7 @@ class GraphModule(torch.nn.Module):
 
 交接的介面也很單純。Dynamo 的 `OutputGraph` 收完圖之後，把 GraphModule 和 example inputs 一起交給 backend 函式，而 `aot_eager`、`inductor` 這些 backend 內部都繞經同一個入口 [`aot_module_simplified`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_functorch/aot_autograd.py)。它收 `fw_compiler`、`bw_compiler`、`partition_fn` 三個關鍵的 callback，意思是「展開完之後，forward 圖交給誰編、backward 圖交給誰編、以及兩張圖之間那一刀怎麼切」。Day 2 的 `backend="aot_eager"` 就是把前兩個 callback 換成「什麼都不做、直接 eager 跑」的版本，所以能單獨觀察 AOTAutograd 這一段。
 
-## 跑一步真正的訓練
+## 實際跑一步訓練
 
 把 `aot_graphs` 打開。
 
@@ -110,7 +110,7 @@ def forward(self, arg0_1: "f32[4, 4][4, 1]cuda:0", arg1_1: "f32[4, 4][4, 1]cuda:
 
 要不要展開 backward，是看輸入的 `requires_grad` 和當下的 grad mode 決定的。Day 6 埋的一個伏筆也在這裡回收。`GLOBAL_STATE grad_mode` 那條 Guard 之所以存在，就是因為開著 grad 編出來的圖和 `no_grad` 底下編的根本是兩個東西，grad mode 一變，整套編譯產物都得換。
 
-## 一場編譯期的沙盤推演
+## AOTAutograd 是怎麼 trace 的
 
 現在回頭講機制。AOTAutograd 拿到 Dynamo 的 torch 層圖之後，做的事可以拆成三步。
 
@@ -126,7 +126,7 @@ def forward(self, arg0_1: "f32[4, 4][4, 1]cuda:0", arg1_1: "f32[4, 4][4, 1]cuda:
 
 *圖一：AOTAutograd 的完整流程。左邊是 Dynamo 交出的 torch 層 forward 圖。中間 AOTAutograd 拿 FakeTensor 重演一遍收成 joint graph 的前半，autograd 引擎接著把 backward 逐節點展開補上後半。partitioner 在 joint graph 上切一刀，`le`、`permute` 被搬到 forward 側存下來。最後分裂成右邊 Forward 與 Backward 兩張 ATen 層的圖，中間那條 saved 箭頭就是兩張圖的臍帶。*
 
-## 順便換了一種語言
+## 圖也從 torch 層降到 ATen 層
 
 比較一下 Dynamo 圖和 AOT 圖裡同一行程式的長相。
 

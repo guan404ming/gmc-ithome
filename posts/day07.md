@@ -14,7 +14,7 @@ FX Graph 交給後端之後，後端要自由地重排、融合、刪除節點�
 
 不過你的程式就是會碰世界。而兩個極端都不行。把修改塞進圖，後端的自由沒了。把修改丟掉，程式的語意錯了。所以出路就只有一條，翻譯期不真的改，先記下來，圖跑完再補做。這其實跟資料庫的 transaction 是同一個思路，所有寫入先進 log，commit 的瞬間一次生效，外界要嘛看到全部、要嘛什麼都沒看到。
 
-## 打開帳本：三個欄位、四種標記
+## SideEffects 裡面記了什麼
 
 `SideEffects` 掛在 `OutputGraph` 上（明天的主角），一個 frame 的翻譯過程共用同一本。打開 [`side_effects.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/side_effects.py) 看它的核心欄位，其實只有三個。
 
@@ -101,7 +101,7 @@ RETURN_VALUE
 
 *圖一：`forward` 的三行在時間軸上怎麼分家。追蹤期 `self.calls += 1` 和 `log.append` 進 SideEffects 帳本、真實世界完全不動，`x * 2` 進 FX Graph。圖執行完，改寫後的 bytecode 才把帳本裡的最終狀態逐筆重播回真實世界。*
 
-## 翻譯期間，帳本是唯一真相
+## 讀寫都先過帳本
 
 有個細節容易被忽略。修改被記帳之後，後續的讀取讀的是帳本，不是真實物件。
 
@@ -117,7 +117,7 @@ def g(x, obj):
 
 順手劃清一條邊界，Tensor 的 in-place 運算（`x.add_(1)`）不歸這本帳管。它是 Tensor 運算，直接進圖，之後由 AOTAutograd 的 Functionalization 收拾。`SideEffects` 管的是 Python 層，也就是屬性、容器、全域變數、closure 的 cell。
 
-## 重播碼的產地：codegen_suffix
+## 重播碼是怎麼生出來的
 
 翻譯結束（`RETURN` 或 Graph Break）時，`OutputGraph.compile_subgraph` 負責收攤，其中結帳的部分在 `codegen_suffix` 裡，順序固定分三步。
 
@@ -140,7 +140,7 @@ def g(x, obj):
 
 最後，`codegen_update_mutated` 把每筆帳拆成「準備新值」和「執行寫入」兩半。準備的部分順著生，寫入的部分收集在一個 `suffixes` list 裡，最後整個反序附加。這就是上面 bytecode 裡 `log[:] = [1]` 會插在 `__setattr__` 的參數和 `CALL 3` 中間的原因。兩筆帳的新值先全部排上 stack，寫入再按正確順序一筆一筆發生。
 
-## 沒逃出去的帳，整筆勾銷
+## 沒逃出去的帳，直接丟掉
 
 而在結帳之前其實還有一步過濾，叫 `prune_dead_object_new()`。它從「翻譯結束時還活著的東西」出發做可達性分析，根節點有三類，分別是即將被 return 的值（`tx.stack`）、Graph Break 時要留給後半段的區域變數（`symbolic_locals`）、以及所有 existing 物件。從這些根一路走引用鏈，走得到的 new 物件才需要重建，走不到的整筆勾銷。
 
@@ -158,7 +158,7 @@ RETURN_VALUE
 
 `tmp` 從頭到尾只活在符號世界，真實世界從來不知道它存在過。這跟 Day 4 看到「list 留在符號世界、圖上根本沒有它」是同一件事的兩面。讀的那面由 `InstructionTranslator` 就地吸收，寫的那面由 `SideEffects` 記帳後發現死掉、整筆撕掉。
 
-## 把三本帳拼在一起
+## 三本帳怎麼搭配
 
 走到這一步，三本帳終於可以拼起來了。同一個值，讀和寫走的是不同的帳。
 
@@ -168,7 +168,7 @@ RETURN_VALUE
 
 也因為讀寫是兩本帳，`self.calls += 1` 這種計數器是個經典踩雷組合。讀的那半被當成常數 bake 進圖、裝了一條 `EQUALS_MATCH` 的 Guard，寫的那半又把它加一寫回。於是下次呼叫時 `calls` 已經變了，Guard 必失敗、必重編，計數器每跳一次就重編一次，直到 automatic dynamic 介入停損。想在編譯區域裡維護計數器，用 buffer（Tensor）而不是 Python int，讓它走進圖的那條路。
 
-## 結不了的帳，只能舉手
+## 記不了帳的時候，就 Graph Break
 
 帳本能記的，前提是 Dynamo 對這個修改建得了模。建不了模的，翻譯就只能舉手 Graph Break。從原始碼裡挑幾個具體的例子來看。
 

@@ -30,7 +30,7 @@
 
 第二，有些 Guard 不是翻譯中長出來的，而是倉庫開張那一刻就裝上的。`__init__` 的最後一步呼叫 `init_ambient_guards()`，一口氣裝上 `GRAD_MODE`、`DEFAULT_DEVICE`、`DETERMINISTIC_ALGORITHMS`、`TORCH_FUNCTION_STATE`、`SHAPE_ENV` 這些「環境」前提。還記得 Day 6 讀 Guard 樹時，最前面那幾行不來自任何參數的 `GLOBAL_STATE`、`DEFAULT_DEVICE` 嗎？出處就是這裡。每張圖天生就押了「全域環境跟編譯當下一樣」這一注，一行使用者程式碼都還沒翻就押好了。
 
-## 動筆的人：create_proxy 與 SubgraphTracer
+## 節點是怎麼被寫進圖裡的
 
 Day 4 說 `BuiltinVariable` 發現兩個運算元是 Tensor，就「往圖上加一個 `mul` 節點」。具體的路是這樣走的。variable 層呼叫 [`wrap_fx_proxy`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/variables/builder.py)，它請 `OutputGraph.create_proxy` 造節點，而 OutputGraph 這邊其實又只是轉手。
 
@@ -49,7 +49,7 @@ def create_proxy(self, *args, **kwargs):
 
 另外，每個節點還掛著一個 `example_value`，一顆只有 shape、dtype、device、沒有數值的 FakeTensor。這就是 Day 3 說「符號執行」的物質基礎，也是圖上每個值印得出 `f32[4, 4][4, 1]cuda:0` 這種標註的原因。形狀資訊一路都在，值從頭到尾不在。
 
-## 輸入不是宣告出來的，是用到才登記
+## 輸入是用到才登記的
 
 節點講完了，接著來講輸入。Dynamo 不看函式簽名決定圖的輸入，一個 Tensor 要等到真的被用上，才呼叫 `create_graph_input` 建 placeholder、登記一筆 `GraphArg`。拿一小段程式驗證看看。
 
@@ -112,7 +112,7 @@ def current_tracer(self):
 
 比較麻煩的是自由變數。子圖裡用到外層的值，在 FX 的世界觀裡這是不合法的（一張圖只能用自己的 placeholder），所以 SubgraphTracer 的 `create_proxy` 在寫節點前多一步。發現參數是外層的 proxy，就呼叫 `maybe_lift_tracked_freevar_to_input`，把它就地 lift 成子圖的輸入，而且是遞迴的，巢狀幾層就一路往上提幾層，直到碰到真正持有它的那層為止。FX 本身沒有這種巢狀管理，SubgraphTracer 這層包裝很大一部分就是為它存在的。
 
-## compile_subgraph：收圖的瞬間
+## compile_subgraph 收圖時做了什麼
 
 那倉庫收貨要收到什麼時候呢？時機只有兩種，RETURN（整個 frame 翻完了）或 Graph Break（翻不下去了）。兩條路殊途同歸，都走進 `compile_subgraph`，它的 docstring 把要做的事列得很白，呼叫編好的子圖、補做 side effect、生成 stack 和 locals 的重建碼、存回 locals。展開來是一連串動作。
 

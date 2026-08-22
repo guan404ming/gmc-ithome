@@ -45,7 +45,7 @@ def forward(self, primals, tangents):
 
 順帶一提，`primals` 和 `tangents` 這兩個名字來自微分幾何的術語，functorch 的 JVP 世界觀就是這樣稱呼「原始輸入」和「方向導數」的，AOTAutograd 從 functorch 一路繼承了這套詞彙。
 
-## 先合起來，才分得開
+## 為什麼要先合成一張 joint graph
 
 Day 12 講過 AOTAutograd 的展開手法。拿 FakeTensor 把 forward 重新執行一遍，讓 autograd 引擎在上面跑出 backward，再把整個過程 trace 下來。更精確地說，它會先把你的函式包成一個 joint function，大概是這個形狀。
 
@@ -71,7 +71,7 @@ def joint(primals, tangents):
 
 切線往 forward 靠是多存，記憶體漲、速度快。往 backward 靠是多算，記憶體省、速度慢。這兩個極端之間的每一個中間點都是合法解，而 Partitioner（[`torch/_functorch/partitioners.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_functorch/partitioners.py)）的工作就是在這條光譜上挑一個好位置。它有兩個策略。`default_partition` 模仿 eager autograd 的行為，backward 用到什麼就存什麼。預設真正上場的則是 `min_cut_rematerialization_partition`，也就是今天的主角。
 
-## 一起來看公證人怎麼切！
+## 實際看 partitioner 怎麼切
 
 同一份 log 往下捲，`aot_graphs` 印出切完的兩張圖。
 
@@ -105,7 +105,7 @@ def forward(self, mm, permute, tangents_1):
 
 **第四，Day 12 的懸案順便破了。** 那時的例子是 `relu`，forward 存的是 `le`（relu 的 mask）而不是 `relu` 的輸出。現在可以讀懂了。`le` 的 dtype 是 `b8`，一個元素一個 byte，只有 `f32` 的四分之一，公證人挑了最便宜的那件家當過戶。存什麼從來不是「backward 公式寫了什麼就存什麼」，而是成本算出來的。
 
-## min-cut：把分家變成一道圖論題
+## 切在哪裡是一道 min-cut 問題
 
 那「跨線傳輸的量最小」這件事是怎麼算的？這就是 min-cut 這個名字的來源。`min_cut_rematerialization_partition` 把問題建模成經典的最大流最小割。
 
@@ -120,7 +120,7 @@ def forward(self, mm, permute, tangents_1):
 
 *圖一：分家公證人的完整流程。上半是 `tanh(x @ w).sum()` 的 joint graph，forward 與 backward 靠資料流相連。先標出 backward 需要的值與各條邊的保存成本，一刀落在 `tanh` 右側（存 tanh）與左側（存 mm）同為 16 KB，但 pointwise 可以免費重算，於是刀往輸入方向推、`tanh` 複製一份歸隊到 backward。接著節點各自歸隊成 FORWARD 與 BACKWARD 兩張圖，中間跨線的 `mm` 與 `permute` 就是保存值。最後把旋鈕轉到底，checkpoint 只存 `primals`，backward 開頭重播整段 forward。*
 
-## 把旋鈕轉到底：activation checkpointing
+## 轉到底就是 activation checkpointing
 
 min-cut 是自動找的折衷點，但這顆旋鈕也可以手動轉到底。把同一個函式包進 `torch.utils.checkpoint`。
 
@@ -163,7 +163,7 @@ Forward 一個中間值都不存，只把原始輸入原封不動傳過去。bac
 
 其實兩個極端之間還有一段可以微調的空間。`torch._functorch.config.activation_memory_budget` 是一個 0 到 1 之間的旋鈕，1 是預設的 min-cut 行為，0 等於整段 checkpoint，中間值則會讓 partitioner 在給定的記憶體預算內，用背包問題的解法挑出最划算的一組重算對象。旋鈕這個比喻不是修辭，它真的是一顆連續的旋鈕。
 
-## 這一刀的份量
+## 這一刀省下多少記憶體
 
 最後把鏡頭拉遠一點。這一刀之所以是編譯式訓練的關鍵設計，有兩個層次的原因。
 

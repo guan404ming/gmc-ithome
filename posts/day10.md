@@ -19,7 +19,7 @@ Day 4 講過判斷發生的位置。`dispatch_table` 對幾乎每條 opcode 都�
 
 第一類我們在 Day 3 就親眼看過了，`generic_jump` 彈出 stack 頂端發現是 `TensorVariable`，丟出 `attempted to jump with TensorVariable()`。第二類有個開關 `torch._dynamo.config.capture_scalar_outputs`，打開之後 `.item()` 不再斷，而是變成一個沒有具體值的符號，代價留到明天 Symbolic Shapes 那篇再算。第三類就是今天的主角。第四類則對應到 Day 5 講過的 `trace_rules.py` 名單，名單上說要跳過的函式，呼叫它就是一個潛在的斷點。
 
-## 舉手的姿勢：Unsupported 例外
+## Unsupported 例外是怎麼丟出來的
 
 handler 舉手的方式不是回傳一個錯誤碼，而是直接丟一個例外。[`exc.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/exc.py) 裡定義了 `Unsupported`，所有 handler 統一經過 `unimplemented_v2()` 把它丟出來，而且丟的時候要交四樣東西，分別是 `gb_type`（分類）、`context`（現場）、`explanation`（解釋）、`hints`（修法建議）。這就是為什麼你看到的每一條 graph break 訊息都長同一個樣子，分類、解釋、提示一應俱全，等一下的實驗就會看到實例。
 
@@ -27,7 +27,7 @@ handler 舉手的方式不是回傳一個錯誤碼，而是直接丟一個例外
 
 不過收拾流程有個麻煩，例外飛出來的時候，翻譯常常是做到一半的。`CALL` 往被 inline 的函式裡鑽到一半才發現翻不了，這時 stack 疊了一半、Day 7 的帳本記了一半，狀態是髒的，直接在這裡切圖就會切出錯的東西。Dynamo 的解法很乾脆，砍掉重練。丟出 `RestartAnalysis` 重翻一遍，第一遍爆炸前 `SpeculationLog` 已經記下「走到第 N 條指令會失敗」，第二遍走到 N 就不往裡鑽，先把圖收乾淨、把斷點擺在乾淨的指令邊界上。兩遍分析花的是編譯期的時間，換到的是斷點永遠落在狀態一致的地方。這件事在 `dynamo.explain` 的 Compile Times 裡其實看得到痕跡，等一下的實驗明明只編了一次，卻會同時出現 `compile_attempt_0` 和 `compile_attempt_1` 兩筆。
 
-## 收前半、回 eager、包續集
+## 斷開之後 Dynamo 做的三件事
 
 收拾流程本身做的就是三件事。翻譯進行到某條指令、`Unsupported` 被接住之後，Dynamo 並不會放棄整個函式，而是照下面三步處理。
 
@@ -37,7 +37,7 @@ handler 舉手的方式不是回傳一個錯誤碼，而是直接丟一個例外
 
 而關鍵就在第三步的後續。resume function 也是函式，一被呼叫，Day 3 的 eval hook 照樣攔截它，於是斷點之後的程式碼就編成了第二張圖。一次 break 的結果，就是兩張圖，中間夾一小段 eager。
 
-## 拿一個 print 開刀
+## 用 print 實際跑一次
 
 ```python
 def f(x):
@@ -160,7 +160,7 @@ Ops per Graph:
 
 *圖一：`f` 的 bytecode 時間軸翻譯到 `print` 舉手之後被切成三段，前段收成圖一交給 Inductor、`print` 那條指令掉回 eager、剩下包成 `__resume_at_32_3` 再被 eval hook 攔截編成圖二，最後執行路徑把三段重新縫成一條。*
 
-## Break 竟然會傳染？inline 裡的斷點
+## inline 裡的斷點會往上傳
 
 那如果是被 inline 的函式（Day 5）內部發生 `Unsupported` 呢？Dynamo 是沒辦法在子函式裡斷的，因為子函式沒有自己的 frame，斷在裡面沒有地方可以 resume。所以 inline 途中的斷點會讓整個 call 在 caller 端變成 break 點，一層層往上傳，直到真正有 frame 的邊界為止。
 

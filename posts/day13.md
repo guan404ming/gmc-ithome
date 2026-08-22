@@ -10,7 +10,7 @@ Functionalization 做的就是這件事，只是手稿換成了 Tensor。`x.add_
 
 正文開始！
 
-## 為什麼 in-place 對編譯器是毒藥？
+## 為什麼 in-place 對編譯器這麼麻煩
 
 先把問題講清楚。Inductor 這類後端要做的事是重排和融合，把幾個 pointwise 運算揉進同一個 kernel、把運算順序調整成對記憶體最友善的樣子。這一切成立的前提是「值不會在背後被改掉」，圖上一個節點的輸出，不管誰在什麼時候讀，讀到的都是同一個值。
 
@@ -20,7 +20,7 @@ In-place 直接毀掉這個前提。`add_` 執行之後，所有指向同一塊�
 
 先跟 Day 7 劃個界線。SideEffects 管的是 Python 層的修改，`self.counter += 1`、往 list 裡 `append`，這些東西進不了圖，所以記帳後用 bytecode 重播。但 `add_` 是合法的 Tensor 運算，它進得了圖，Dynamo 也真的把它原樣放進圖裡。問題出在後端不喜歡它，所以得在 Dynamo 和 Inductor 之間有人負責把它「翻譯」掉，這個人就是 AOTAutograd 裡的 Functionalization。
 
-## 抄寫員的兩條規則
+## Functionalization 的兩條規則
 
 Functionalization 的規則其實只有兩條。
 
@@ -29,7 +29,7 @@ Functionalization 的規則其實只有兩條。
 
 兩條規則合起來，圖內部就完全沒有 mutation 了，每個節點的值一旦產生就不再改變，是教科書定義的 SSA 形式。剩下的唯一問題是邊界，這個下面會講。
 
-## 實測：view 碰上 in-place
+## 實際測 view 加 in-place
 
 拿一個把 view 和 in-place 都用上的函式來實測，一樣跑在 Modal 的 L40S 上，`torch 2.8.0+cu128`。這個函式透過 view 就地改了 `x`，最後回傳依賴被改過的 `x`。
 
@@ -117,7 +117,7 @@ def forward(self, arg0_1: "f32[4][1]cuda:0"):
 
 回頭一看，這跟 Day 7 的結構一模一樣。SideEffects 把 Python 層的修改記帳、圖跑完用 bytecode 重播。Functionalization 把 Tensor 層的修改謄寫、圖尾端一條 `copy_` 寫回。兩層各管一段，語意都靠「最後一刻結算」保住。
 
-## 循著原始碼找到抄寫員
+## 原始碼裡它在哪
 
 對照 v2.8.0 的原始碼，這套機制分兩層。
 
@@ -127,7 +127,7 @@ View 的部分更講究一點。每做一次 view，wrapper 會記下一筆 `Vie
 
 AOTAutograd 這一側，追蹤前會先跑一遍 [`collect_metadata_analysis.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_functorch/_aot_autograd/collect_metadata_analysis.py) 裡的 `run_functionalized_fw_and_collect_metadata`，把函式在 functionalization 底下用 FakeTensor 跑一次，收集出上面看到的 `ViewAndMutationMeta`。哪個輸入被改過、哪個輸出其實是輸入的 alias，全部先問清楚，再決定圖要長什麼樣、wrapper 要在圖外補做哪些事。
 
-## 難寫的分析，只寫一次
+## 為什麼不留給後端自己處理
 
 理論上 Inductor 也可以自己分析 aliasing，但代價是每個後端都要重新實作一遍這套非常難寫對的分析，像是 view of view、跨 view 的寫入順序、輸入輸出互為 alias，每一項都是坑。在 AOTAutograd 集中做一次，後端拿到的圖保證純函數式，這就是「正規化」的意義，把千奇百怪的合法寫法收斂成一種標準形狀，後面的每一層都只需要處理標準形狀。這跟 Day 12 講的「順便換成 ATen 語言」是同一個哲學，正規化做得越徹底，後端越好寫。
 

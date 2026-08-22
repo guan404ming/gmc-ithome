@@ -8,7 +8,7 @@ Decomposition 的思路很像玩樂高。大多數看起來很複雜的 op，其
 
 正文開始！
 
-## op 的世界其實分好幾層
+## op 其實分好幾層
 
 在拆之前，先把「op 有幾層」這件事講清楚，因為 decomposition 拆的方向就是沿著這個階層往下走，整理成一張表。
 
@@ -79,7 +79,7 @@ GELU 則被拆成它的數學定義 `0.5 * x * (1 + erf(x / sqrt(2)))`。`mul_2`
 
 *圖一：拆解加融合的完整旅程。左邊是 torch 層的高階 op，中間是查 decomposition table 之後的 ATen 圖，LayerNorm 先炸開成七行、GELU 再炸開成五行。`x @ w` 這種戰略 op 不在表裡，原樣穿過直達後端。右邊是 Inductor 的收攏，十個 pointwise 被融回一個 `triton_poi_fused_*` kernel，`var_mean` 走 reduction kernel，mm 交給 matmul template。*
 
-## 翻開拆解表
+## 拆解表長什麼樣
 
 那「怎麼拆」是誰規定的？答案意外地樸素，就是一張 op 對到 Python 函式的映射表。在 [`torch/_decomp/__init__.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_decomp/__init__.py) 裡就是一個全域 dict，實測數一下規模。
 
@@ -127,7 +127,7 @@ remove_decompositions(decompositions, decomps_to_exclude)
 
 如果哪天你要寫自己的後端（這個系列最後真的會寫一個），拿到的第一個禮物就是這張表。`get_decompositions()` 挑你要的規則，不支援的 op 讓表幫你拆掉，你只需要實作剩下的基本運算。
 
-## 拆與不拆的智慧
+## 哪些 op 不該拆
 
 最後回頭看圖上兩個「倖存者」，它們是理解 decomposition 分寸感的關鍵。
 

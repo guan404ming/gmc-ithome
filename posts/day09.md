@@ -21,7 +21,7 @@ Day 3 的時候我們說過，eval hook 最後會還給 CPython 一段改寫過�
 
 注意這張清單，裡面沒有任何一項是「計算」。乘法、加法、`torch.sin`，全都已經被搬進 `__compiled_fn_1` 裡了，留在 bytecode 層的只剩下搬運，把值從原本的位置搬上 stack、把結果搬回該在的位置、把記過的帳搬回真實世界。所以 PyCodegen 生出來的碼幾乎清一色是 `LOAD_*`、`STORE_*`、`CALL`、`BUILD_*` 這幾類指令，這也是它能做得這麼小的原因。CPython 拿到這段就照著跑，完全不知道自己正在執行一個編譯器的輸出。
 
-## PyCodegen：會抄捷徑的碼生成器
+## PyCodegen 怎麼挑最短路徑
 
 它的核心介面小到有點誇張，`PyCodegen` 物件本身是可呼叫的。`__call__` 收一個 `VariableTracker` 或一條 `Source`，往內部的指令表 append「執行完之後，這個值會出現在 stack 頂端」的指令。收圖時的所有生成，就是對著一串值逐個呼叫它。而它真正的本事在於挑最短路徑，捷徑按優先序排下來大概像下表。
 
@@ -36,7 +36,7 @@ Day 3 的時候我們說過，eval hook 最後會還給 CPython 一段改寫過�
 
 順帶一提，`reconstruct` 這個名字其實在 Day 5 的介面表就出現過。它是每個 `VariableTracker` 都要回答的問題「改寫後的 bytecode 要怎麼把我重建出來」，而 `Source` 上也有一個同名方法。分工很清楚，有 Source 的值由 `source.reconstruct()` 發指令，從原位置載回來。沒有 Source 的值，也就是翻譯期間新生的 list、dict、閉包，則由 `VariableTracker` 自己的 `reconstruct()` 發，`BUILD_LIST`、`BUILD_MAP` 一磚一瓦蓋出來。Day 4 說過 `parts` 這種翻譯期的 list 圖上根本沒有，但如果它要被 return 出去，bytecode 層就必須真的把它蓋出來，`reconstruct` 就是那本蓋法說明書。而連 `reconstruct` 都寫不出來的值（某些 C 擴充物件），就會變成一條 `Reconstruction failure` 的 graph break。
 
-## 改寫前後，攤開對照
+## 改寫前後對照著看
 
 接下來我們就用 `TORCH_LOGS="bytecode"`，把 `f(x, n) -> x * n + 1` 在 L40S 上（Python 3.12、PyTorch 2.8.0）改寫前後的 bytecode 都印出來對照看看。改寫前就是 Day 4 看過的那六條，改寫後的完整版長成下面這樣。
 
@@ -94,7 +94,7 @@ RETURN_VALUE                     <- 任務 6
 
 *圖一：`f(x, n) -> x * n + 1` 的改寫現場。左邊是原 bytecode，中間的 PyCodegen 逐條發出新指令，載入 `__compiled_fn_1`、按 Source 擺輸入（`n` 被 bake、不用載）、一條 `CALL` 吃掉整段計算、拆輸出、return。最後 `transform_code_object` 組裝，offset 這時才被算出來。*
 
-## 為什麼要生兩遍？pass1 數帳、pass2 出碼
+## 為什麼要生兩遍？
 
 先想一個小問題。如果圖有兩個輸入 `cfg.a.x` 和 `cfg.a.y`，載入碼是不是就得把 `LOAD_FAST cfg`、`LOAD_ATTR a` 這條前綴走兩次？
 
@@ -102,7 +102,7 @@ RETURN_VALUE                     <- 任務 6
 
 另一個更便宜的快取是 `top_of_stack`。PyCodegen 會記著「上一次生成完，stack 頂端是誰」，下一個要的值剛好就是它的話，一條 `COPY 1` 複製了事，連 `LOAD_FAST` 都省下來了。
 
-## 把斷點那一刻的世界排回去
+## Graph Break 時要重建什麼
 
 再問一個問題。RETURN 的時候 stack 上不就剩一個回傳值嗎？那「重建 stack」到底是在重建什麼？
 
