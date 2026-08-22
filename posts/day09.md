@@ -99,7 +99,7 @@ RETURN_VALUE                     <- 任務 6
 
 先想一個小問題。如果圖有兩個輸入 `cfg.a.x` 和 `cfg.a.y`，loading code 是不是就得把 `LOAD_FAST cfg`、`LOAD_ATTR a` 這條前綴走兩次？
 
-答案是不用，因為這段碼其實生了兩遍（[`output_graph.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/output_graph.py) 的 `compile_subgraph`）。第一遍的產出直接丟掉，只留下 side effect。PyCodegen 有一個 `uses` 計數器，記下每個值、每條 Source 各被載了幾次。兩遍之間掃一輪，被用超過一次、又不是本來就一條指令就拿得到的（區域變數不算），就登記進 `tempvars`。第二遍才是真的出碼。登記過的值第一次被載出來時，多生一條 `COPY` 和 `STORE_FAST tmp_N` 存進暫存變數，之後每次要用都只是一條便宜的 `LOAD_FAST tmp_N`。原始碼的註解「This essentially implements CSE.」說得很直白，也就是編譯器教科書裡的 common subexpression elimination，在 bytecode 生成層又出現了一次。
+答案是不用，PyCodegen 的做法很像寫文章前先打草稿（[`output_graph.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/output_graph.py) 的 `compile_subgraph`）。第一遍就是草稿，生出來的指令直接丟掉，只做一件事，用 `uses` 計數器數清楚每個值總共被載了幾次。數完掃一輪，發現某個值被用了不只一次、而且每次都得走一長串指令才拿得到，就把它登記進 `tempvars`，意思是「這個值得先存起來」。第二遍才是正式謄寫。被登記的值第一次載出來時，順手多生一條 `COPY` 和 `STORE_FAST tmp_N` 存進暫存變數，之後每次要用都只是一條便宜的 `LOAD_FAST tmp_N`，那串長前綴只需要走一次。原始碼的註解「This essentially implements CSE.」說的就是這件事，也就是編譯器教科書裡的 common subexpression elimination，在 bytecode 生成層又出現了一次。
 
 另一個更便宜的快取是 `top_of_stack`。PyCodegen 會記著「上一次生成完，stack 頂端是誰」，下一個要的值剛好就是它的話，一條 `COPY 1` 複製了事，連 `LOAD_FAST` 都省下來了。
 
