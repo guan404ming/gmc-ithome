@@ -39,13 +39,11 @@ Day 4 說 `BuiltinVariable` 發現兩個運算元是 Tensor，就「往圖上加
 # File: /root/output_graph.py:15 in f, code: return (x @ y + bias).relu()
 ```
 
-它就是這時候寫進 meta、印圖時再讀出來的。所以圖不只是節點的集合，每個節點都帶著「我從你的哪一行程式碼來」的出生證明，之後 Graph Break 訊息、profiler 歸因、AOTAutograd 的 stack trace 保留，全都吃這份 meta。
+它就是這時候寫進 meta、印圖時再讀出來的。所以圖不只是節點的集合，每個節點都帶著「我從你的哪一行程式碼來」的出生證明，之後 Graph Break 訊息、profiler 歸因、AOTAutograd 的 stack trace 保留，全都吃這份 meta。另外，每個節點還掛著一個 `example_value`，一顆只有 shape、dtype、device、沒有數值的 FakeTensor。這就是 Day 3 說「符號執行」的基礎，也是圖上每個值印得出 `f32[4, 4][4, 1]cuda:0` 這種標註的原因。形狀資訊一路都在，值從頭到尾沒有存。
 
-另外，每個節點還掛著一個 `example_value`，一顆只有 shape、dtype、device、沒有數值的 FakeTensor。這就是 Day 3 說「符號執行」的物質基礎，也是圖上每個值印得出 `f32[4, 4][4, 1]cuda:0` 這種標註的原因。形狀資訊一路都在，值從頭到尾不在。
+## 輸入是用到的時候才登記的
 
-## 輸入是用到才登記的
-
-節點講完了，接著來講輸入。Dynamo 不看函式簽名決定圖的輸入，一個 Tensor 要等到真的被用上，才呼叫 `create_graph_input` 建 placeholder、登記一筆 `GraphArg`。拿一小段程式驗證看看。
+節點講完了，接著來講輸入。Dynamo 不看 function signature 決定圖的輸入，一個 Tensor 要等到真的被用上，才呼叫 `create_graph_input` 建 placeholder、登記一筆 `GraphArg`。拿一小段程式驗證看看。
 
 ```python
 bias = torch.randn(4, device="cuda")
