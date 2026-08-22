@@ -2,7 +2,7 @@
 
 ## 前言
 
-前四天我們各講了一條生產線：節點（Day 4）、包裝（Day 5）、Guard（Day 6）、修改帳（Day 7）。每條線都在產出東西，不過有一個問題我們一直沒問：這些產出到底寫到哪裡去了？節點說「往圖上加」，是往哪張圖上加？Guard 說「丟進集合」，又是誰的集合？今天就來介紹這個負責收貨的中央倉庫。簡單來說，`InstructionTranslator` 是筆，[`OutputGraph`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/output_graph.py) 就是那張紙：一個 frame 的一次編譯只會有一個 OutputGraph，所有產出都寫在它上面。
+前四天我們各講了一條生產線：節點（Day 4）、包裝（Day 5）、Guard（Day 6）、修改帳（Day 7）。每條線都在產出東西，不過有一個問題我們一直沒問：這些產出到底寫到哪裡去了？節點說「往圖上加」，是往哪張圖上加？Guard 說「丟進集合」，又是誰的集合？今天就來介紹這個負責收貨的中央倉庫。簡單來說，`InstructionTranslator` 是筆，[`OutputGraph`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/output_graph.py) 就是那張紙。一個 frame 的一次編譯只會有一個 OutputGraph，所有產出都寫在它上面。
 
 原始碼裡它的 docstring 第一句話就把定位講死了：「Wrapper class to hold outputs of InstructionTranslator」。那今天我們就沿著這句話來拆三件事：產出是怎麼一筆一筆寫進去的、輸入為什麼是「用到才登記」、以及 RETURN 或 Graph Break 的那一瞬間，`compile_subgraph` 是怎麼把一切收攏成一張 FX Graph 交出去的。
 
@@ -10,7 +10,7 @@
 
 ## 一個 frame，一個倉庫
 
-先來把「一對一」這件事講清楚，因為它其實解釋了前幾天看到的一個現象。docstring 接著說：OutputGraph 與被處理的 frame 一對一；當使用者的程式呼叫另一個函式，Dynamo 開的 `InliningInstructionTranslator` 會**繼續寫進 root translator 的同一個 OutputGraph**。這就是 Day 5 看到「`helper` 被 inline 之後，整條呼叫鏈攤平成一張圖」的機關：筆可以換好幾支（每 inline 一層就多一台 translator），紙從頭到尾只有一張。
+先來把「一對一」這件事講清楚，因為它其實解釋了前幾天看到的一個現象。docstring 接著說，OutputGraph 與被處理的 frame 一對一；當使用者的程式呼叫另一個函式，Dynamo 開的 `InliningInstructionTranslator` 會**繼續寫進 root translator 的同一個 OutputGraph**。這就是 Day 5 看到「`helper` 被 inline 之後，整條呼叫鏈攤平成一張圖」的機關。筆可以換好幾支（每 inline 一層就多一台 translator），紙從頭到尾只有一張。
 
 那這張紙上到底有什麼呢？看一下 `__init__` 就知道倉庫開張時擺了哪些貨架：
 
@@ -24,22 +24,22 @@
 | `installed_globals` 暫存區 | 等著塞進 frame globals 的東西，編譯結果就放這 | `install_global` |
 | `output_instructions` | 收圖後生成的新 bytecode | `compile_subgraph`（明天的主角） |
 
-這裡有兩個細節值得先特別拉出來簡單講一下。
+其中有兩個細節，先講清楚再往下走。
 
-第一，`guards` 和 `nn_modules` 其實不是 OutputGraph 自己的欄位，而是 property，轉手到 `self.tracing_context`。`__init__` 裡先建了 `ShapeEnv` 和 `FakeTensorMode`，再用它們建一個 [`TracingContext`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_guards.py)，Guard 真正住在 `tracing_context.guards_context.dynamo_guards` 裡。那為什麼要多這一層呢？主要是因為 Guard 的產地不只 Dynamo：之後 AOTAutograd 和 Symbolic Shapes 也會往裡面添前提，TracingContext 是整條編譯管線共用的隨身包，OutputGraph 只是它在 Dynamo 這一段的持有者。
+第一，`guards` 和 `nn_modules` 其實不是 OutputGraph 自己的欄位，而是 property，轉手到 `self.tracing_context`。`__init__` 裡先建了 `ShapeEnv` 和 `FakeTensorMode`，再用它們建一個 [`TracingContext`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_guards.py)，Guard 真正住在 `tracing_context.guards_context.dynamo_guards` 裡。那為什麼要多這一層呢？主要是因為 Guard 的產地不只 Dynamo，之後 AOTAutograd 和 Symbolic Shapes 也會往裡面添前提，TracingContext 是整條編譯管線共用的隨身包，OutputGraph 只是它在 Dynamo 這一段的持有者。
 
-第二，有些 Guard 不是翻譯中長出來的，而是倉庫開張那一刻就裝上的。`__init__` 的最後一步呼叫 `init_ambient_guards()`，一口氣裝上 `GRAD_MODE`、`DEFAULT_DEVICE`、`DETERMINISTIC_ALGORITHMS`、`TORCH_FUNCTION_STATE`、`SHAPE_ENV` 這些「環境」前提。還記得 Day 6 讀 Guard 樹時，最前面那幾行不來自任何參數的 `GLOBAL_STATE`、`DEFAULT_DEVICE` 嗎？出處就是這裡：每張圖天生就押了「全域環境跟編譯當下一樣」這一注，一行使用者程式碼都還沒翻就押好了。
+第二，有些 Guard 不是翻譯中長出來的，而是倉庫開張那一刻就裝上的。`__init__` 的最後一步呼叫 `init_ambient_guards()`，一口氣裝上 `GRAD_MODE`、`DEFAULT_DEVICE`、`DETERMINISTIC_ALGORITHMS`、`TORCH_FUNCTION_STATE`、`SHAPE_ENV` 這些「環境」前提。還記得 Day 6 讀 Guard 樹時，最前面那幾行不來自任何參數的 `GLOBAL_STATE`、`DEFAULT_DEVICE` 嗎？出處就是這裡。每張圖天生就押了「全域環境跟編譯當下一樣」這一注，一行使用者程式碼都還沒翻就押好了。
 
-## 節點是怎麼寫上去的？create_proxy 這條路
+## 動筆的人：create_proxy 與 SubgraphTracer
 
-Day 4 說 `BuiltinVariable` 發現兩個運算元是 Tensor，就「往圖上加一個 `mul` 節點」。那具體的路是這樣走的：variable 層呼叫 [`wrap_fx_proxy`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/variables/builder.py)，它請 `OutputGraph.create_proxy` 造節點，而 OutputGraph 這邊其實又只是轉手：
+Day 4 說 `BuiltinVariable` 發現兩個運算元是 Tensor，就「往圖上加一個 `mul` 節點」。具體的路是這樣走的。variable 層呼叫 [`wrap_fx_proxy`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/variables/builder.py)，它請 `OutputGraph.create_proxy` 造節點，而 OutputGraph 這邊其實又只是轉手：
 
 ```python
 def create_proxy(self, *args, **kwargs):
     return self.current_tracer.create_proxy(*args, **kwargs)
 ```
 
-真正動筆的是 `SubgraphTracer`，它是 `fx.Tracer` 的子類別，就定義在同一個檔案下半部。FX 本身的 `create_proxy` 只負責「在圖上造一個節點、回一個 proxy」，SubgraphTracer 覆寫它，在造完節點之後多做幾件 Dynamo 才需要的事：把當下正在翻譯的那條 bytecode 的原始碼位置記進 `node.meta`、記下 `nn_module_stack`（這個運算發生在哪個 module 的 forward 裡）、記下 `source_fn_stack`（是哪個使用者層級的函式產生的）。你在 `graph_code` 輸出裡看到的那行註解：
+真正動筆的是 `SubgraphTracer`，它是 `fx.Tracer` 的子類別，就定義在同一個檔案下半部。FX 本身的 `create_proxy` 只負責「在圖上造一個節點、回一個 proxy」，SubgraphTracer 覆寫它，在造完節點之後多做幾件 Dynamo 才需要的事，像是把當下正在翻譯的那條 bytecode 的原始碼位置記進 `node.meta`、記下 `nn_module_stack`（這個運算發生在哪個 module 的 forward 裡）、記下 `source_fn_stack`（是哪個使用者層級的函式產生的）。你在 `graph_code` 輸出裡看到的那行註解：
 
 ```python
 # File: /root/output_graph.py:15 in f, code: return (x @ y + bias).relu()
@@ -47,11 +47,11 @@ def create_proxy(self, *args, **kwargs):
 
 就是這時候寫進 meta、印圖時再讀出來的。所以圖不只是節點的集合，每個節點都帶著「我從你的哪一行程式碼來」的出生證明，之後 Graph Break 訊息、profiler 歸因、AOTAutograd 的 stack trace 保留，全都吃這份 meta。
 
-順帶一提，每個節點還掛著一個 `example_value`：一顆 FakeTensor，只有 shape、dtype、device，沒有數值。這就是 Day 3 說「符號執行」的物質基礎，也是圖上每個值印得出 `f32[4, 4][4, 1]cuda:0` 這種標註的原因：形狀資訊一路都在，值從頭到尾不在。
+另外，每個節點還掛著一個 `example_value`，一顆只有 shape、dtype、device、沒有數值的 FakeTensor。這就是 Day 3 說「符號執行」的物質基礎，也是圖上每個值印得出 `f32[4, 4][4, 1]cuda:0` 這種標註的原因。形狀資訊一路都在，值從頭到尾不在。
 
 ## 輸入不是宣告出來的，是用到才登記
 
-節點講完了，接著來講輸入。Dynamo 不看函式簽名決定圖的輸入，一個 Tensor 要等到真的被用上，才呼叫 `create_graph_input` 建 placeholder、登記一筆 `GraphArg`。一起來實際跑跑看：
+節點講完了，接著來講輸入。Dynamo 不看函式簽名決定圖的輸入，一個 Tensor 要等到真的被用上，才呼叫 `create_graph_input` 建 placeholder、登記一筆 `GraphArg`。拿一小段程式驗證：
 
 ```python
 bias = torch.randn(4, device="cuda")
@@ -72,13 +72,13 @@ def forward(self, L_x_: "f32[4, 4][4, 1]cuda:0", L_y_: "f32[4, 4][4, 1]cuda:0", 
     return (relu,)
 ```
 
-這邊有三個值得放大來看的地方：
+三個地方值得放大來看：
 
 - **`unused` 不在圖裡**。傳了但沒用到的參數不會被登記；收圖前 `remove_unused_graphargs` 還會再掃一輪，把中途變成死代碼的輸入拔掉。
 - **`bias` 也是輸入**。它不是參數，是外面抓進來的 Tensor。`LOAD_DEREF` 載入它的那一刻，`VariableBuilder` 把它包成 `TensorVariable`，順手 lift 成 root graph 的輸入，placeholder 的名字 `L_bias_` 就是它的 Source。Tensor 的值永遠當輸入而不是常數，這就是 Day 5 那個押注原則在這裡的體現。
-- **中間值用完立刻 `= None`**：提早歸還引用，讓記憶體早點釋放。輸出永遠是 tuple，就算只有一個值。
+- **中間值用完立刻 `= None`**，提早歸還引用，讓記憶體早點釋放。輸出永遠是 tuple，就算只有一個值。
 
-`create_graph_input` 的實作還有個蠻乾淨的地方：placeholder 一律插在圖的最前面（沿著上一個 placeholder 往後接），然後把 `GraphArg` 掛在 `node.meta["grapharg"]` 上。所以 OutputGraph 的 `graphargs` property 並不是另外維護的一份名單：
+`create_graph_input` 的實作還有個蠻乾淨的地方。placeholder 一律插在圖的最前面（沿著上一個 placeholder 往後接），然後把 `GraphArg` 掛在 `node.meta["grapharg"]` 上。所以 OutputGraph 的 `graphargs` property 並不是另外維護的一份名單：
 
 ```python
 @property
@@ -90,9 +90,9 @@ def graphargs(self) -> list[GraphArg]:
     return [node.meta["grapharg"] for node in self.placeholders]
 ```
 
-輸入清單就是圖裡的 placeholder 自己，單一事實來源，登記和圖永遠不會不同步。每筆 `GraphArg` 都帶著 Source 和 fake tensor：Source 給明天的 PyCodegen 用（生出把這個值推上 stack 的 bytecode），fake tensor 則給後端當 example input。
+輸入清單就是圖裡的 placeholder 自己，單一事實來源，登記和圖永遠不會不同步。每筆 `GraphArg` 都帶著 Source 和 fake tensor。Source 給明天的 PyCodegen 用（生出把這個值推上 stack 的 bytecode），fake tensor 則給後端當 example input。
 
-順帶一提，`nn.Module` 的參數和 buffer 另有通道：`register_attr_or_module` 把它們掛進 `nn_modules`、以 `get_attr` 或輸入的形式進圖，Day 5 說「權重變成圖的輸入」的具體機關就在這裡。
+至於 `nn.Module` 的參數和 buffer，則另有通道，由 `register_attr_or_module` 把它們掛進 `nn_modules`、以 `get_attr` 或輸入的形式進圖，Day 5 說「權重變成圖的輸入」的具體機關就在這裡。
 
 ## SubgraphTracer 其實是一疊？
 
@@ -108,13 +108,13 @@ def current_tracer(self):
     return self.tracers[-1]
 ```
 
-平常這疊只有一層，root tracer 從頭寫到尾。但遇到 `torch.cond`、activation checkpoint 這類「參數是函式」的 higher-order op，分支必須自成一張子圖：Dynamo 就 push 一個新的 SubgraphTracer，接下來的節點全寫進子圖，翻完 pop 回來，子圖以 submodule 的身分掛回主圖。
+平常這疊只有一層，root tracer 從頭寫到尾。但遇到 `torch.cond`、activation checkpoint 這類「參數是函式」的 higher-order op，分支必須自成一張子圖，Dynamo 就 push 一個新的 SubgraphTracer，接下來的節點全寫進子圖，翻完 pop 回來，子圖以 submodule 的身分掛回主圖。
 
-不過這邊比較麻煩的是自由變數。子圖裡用到外層的值，在 FX 的世界觀裡這是不合法的（一張圖只能用自己的 placeholder），所以 SubgraphTracer 的 `create_proxy` 在寫節點前多一步：發現參數是外層的 proxy，就呼叫 `maybe_lift_tracked_freevar_to_input`，把它就地 lift 成子圖的輸入，而且是遞迴的，巢狀幾層就一路往上提幾層，直到碰到真正持有它的那層為止。FX 本身沒有這種巢狀管理，SubgraphTracer 這層包裝很大一部分就是為它存在的。
+比較麻煩的是自由變數。子圖裡用到外層的值，在 FX 的世界觀裡這是不合法的（一張圖只能用自己的 placeholder），所以 SubgraphTracer 的 `create_proxy` 在寫節點前多一步。發現參數是外層的 proxy，就呼叫 `maybe_lift_tracked_freevar_to_input`，把它就地 lift 成子圖的輸入，而且是遞迴的，巢狀幾層就一路往上提幾層，直到碰到真正持有它的那層為止。FX 本身沒有這種巢狀管理，SubgraphTracer 這層包裝很大一部分就是為它存在的。
 
 ## compile_subgraph：收圖的瞬間
 
-那倉庫收貨要收到什麼時候呢？時機只有兩種：RETURN（整個 frame 翻完了）或 Graph Break（翻不下去了）。兩條路殊途同歸，都走進 `compile_subgraph`，它的 docstring 把要做的事列得很白：呼叫編好的子圖、補做 side effect、生成 stack 和 locals 的重建碼、存回 locals。展開來是一連串動作：
+那倉庫收貨要收到什麼時候呢？時機只有兩種，RETURN（整個 frame 翻完了）或 Graph Break（翻不下去了）。兩條路殊途同歸，都走進 `compile_subgraph`，它的 docstring 把要做的事列得很白，呼叫編好的子圖、補做 side effect、生成 stack 和 locals 的重建碼、存回 locals。展開來是一連串動作：
 
 1. **算活性**：symbolic stack 和 locals 裡哪些值在這之後還會被用到（`_get_stack_values_to_restore`），它們得成為圖的輸出，不然斷點之後接不上。RETURN 時這很簡單，就是回傳值；Graph Break 時才是重頭戲，翻到一半的中間狀態全要保住。
 2. **side_effects 結帳**（Day 7）：`codegen_suffix` 請帳本把每筆修改的重播碼生出來。
@@ -127,9 +127,9 @@ def current_tracer(self):
 ['__compiled_fn_1_6d16fdd3_...', '__compiled_fn_4_998ecab5_...']
 ```
 
-新 bytecode 之後只要一條 `LOAD_GLOBAL` 就叫得到它。這裡還有一個對稱的細節：`install_global_unsafe` 塞東西進 globals 時會順手註冊一個 `CleanupHook`，這張圖將來被淘汰時，塞進去的東西也會被撿走，倉庫不留垃圾。
+新 bytecode 之後只要一條 `LOAD_GLOBAL` 就叫得到它。還有一個對稱的細節。`install_global_unsafe` 塞東西進 globals 時會順手註冊一個 `CleanupHook`，這張圖將來被淘汰時，塞進去的東西也會被撿走，倉庫不留垃圾。
 
-這條路上還有兩個省錢的細節值得一看。其一，收圖有一條快速道：stack 上全是普通的 `TensorVariable`、帳本是空的、沒有要重建的複雜結構，就直接「呼叫圖、`UNPACK_SEQUENCE` 攤開回傳值」完事，連暫存變數 `graph_out_0` 都省了。其二，圖是空的就不叫後端：
+這條路上還有兩個省錢的細節值得一看。其一，收圖有一條快速道。stack 上全是普通的 `TensorVariable`、帳本是空的、沒有要重建的複雜結構，就直接「呼叫圖、`UNPACK_SEQUENCE` 攤開回傳值」完事，連暫存變數 `graph_out_0` 都省了。其二，圖是空的就不叫後端：
 
 ```python
 if count_calls(self.graph) != 0 or len(pass2.graph_outputs) != 0:
@@ -158,7 +158,7 @@ return cg.get_instructions()
 
 拿回編譯結果還不夠，得有人把「載入 `__compiled_fn_1`、把參數照 Source 推上 stack、呼叫、拆開回傳的 tuple」這段新 bytecode 寫出來。而負責寫的人就叫 PyCodegen，也就是明天的主角。
 
-把今天整條「逐筆進貨、一次收攏」的流程用動畫走一遍，就是下面這張圖：
+下面這張動畫，把今天整條「逐筆進貨、一次收攏」的流程走了一遍：
 
 ![散落的節點、輸入、Guard 與修改帳逐一飛進 OutputGraph，compile_subgraph 收攏成一張 FX Graph 並交給後端](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day08/output_graph.gif)
 
@@ -166,9 +166,9 @@ return cg.get_instructions()
 
 ## 結語
 
-OutputGraph 就是一個 frame 一次編譯的收集點：節點經 SubgraphTracer 寫進 fx.Graph 並帶上出生證明、輸入按 Source 用到才登記且清單就是 placeholder 本身、Guard 住在 TracingContext 裡且環境前提出生就裝好、修改帳則掛在旁邊。RETURN 或 Graph Break 時 `compile_subgraph` 收攏一切：算活性、結帳、清輸入、交給後端、把 `__compiled_fn` 塞進 globals，空圖則直接放行。
+OutputGraph 就是一個 frame 一次編譯的收集點。節點經 SubgraphTracer 寫進 fx.Graph 並帶上出生證明、輸入按 Source 用到才登記且清單就是 placeholder 本身、Guard 住在 TracingContext 裡且環境前提出生就裝好、修改帳則掛在旁邊。RETURN 或 Graph Break 時 `compile_subgraph` 收攏一切，算活性、結帳、清輸入、交給後端、把 `__compiled_fn` 塞進 globals，空圖則直接放行。
 
-到這裡 `__compiled_fn_1` 已經躺在 globals 裡了，但 CPython 不會自己知道怎麼用它。所以還缺最後一步：生一段新的 bytecode，把「載入、擺參數、呼叫、拆輸出、重播帳本、return」寫出來。明天我們就來看看 PyCodegen 和它底下的 bytecode 工具箱。那我們明天見！
+到這裡 `__compiled_fn_1` 已經躺在 globals 裡了，但 CPython 不會自己知道怎麼用它。所以還缺最後一步，生一段新的 bytecode，把「載入、擺參數、呼叫、拆輸出、重播帳本、return」寫出來。明天我們就來看看 PyCodegen 和它底下的 bytecode 工具箱。那我們明天見！
 
 ## 參考資料
 

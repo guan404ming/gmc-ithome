@@ -4,7 +4,7 @@
 
 昨天 Functionalization 把圖洗成了純函數式，但圖還是「大」的：一個 LayerNorm 節點背後頂著十幾個基本運算，一個 GELU 藏著一條完整的數學式。而這背後其實還有一個更根本的問題：PyTorch 有超過兩千個 operator（光 `torch.ops.aten` 就登記了八百多個 op 家族），如果每個後端都要為每一個 op 寫一份 codegen，那任何新後端都不用做了，光把 op 清單看完就先陣亡。
 
-Decomposition 的思路很像玩樂高：大多數看起來很複雜的 op，其實都是少數基本積木的組合。把組合拆開，後端只需要面對基本積木，而且拆完之後，後端還可以用自己的方式把積木拼回去，拼出來的東西常常比原本更快。今天會實際看一次拆解、翻開拆解表看它長什麼樣、看規則是怎麼註冊的、講清楚為什麼拆了不會變慢，最後看哪些 op 說什麼都不拆。
+Decomposition 的思路很像玩樂高。大多數看起來很複雜的 op，其實都是少數基本積木的組合。把組合拆開，後端只需要面對基本積木，而且拆完之後，後端還可以用自己的方式把積木拼回去，拼出來的東西常常比原本更快。今天會實際看一次拆解、翻開拆解表看它長什麼樣、看規則是怎麼註冊的、講清楚為什麼拆了不會變慢，最後看哪些 op 說什麼都不拆。
 
 正文開始！
 
@@ -19,11 +19,11 @@ Decomposition 的思路很像玩樂高：大多數看起來很複雜的 op，其
 | Core ATen | `aten.add`、`aten.rsqrt`、`aten.var_mean` | 約 180 個 | 後端的共同詞彙表 |
 | Prims | `prims.add`、`prims.convert_element_type` | 約 250 個 | 拆到底的極簡詞彙表 |
 
-最上層是使用者寫的 torch API。往下一層是 ATen，也就是 Day 12 開始一直看到的 `torch.ops.aten.*`，dispatcher 和 autograd 都工作在這一層。再往下是 [Core ATen IR](https://pytorch.org/docs/stable/torch.compiler_ir.html)，官方從 ATen 裡挑出約 180 個 op 當作「後端至少要支援的最小集合」。最底層是 PrimTorch 專案定義的 [prims](https://github.com/pytorch/pytorch/tree/v2.8.0/torch/_prims)：約 250 個語意最單純的基本運算，連 type promotion、broadcast 都被拆成顯式的 op，是「拆到底」的目標詞彙表。
+最上層是使用者寫的 torch API。往下一層是 ATen，也就是 Day 12 開始一直看到的 `torch.ops.aten.*`，dispatcher 和 autograd 都工作在這一層。再往下是 [Core ATen IR](https://pytorch.org/docs/stable/torch.compiler_ir.html)，官方從 ATen 裡挑出約 180 個 op 當作「後端至少要支援的最小集合」。最底層是 PrimTorch 專案定義的 [prims](https://github.com/pytorch/pytorch/tree/v2.8.0/torch/_prims)，約 250 個語意最單純的基本運算，連 type promotion、broadcast 都被拆成顯式的 op，是「拆到底」的目標詞彙表。
 
-Decomposition 做的事，就是把上層的 op 用下層的 op 重寫。要拆到哪一層停，不是寫死的，是後端自己決定的：Inductor 大致停在 Core ATen 附近（下面會看到它的表），一個只想支援三十個基本 op 的玩具後端可以要求一路拆到 prims。
+Decomposition 做的事，就是把上層的 op 用下層的 op 重寫。要拆到哪一層停，不是寫死的，是後端自己決定的。Inductor 大致停在 Core ATen 附近（下面會看到它的表），一個只想支援三十個基本 op 的玩具後端可以要求一路拆到 prims。
 
-## 一起來實際跑跑看！
+## 兩個 op，拆出十二行
 
 拿兩個大家最熟的高階 op 來拆：
 
@@ -59,29 +59,29 @@ def forward(self, arg0_1: "f32[8]", arg1_1: "f32[8]", arg2_1: "f32[4, 8]"):
     return (mul_4,)
 ```
 
-逐段讀。LayerNorm 被拆成它的定義：`var_mean` 一次算出平均值和變異數，`add` 加上 `eps=1e-05` 防止除以零，`rsqrt` 取反平方根，`sub` 和 `mul` 完成標準化，最後兩行乘上 weight、加上 bias，正好對應 `nn.LayerNorm(8)` 的兩個參數 `arg0_1` 和 `arg1_1`。
+逐段讀。LayerNorm 被拆成它的定義。`var_mean` 一次算出平均值和變異數，`add` 加上 `eps=1e-05` 防止除以零，`rsqrt` 取反平方根，`sub` 和 `mul` 完成標準化，最後兩行乘上 weight、加上 bias，正好對應 `nn.LayerNorm(8)` 的兩個參數 `arg0_1` 和 `arg1_1`。
 
-GELU 則被拆成它的數學定義 `0.5 * x * (1 + erf(x / sqrt(2)))`：`mul_2` 是 `0.5 * x`，`mul_3` 那個神秘的 `0.7071067811865476` 就是 `1 / sqrt(2)`，接著 `erf`、`+ 1`，最後 `mul_4` 把兩半乘起來。一條數學式，五行基本運算。
+GELU 則被拆成它的數學定義 `0.5 * x * (1 + erf(x / sqrt(2)))`。`mul_2` 是 `0.5 * x`，`mul_3` 那個神秘的 `0.7071067811865476` 就是 `1 / sqrt(2)`，接著 `erf`、`+ 1`，最後 `mul_4` 把兩半乘起來。一條數學式，五行基本運算。
 
-整張圖數下來，兩個高階 op 變成了十二行，而且只用到 `var_mean`、`add`、`rsqrt`、`sub`、`mul`、`erf` 六種基本運算。這就是 decomposition 的效果：不管使用者用了多少花俏的 op，到了後端手上，詞彙表只剩下少數幾種。
+整張圖數下來，兩個高階 op 變成了十二行，而且只用到 `var_mean`、`add`、`rsqrt`、`sub`、`mul`、`erf` 六種基本運算。這就是 decomposition 的效果，不管使用者用了多少花俏的 op，到了後端手上，詞彙表只剩下少數幾種。
 
-順帶一提，這裡包了 `torch.no_grad()`，所以 AOTAutograd 判定是 inference，只有一張 forward 圖。訓練模式下 backward 圖也會經過同一套拆解，這點下面講到規則的本質時會再回來。
+另外交代一下，這裡包了 `torch.no_grad()`，所以 AOTAutograd 判定是 inference，只有一張 forward 圖。訓練模式下 backward 圖也會經過同一套拆解，這點下面講到規則的本質時會再回來。
 
 ## 拆了不會變慢嗎？
 
 看到這裡應該會有個很自然的疑問：GELU 在 eager 下是一個手寫的 CUDA kernel，一次 launch 就做完；拆成五個 op 之後，難道不是變成五次 launch、五趟記憶體來回？如果真是這樣，decomposition 就是負優化了。
 
-答案藏在 Day 2 就看過的東西裡：Inductor 最擅長把連續的 elementwise 運算融合回一個 kernel。拆出來的 `mul`、`erf`、`add` 全部都是 pointwise，正是最好融合的那一種，Day 2 那個 `triton_poi_fused_add_cos_mul_sin_tanh_0` 的 kernel 名字就是證據：五個 op、一次 `tl.load`、一次 `tl.store`。拆解拆出來的這十幾行，最後在 GPU 上根本不會是十幾個 kernel。
+答案藏在 Day 2 就看過的東西裡。Inductor 最擅長把連續的 elementwise 運算融合回一個 kernel。拆出來的 `mul`、`erf`、`add` 全部都是 pointwise，正是最好融合的那一種，Day 2 那個 `triton_poi_fused_add_cos_mul_sin_tanh_0` 的 kernel 名字就是證據：五個 op、一次 `tl.load`、一次 `tl.store`。拆解拆出來的這十幾行，最後在 GPU 上根本不會是十幾個 kernel。
 
-所以 decomposition 和 fusion 是一套組合拳：**拆解把高階 op 打散成基本運算，融合再把基本運算收攏成大 kernel**。效果等於「為每一種複合 op 手寫一個 fused kernel」，但成本完全不同：手寫路線要為每個 op、每種組合各寫一份；拆解加融合的路線只需要為六種基本運算寫 codegen，所有組合自動涵蓋。甚至連使用者自創的、PyTorch 從來沒見過的運算組合，都能被融合成一個不存在於任何函式庫裡的客製 kernel。這就是拆的底氣：拆不是把東西變碎，是把「怎麼拼」的決定權交給後端。
+所以 decomposition 和 fusion 是一套組合拳：**拆解把高階 op 打散成基本運算，融合再把基本運算收攏成大 kernel**。效果等於「為每一種複合 op 手寫一個 fused kernel」，但成本完全不同，手寫路線要為每個 op、每種組合各寫一份；拆解加融合的路線只需要為六種基本運算寫 codegen，所有組合自動涵蓋。甚至連使用者自創的、PyTorch 從來沒見過的運算組合，都能被融合成一個不存在於任何函式庫裡的客製 kernel。這就是拆的底氣。拆不是把東西變碎，是把「怎麼拼」的決定權交給後端。
 
 ![高階 op 逐層炸開成基本運算，再被 Inductor 融合收攏](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day14/decomposition.gif)
 
 *圖一：拆解加融合的完整旅程。左邊是 torch 層的高階 op，中間是查 decomposition table 之後的 ATen 圖：LayerNorm 先炸開成七行、GELU 再炸開成五行；`x @ w` 這種戰略 op 不在表裡，原樣穿過直達後端。右邊是 Inductor 的收攏：十個 pointwise 被融回一個 `triton_poi_fused_*` kernel，`var_mean` 走 reduction kernel，mm 交給 matmul template。*
 
-## 拆解表就是一份 Python 字典
+## 翻開拆解表
 
-那「怎麼拆」是誰規定的？答案意外地樸素：一張 op 對到 Python 函式的映射表。在 [`torch/_decomp/__init__.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_decomp/__init__.py) 裡就是一個全域 dict，實測數一下規模：
+那「怎麼拆」是誰規定的？答案意外地樸素，就是一張 op 對到 Python 函式的映射表。在 [`torch/_decomp/__init__.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_decomp/__init__.py) 裡就是一個全域 dict，實測數一下規模：
 
 ```
 aten ops registered:                     827
@@ -100,7 +100,7 @@ def gelu(a, approximate="none"):
     return a * 0.5 * (1 + torch.erf(a * kAlpha))
 ```
 
-跟上面 AOT 圖裡那五行完全對得上，連 `0.7071` 的出處都找到了。LayerNorm 的規則也一樣，`@register_decomposition(aten.native_layer_norm)` 註冊在 [`torch/_refs/__init__.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_refs/__init__.py)，更多規則集中住在 [`torch/_decomp/decompositions.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_decomp/decompositions.py)。查表的時機就是 Day 12 講過的 trace 過程：AOTAutograd 拿 FakeTensor 重跑函式時，每碰到一個 op 先查表，表裡有，就改成呼叫那個 Python 函式，tracer 走進函式內部，錄下來的自然就是拆開後的基本運算。
+跟上面 AOT 圖裡那五行完全對得上，連 `0.7071` 的出處都找到了。LayerNorm 的規則也一樣，`@register_decomposition(aten.native_layer_norm)` 註冊在 [`torch/_refs/__init__.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_refs/__init__.py)，更多規則集中住在 [`torch/_decomp/decompositions.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_decomp/decompositions.py)。查表的時機就是 Day 12 講過的 trace 過程。AOTAutograd 拿 FakeTensor 重跑函式時，每碰到一個 op 先查表，表裡有，就改成呼叫那個 Python 函式，tracer 走進函式內部，錄下來的自然就是拆開後的基本運算。
 
 「規則本身也是 PyTorch 程式」這個設計比看起來重要，因為它一次帶來三個好處：
 
@@ -123,7 +123,7 @@ decompositions = {**core_aten_decompositions(), **inductor_decompositions}
 remove_decompositions(decompositions, decomps_to_exclude)
 ```
 
-第一步從官方的 Core ATen 拆解集合出發；第二步加上自己額外想拆的 op，上面實驗裡的 `aten.gelu` 和 `aten.native_layer_norm` 就在這份名單上；第三步再刪掉一批它「不想拆」的，`decomps_to_exclude` 的每一項後面都附著理由，例如 `aten.sum` 旁邊註明 inductor lowers this directly（Inductor 自己 lowering 更快，不需要先拆），`aten.baddbmm` 註明拆了會 upcast 到 fp32 有效能問題。這三行把 decomposition 的哲學講得很明白：**拆什麼、不拆什麼，是後端的效能決策，不是全域的真理**。這也是實測數字裡 Inductor 的表（1133）比預設表（1123）多、但兩者又不是包含關係的原因。
+第一步從官方的 Core ATen 拆解集合出發；第二步加上自己額外想拆的 op，上面實驗裡的 `aten.gelu` 和 `aten.native_layer_norm` 就在這份名單上；第三步再刪掉一批它「不想拆」的，`decomps_to_exclude` 的每一項後面都附著理由，例如 `aten.sum` 旁邊註明 inductor lowers this directly（Inductor 自己 lowering 更快，不需要先拆），`aten.baddbmm` 註明拆了會 upcast 到 fp32 有效能問題。這三行把 decomposition 的哲學講得很明白。**拆什麼、不拆什麼，是後端的效能決策，不是全域的真理**。這也是實測數字裡 Inductor 的表（1133）比預設表（1123）多、但兩者又不是包含關係的原因。
 
 如果哪天你要寫自己的後端（這個系列最後真的會寫一個），拿到的第一個禮物就是這張表：`get_decompositions()` 挑你要的規則，不支援的 op 讓表幫你拆掉，你只需要實作剩下的基本運算。
 
@@ -145,9 +145,9 @@ remove_decompositions(decompositions, decomps_to_exclude)
 
 ## 結語
 
-Decomposition 把兩千多個 op 收斂成少數基本運算：規則是普通的 Python 函式，可以再 trace、可以微分、還兼任 meta 實作；表是可以換的字典，Inductor 加一點、刪一點，玩具後端可以拆到 prims；拆解分層發生，pointwise 儘管拆、matmul 這類戰略 op 絕不拆。而拆的底氣來自融合：拆解加融合的組合拳，等於免費得到所有組合的手寫 fused kernel。
+Decomposition 把兩千多個 op 收斂成少數基本運算。規則是普通的 Python 函式，可以再 trace、可以微分、還兼任 meta 實作；表是可以換的字典，Inductor 加一點、刪一點，玩具後端可以拆到 prims；拆解分層發生，pointwise 儘管拆、matmul 這類戰略 op 絕不拆。而拆的底氣來自融合：拆解加融合的組合拳，等於免費得到所有組合的手寫 fused kernel。
 
-配合昨天的 Functionalization，Inductor 拿到的圖現在既純又小：只有基本運算、沒有 aliasing、沒有 mutation。到此 forward 圖的正規化完成。但還有一個懸而未決的問題：Day 12 看到 forward 多輸出了 `le` 和 `permute` 給 backward 用，誰決定存這兩個而不是別的？存多了費記憶體，存少了 backward 要重算。明天講 joint graph 與 partitioner：forward 和 backward 其實是先畫成一張圖，再由一個 min-cut 演算法切開的。那我們明天見！
+配合昨天的 Functionalization，Inductor 拿到的圖現在既純又小：只有基本運算、沒有 aliasing、沒有 mutation。到此 forward 圖的正規化完成。但還有一個懸而未決的問題。Day 12 看到 forward 多輸出了 `le` 和 `permute` 給 backward 用，誰決定存這兩個而不是別的？存多了費記憶體，存少了 backward 要重算。明天講 joint graph 與 partitioner，forward 和 backward 其實是先畫成一張圖，再由一個 min-cut 演算法切開的。那我們明天見！
 
 ## 參考資料
 
