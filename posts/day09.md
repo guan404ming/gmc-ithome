@@ -1,8 +1,8 @@
-# Day 9 | 新的 bytecode 誰來寫？PyCodegen 登場！
+# Day 9 | 新的 bytecode 誰來寫？TorchDynamo PyCodegen！
 
 ## 前言
 
-Day 3 的時候我們說過，eval hook 最後會還給 CPython 一段改寫過的 bytecode。而之後的五天其實都在講「分析」這一側，依序是翻譯（Day 4）、包裝（Day 5）、記前提（Day 6）、記修改（Day 7）、收圖（Day 8）。今天換到「合成」這一側，看看那段新 bytecode 到底是怎麼一條一條被生出來的。
+Day 3 的時候我們說過，eval hook 最後會還給 CPython 一段改寫過的 bytecode。而之後的五天其實都在講「分析」這一側，依序是翻譯（Day 4）、包裝（Day 5）、記押注（Day 6）、記修改（Day 7）、收圖（Day 8）。今天就換到「合成」這一側，看看那段新 bytecode 到底是怎麼一條一條被生出來的。
 
 今天的主角是兩個檔案，分工非常乾淨。[`codegen.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/codegen.py) 裡的 `PyCodegen` 負責生指令。給它一個值，它就吐出「把這個值弄上 stack」的指令序列。[`bytecode_transformation.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/bytecode_transformation.py) 則負責組裝，把一張指令表變回一個 CPython 肯執行的 code object，offset、跳轉、stacksize、linetable 這些髒活全都收在裡面。簡單來說，就是一個管內容、一個管形式。
 
@@ -25,20 +25,22 @@ Day 3 的時候我們說過，eval hook 最後會還給 CPython 一段改寫過�
 
 它的核心介面小到有點誇張，`PyCodegen` 物件本身是可呼叫的。`__call__` 收一個 `VariableTracker` 或一條 `Source`，往內部的指令表 append「執行完之後，這個值會出現在 stack 頂端」的指令。收圖時的所有生成，就是對著一串值逐個呼叫它。而它真正的本事在於挑最短路徑，捷徑按優先序排下來大概像下表。
 
-| 情況 | 生成什麼 |
-|---|---|
+
+| 情況        | 生成什麼                                                                               |
+| --------- | ---------------------------------------------------------------------------------- |
 | 值有 Source | `source.reconstruct()`：從原位置載，`LOAD_FAST x` 或 `LOAD_GLOBAL cfg` + `LOAD_ATTR scale` |
-| 值是圖的輸出 | 從暫存的輸出 tuple 取：`LOAD_FAST graph_out_0` 加下標 |
-| 純常數 | `LOAD_CONST` |
-| 翻譯期新生的容器 | 重建碼：`BUILD_LIST`、`BUILD_MAP` |
+| 值是圖的輸出    | 從暫存的輸出 tuple 取：`LOAD_FAST graph_out_0` 加下標                                         |
+| 純常數       | `LOAD_CONST`                                                                       |
+| 翻譯期新生的容器  | 重建碼：`BUILD_LIST`、`BUILD_MAP`                                                       |
 
-第一列是最關鍵的省。有 Source 的值本來就在 frame 裡拿得到，何必讓圖多輸出一份呢？這也是 Source 鏈第三次出場了，Day 6 生 Guard、Day 8 命名輸入、今天生載入碼，共同點是 Dynamo 對一個值記下的關鍵資訊不是「它是什麼」，而是「runtime 怎麼拿到它」。
 
-順帶一提，`reconstruct` 這個名字在 Day 5 的介面表就出現過，回答的是「改寫後的 bytecode 要怎麼把我重建出來」。有 Source 的值由 `source.reconstruct()` 發指令，從原位置載回來。沒有 Source 的值，也就是翻譯期新生的 list、dict、閉包，由 `VariableTracker` 自己的 `reconstruct()` 用 `BUILD_LIST`、`BUILD_MAP` 一磚一瓦蓋出來，Day 4 那個圖上根本沒有的 `parts` 要被 return 出去時，走的就是這條路。而連 `reconstruct` 都寫不出來的值（某些 C 擴充物件），就會變成一條 `Reconstruction failure` 的 graph break。
+第一列是最關鍵的節省點。有 Source 的值本來就在 frame 裡拿得到，就不需要讓圖多輸出一份了。這也是 Source 鏈第三次出場了，Day 6 生 Guard、Day 8 命名輸入、今天生載入的 bytecode，這些的共同點就是是 Dynamo 對一個值記下的關鍵資訊不是「它是什麼」，而是「runtime 怎麼拿到它」。
+
+順帶一提，`reconstruct` 這個名字在 Day 5 VariableTracker 的介面表就出現過，回答的是「改寫後的 bytecode 要怎麼把我重建出來」。有 Source 的值由 `source.reconstruct()` 發指令，從原位置載回來。沒有 Source 的值，也就是翻譯期新生的 list、dict、閉包，由 `VariableTracker` 自己的 `reconstruct()` 用 `BUILD_LIST`、`BUILD_MAP` 一磚一瓦蓋出來，Day 4 那個圖上根本沒有的 `parts` 要被 return 出去時，走的就是這條路。而連 `reconstruct` 都寫不出來的值（某些 C 擴充物件），就會變成一條 `Reconstruction failure` 的 graph break。
 
 ## 改寫前後對照著看
 
-接下來我們就用 `TORCH_LOGS="bytecode"`，把 `f(x, n) -> x * n + 1` 在 L40S 上（Python 3.12、PyTorch 2.8.0）改寫前後的 bytecode 都印出來對照看看。改寫前就是 Day 4 看過的那六條，改寫後的完整版長成下面這樣。
+接下來我們就用 `TORCH_LOGS="bytecode"`，把 `f(x, n) -> x * n + 1` 在 GPU上（Python 3.12、PyTorch 2.8.0）改寫前後的 bytecode 都印出來對照看看。改寫前就是 Day 4 看過的那六條，改寫後的完整版長成下面這樣。
 
 ```
 MODIFIED BYTECODE f
@@ -83,9 +85,8 @@ RETURN_VALUE                     <- 任務 6
 
 有幾處值得圈起來細讀。
 
-- **`n` 沒被傳給 `__compiled_fn_1`**。它是 Python int，Day 5 已經被 bake 成常數了，圖的輸入只剩 `x`，所以擺輸入只需要一條 `LOAD_FAST x`，而這條指令就是 `LocalSource("x")` 的 `reconstruct()` 生出來的。
-- **輸出永遠是 tuple**。就算只有一個回傳值，圖的輸出也是 `(add,)`（Day 8 看過），所以要 `BINARY_SUBSCR` 取下標 0。`graph_out_0` 是現配的暫存區域變數，用完立刻 `DELETE_FAST` 歸還引用，跟圖裡中間值用完就 `= None` 是同一個潔癖。
-- **沒有任務 5**。這個 `f` 沒有 side effect，帳本是空的。Day 7 那個例子裡，replay 的 bytecode就插在 `RETURN_VALUE` 之前。
+- `n` **沒被傳給** `__compiled_fn_1`：它是 Python int，Day 5 已經被 bake 成常數了，圖的輸入只剩 `x`，所以擺輸入只需要一條 `LOAD_FAST x`，而這條指令就是 `LocalSource("x")` 的 `reconstruct()` 生出來的。
+- **輸出永遠是 tuple**：就算只有一個回傳值，圖的輸出也是 `(add,)`（Day 8 看過），所以要 `BINARY_SUBSCR` 取下標 0。`graph_out_0` 是現配的暫存區域變數，用完立刻 `DELETE_FAST` 歸還引用，跟圖裡中間值用完就 `= None` 是同一個潔癖。
 - profiler 那段順便示範了另外兩招。`tmp_2` 先收著 `enter` 的回傳、等輸入擺完再交給 `exit`，`COPY 1` 加 `STORE_FAST tmp_1` 則是把剛載上來的函式快取一份，而快取正好是下一節的主題。
 
 這段「原碼進、新碼出」的改寫現場，動起來就是下面這張圖。
@@ -96,9 +97,9 @@ RETURN_VALUE                     <- 任務 6
 
 ## 為什麼要生兩遍？
 
-先想一個小問題。如果圖有兩個輸入 `cfg.a.x` 和 `cfg.a.y`，載入碼是不是就得把 `LOAD_FAST cfg`、`LOAD_ATTR a` 這條前綴走兩次？
+先想一個小問題。如果圖有兩個輸入 `cfg.a.x` 和 `cfg.a.y`，loading code 是不是就得把 `LOAD_FAST cfg`、`LOAD_ATTR a` 這條前綴走兩次？
 
-答案是不用，因為這段碼其實生了兩遍（[`output_graph.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/output_graph.py) 的 `compile_subgraph`）。第一遍的產出直接丟掉，只留下副作用。PyCodegen 有一個 `uses` 計數器，記下每個值、每條 Source 各被載了幾次。兩遍之間掃一輪，被用超過一次、又不是本來就一條指令就拿得到的（區域變數不算），就登記進 `tempvars`。第二遍才是真的出碼。登記過的值第一次被載出來時，多生一條 `COPY` 和 `STORE_FAST tmp_N` 存進暫存變數，之後每次要用都只是一條便宜的 `LOAD_FAST tmp_N`。原始碼的註解「This essentially implements CSE.」說得很直白，也就是編譯器教科書裡的 common subexpression elimination，在 bytecode 生成層又出現了一次。
+答案是不用，因為這段碼其實生了兩遍（[`output_graph.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/output_graph.py) 的 `compile_subgraph`）。第一遍的產出直接丟掉，只留下 side effect。PyCodegen 有一個 `uses` 計數器，記下每個值、每條 Source 各被載了幾次。兩遍之間掃一輪，被用超過一次、又不是本來就一條指令就拿得到的（區域變數不算），就登記進 `tempvars`。第二遍才是真的出碼。登記過的值第一次被載出來時，多生一條 `COPY` 和 `STORE_FAST tmp_N` 存進暫存變數，之後每次要用都只是一條便宜的 `LOAD_FAST tmp_N`。原始碼的註解「This essentially implements CSE.」說得很直白，也就是編譯器教科書裡的 common subexpression elimination，在 bytecode 生成層又出現了一次。
 
 另一個更便宜的快取是 `top_of_stack`。PyCodegen 會記著「上一次生成完，stack 頂端是誰」，下一個要的值剛好就是它的話，一條 `COPY 1` 複製了事，連 `LOAD_FAST` 都省下來了。
 
@@ -191,3 +192,4 @@ PyCodegen 就是一位只寫搬運碼的代筆人，按 Source 和 `reconstruct`
 - [torch/_dynamo/output_graph.py：compile_subgraph（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/output_graph.py)
 - [torch/_dynamo/convert_frame.py：transform（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/convert_frame.py)
 - [Dynamo Deep-Dive（PyTorch 官方文件）](https://pytorch.org/docs/stable/torch.compiler_dynamo_deepdive.html)
+
