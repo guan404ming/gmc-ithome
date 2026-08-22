@@ -8,10 +8,6 @@
 
 正文開始！
 
-![散落的節點、輸入、Guard 與修改帳逐一飛進 OutputGraph，compile_subgraph 收攏成一張 FX Graph 並交給後端](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day08/output_graph.gif)
-
-*圖一：OutputGraph 是倉庫。翻譯期間節點、輸入、Guard、修改帳逐筆匯入；RETURN 或 Graph Break 時 `compile_subgraph` 一次收攏：接上 output 節點、清掉沒用的輸入、交給後端、把 `__compiled_fn` 塞進 globals。*
-
 ## 一個 frame，一個倉庫
 
 先來把「一對一」這件事講清楚，因為它其實解釋了前幾天看到的一個現象。docstring 接著說：OutputGraph 與被處理的 frame 一對一；當使用者的程式呼叫另一個函式，Dynamo 開的 `InliningInstructionTranslator` 會**繼續寫進 root translator 的同一個 OutputGraph**。這就是 Day 5 看到「`helper` 被 inline 之後，整條呼叫鏈攤平成一張圖」的機關：筆可以換好幾支（每 inline 一層就多一台 translator），紙從頭到尾只有一張。
@@ -161,6 +157,12 @@ return cg.get_instructions()
 ```
 
 拿回編譯結果還不夠，得有人把「載入 `__compiled_fn_1`、把參數照 Source 推上 stack、呼叫、拆開回傳的 tuple」這段新 bytecode 寫出來。而負責寫的人就叫 PyCodegen，也就是明天的主角。
+
+把今天整條「逐筆進貨、一次收攏」的流程用動畫走一遍，就是下面這張圖：
+
+![散落的節點、輸入、Guard 與修改帳逐一飛進 OutputGraph，compile_subgraph 收攏成一張 FX Graph 並交給後端](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day08/output_graph.gif)
+
+*圖一：OutputGraph 是倉庫。翻譯期間節點、輸入、Guard、修改帳逐筆匯入；RETURN 或 Graph Break 時 `compile_subgraph` 一次收攏：接上 output 節點、清掉沒用的輸入、交給後端、把 `__compiled_fn` 塞進 globals。*
 
 ## 結語
 

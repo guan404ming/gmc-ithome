@@ -8,10 +8,6 @@ Day 3 的時候我們說過，eval hook 最後會還給 CPython 一段改寫過�
 
 正文開始！
 
-![PyCodegen 把原 bytecode 逐段改寫成呼叫編譯產物的新指令，最後由 transform_code_object 組裝出帶 offset 的 code object](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day09/codegen.gif)
-
-*圖一：`f(x, n) -> x * n + 1` 的改寫現場。左邊是原 bytecode，中間的 PyCodegen 逐條發出新指令：載入 `__compiled_fn_1`、按 Source 擺輸入（`n` 被 bake、不用載）、一條 `CALL` 吃掉整段計算、拆輸出、return；最後 `transform_code_object` 組裝，offset 這時才被算出來。*
-
 ## 新 bytecode 的任務清單
 
 原函式的 code object 會被換成一段等價的改寫，而它要做的事其實就只有六件：
@@ -91,6 +87,12 @@ RETURN_VALUE                     <- 任務 6
 - **輸出永遠是 tuple**。就算只有一個回傳值，圖的輸出也是 `(add,)`（Day 8 看過），所以要 `BINARY_SUBSCR` 取下標 0。`graph_out_0` 是現配的暫存區域變數，用完立刻 `DELETE_FAST` 歸還引用，跟圖裡中間值用完就 `= None` 是同一個潔癖。
 - **沒有任務 5**。這個 `f` 沒有 side effect，帳本是空的；Day 7 那個例子裡，重播碼就插在 `RETURN_VALUE` 之前。
 - profiler 那段順便示範了 PyCodegen 的另外兩招：`tmp_2` 存的是 `enter` 回傳的物件，先收起來、等輸入擺完再交給 `exit` 用；`COPY 1` 加 `STORE_FAST tmp_1` 則是把剛載上來的函式順手快取一份。而快取正好就是下一節的主題。
+
+把剛剛這段「原碼進、新碼出」的改寫現場整個動起來看，就是下面這張圖：
+
+![PyCodegen 把原 bytecode 逐段改寫成呼叫編譯產物的新指令，最後由 transform_code_object 組裝出帶 offset 的 code object](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day09/codegen.gif)
+
+*圖一：`f(x, n) -> x * n + 1` 的改寫現場。左邊是原 bytecode，中間的 PyCodegen 逐條發出新指令：載入 `__compiled_fn_1`、按 Source 擺輸入（`n` 被 bake、不用載）、一條 `CALL` 吃掉整段計算、拆輸出、return；最後 `transform_code_object` 組裝，offset 這時才被算出來。*
 
 ## 為什麼要生兩遍？pass1 數帳、pass2 出碼
 

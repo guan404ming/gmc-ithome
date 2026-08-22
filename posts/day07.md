@@ -8,10 +8,6 @@
 
 正文開始！
 
-![追蹤期間修改只進帳本，圖跑完由改寫後的 bytecode 逐筆重播回真實世界](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day07/side_effects.gif)
-
-*圖一：`forward` 的三行在時間軸上怎麼分家。追蹤期 `self.calls += 1` 和 `log.append` 進 SideEffects 帳本、真實世界完全不動；`x * 2` 進 FX Graph；圖執行完，改寫後的 bytecode 才把帳本裡的最終狀態逐筆重播回真實世界。*
-
 ## 為什麼圖必須是純的？
 
 FX Graph 交給後端之後，後端要自由地重排、融合、刪除節點，Inductor 的整套最佳化全建立在這個自由上。一旦圖裡藏著「第三個節點會偷改全域變數」這種事，重排就不再安全：改了順序，別人看到的世界就不一樣了。所以 Dynamo 給後端的承諾是：**圖只算值，不碰世界**。
@@ -98,6 +94,12 @@ RETURN_VALUE
 - **重播的是最終狀態，不是過程**。迴圈裡 `append` 十次，重播一次補齊十個元素；`counter += 1` 三次，寫回一次最終值。整張圖的執行是原子的，外界只在圖跑完之後才回來看世界。
 - **最終值以常數形式被寫死在 bytecode 裡**。`LOAD_CONST 1` 那個 1 不是算出來的，是翻譯期就知道的答案，直接烙進改寫後的 code object。
 - **順序在圖之後**。圖在 GPU 上算多久，Python 層的世界就維持原樣多久。
+
+把剛剛 `forward` 這三行在時間軸上的分家整個畫出來，就是下面這張圖：
+
+![追蹤期間修改只進帳本，圖跑完由改寫後的 bytecode 逐筆重播回真實世界](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day07/side_effects.gif)
+
+*圖一：`forward` 的三行在時間軸上怎麼分家。追蹤期 `self.calls += 1` 和 `log.append` 進 SideEffects 帳本、真實世界完全不動；`x * 2` 進 FX Graph；圖執行完，改寫後的 bytecode 才把帳本裡的最終狀態逐筆重播回真實世界。*
 
 ## 翻譯期間，帳本是唯一真相
 

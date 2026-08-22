@@ -6,10 +6,6 @@ Day 4 的結尾留過一句話：Graph Break 不是查表失敗，而是 handler
 
 正文開始！
 
-![函式時間軸在 print 斷開：前段編成圖一、print 掉進 eager、resume function 又被攔截編成圖二，再縫回一條執行路徑](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day10/graph_break.gif)
-
-*圖一：`f` 的 bytecode 時間軸翻譯到 `print` 舉手之後被切成三段：前段收成圖一交給 Inductor、`print` 那條指令掉回 eager、剩下包成 `__resume_at_32_3` 再被 eval hook 攔截編成圖二，最後執行路徑把三段重新縫成一條。*
-
 ## 什麼樣的程式碼會踩到斷點？
 
 先來問一個問題：到底什麼會斷？Day 4 講過判斷發生的位置：`dispatch_table` 對幾乎每條 opcode 都有同名 handler，查表這一步不會落空；真正斷開的時機，是 handler 接下指令、看了運算元，發現這個操作沒辦法只靠符號值走下去。所以「會不會斷」不是指令說了算，而是運算元說了算。同一條 `CALL`，呼叫 `torch.sin` 進圖、呼叫自己寫的函式被 inline、呼叫 `print` 就斷。實務上最常撞到的大概是這幾類：
@@ -158,7 +154,11 @@ Ops per Graph:
   Ops 2: <built-in function add>
 ```
 
-兩張圖各領一個 op，中間夾著那聲 `mid`。
+兩張圖各領一個 op，中間夾著那聲 `mid`。斷開、掉落、縫回這一整段旅程，用動畫走一遍就是下面這張圖：
+
+![函式時間軸在 print 斷開：前段編成圖一、print 掉進 eager、resume function 又被攔截編成圖二，再縫回一條執行路徑](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day10/graph_break.gif)
+
+*圖一：`f` 的 bytecode 時間軸翻譯到 `print` 舉手之後被切成三段：前段收成圖一交給 Inductor、`print` 那條指令掉回 eager、剩下包成 `__resume_at_32_3` 再被 eval hook 攔截編成圖二，最後執行路徑把三段重新縫成一條。*
 
 ## Break 竟然會傳染？inline 裡的斷點
 
