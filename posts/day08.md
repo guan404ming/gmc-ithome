@@ -74,9 +74,9 @@ def forward(self, L_x_: "f32[4, 4][4, 1]cuda:0", L_y_: "f32[4, 4][4, 1]cuda:0", 
 
 至於 `nn.Module` 的參數和 buffer，則另有通道，由 `register_attr_or_module` 把它們掛進 `nn_modules`、以 `get_attr` 或輸入的形式進圖，Day 5 說「權重變成圖的輸入」的具體機關就在這裡。
 
-## SubgraphTracer 其實是一疊？
+## SubgraphTracer 其實是一個 stack？
 
-OutputGraph 裡動筆的 tracer 其實是一個 stack。平常這疊只有一層，root tracer 從頭寫到尾。但遇到 `torch.cond`、activation checkpoint 這類「參數是函式」的 higher-order op，分支必須自成一張子圖，Dynamo 就 push 一個新的 SubgraphTracer，接下來的節點全寫進子圖，翻完 pop 回來，子圖以 submodule 的身分掛回主圖。
+OutputGraph 裡動筆的 tracer 其實是一個 stack。平常這個 stack 只有一層，root tracer 從頭寫到尾。但遇到 `torch.cond`、activation checkpoint 這類「參數是函式」的 higher-order op，分支必須自成一張子圖，Dynamo 就 push 一個新的 SubgraphTracer，接下來的節點全寫進子圖，翻完 pop 回來，子圖以 submodule 的身分掛回主圖。
 
 比較麻煩的是自由變數。子圖裡用到外層的值，在 FX 的世界觀裡這是不合法的（一張圖只能用自己的 placeholder），所以 SubgraphTracer 的 `create_proxy` 在寫節點前多一步。發現參數是外層的 proxy，就呼叫 `maybe_lift_tracked_freevar_to_input`，把它就地 lift 成子圖的輸入，而且是遞迴的，巢狀幾層就一路往上提幾層，直到碰到真正持有它的那層為止。FX 本身沒有這種巢狀管理，SubgraphTracer 這層包裝很大一部分就是為它存在的。
 
