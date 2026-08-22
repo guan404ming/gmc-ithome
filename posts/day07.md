@@ -35,6 +35,8 @@ FX Graph 交給後端之後，後端要自由地重排、融合、刪除節點�
 
 其中 Existing 與 New 的分界是一條生死線。existing 的修改一定要 replay，因為外面的世界看得到這個物件。new 的物件如果沒逃出函式（沒被 return、沒被塞進既有結構），整筆帳直接勾銷，連重建都省了。
 
+不過帳本能記的前提是 Dynamo 對這個修改建得了模，建不了模的，Dynamo 就只能舉手 Graph Break。舉例來說，對 Dynamo 不認識的 C 擴充物件呼叫會改內部狀態的方法，它連物件裡有什麼都不知道，自然記不了帳。又或是對有 `maxlen` 的 `deque` 做修改，滿了會自動擠掉舊元素，replay「最終狀態」需要知道每筆操作的順序，但帳本只記結果不記過程，v2.8.0 直接放棄。
+
 ## 一起來動手跑跑看！
 
 ```python
@@ -142,11 +144,11 @@ def g(x, obj):
 
 list 不是把 `append` 重做一遍，而是整個內容用 slice 賦值換掉，不管中間經歷幾次操作，replay 永遠只有一筆，而且動的是原本那個物件，別人手上的 reference 依然有效。改屬性時繞過自訂 `__setattr__` 也是同個邏輯，它的效果在翻譯期已經被 inline 追蹤、記在帳上了，replay 再跑一次就會重複執行。
 
-最後，`codegen_update_mutated` 把每筆帳拆成「準備新值」和「執行寫入」兩半，寫入收集在 `suffixes` 裡反序附加。這就是上面 bytecode 裡 `log[:] = [1]` 插在 `__setattr__` 參數和 `CALL 3` 中間的原因。
+最後 `codegen_update_mutated` 把每筆帳拆成「準備新值」和「執行寫入」兩半，寫入收集在 `suffixes` 裡反序附加。這就是上面 bytecode 裡 `log[:] = [1]` 插在 `__setattr__` 參數和 `CALL 3` 中間的原因。
 
-另外，結帳之前其實還有一步過濾，叫 `prune_dead_object_new()`。它從即將被 return 的值、Graph Break 時要留給後半段的區域變數、以及所有 existing 物件這三類根出發走引用鏈，走得到的 new 物件才需要重建，走不到的整筆勾銷。
+另外結帳之前其實還有一步過濾，叫 `prune_dead_object_new()`。它從即將被 return 的值、Graph Break 時要留給後半段的區域變數、以及所有 existing 物件這三類根出發走引用鏈，走得到的 new 物件才需要重建，走不到的整筆勾銷。
 
-實際驗證，`tmp = []; tmp.append(1); return x * 2` 改寫後的 bytecode 裡，`BUILD_LIST` 和 `append` 徹底消失，只剩一次 `__compiled_fn` 呼叫。
+我們也可以透過程式碼來簡單的實際驗證，`tmp = []; tmp.append(1); return x * 2` 改寫後的 bytecode 裡，`BUILD_LIST` 和 `append` 徹底消失，只剩一次 `__compiled_fn` 呼叫。
 
 ```
 RESUME        0
@@ -160,24 +162,17 @@ RETURN_VALUE
 
 `tmp` 從頭到尾只活在符號世界，真實世界從來不知道它存在過。這跟 Day 4 的「list 留在符號世界」是同一件事的兩面，讀的那面被就地吸收，寫的那面記帳後發現死掉、整筆撕掉。
 
+順帶一提，Graph Break 的瞬間走的也是同一條路。前半段的帳要先結清，最後才能把控制權還給 CPython，因為接手的真實 Python 必須看到最新狀態。這是 Graph Break 貴的另一個原因，帳本被迫提前結算，原本一筆的修改被拆成好幾次 replay。
+
 ## 三本帳怎麼搭配
 
 走到這一步，三本帳終於可以拼起來了。同一個值，讀和寫走的是不同的帳。
 
 - **讀**：值從外面進來，帶著 Source。被讀的那一刻裝 Guard，讀到的內容可能被 bake 進圖。這是 Day 5、Day 6 的路。
 - **寫**：寫入被 `SideEffects` 攔下記帳，真實物件凍結，後續的讀先查帳本。
-- **replay**：生指令時要先把「被改的那個物件」放上 stack，而找回它靠的正是 Source，也就是發出 `LOAD_FAST self`、`LOAD_DEREF log` 的那條鏈。Source 一頭生 Guard、一頭生重建 bytecode，後半句真正的使用者就是 SideEffects。
+- **replay**：生指令時要先把「被改的那個物件」放上 stack，而找回它靠的正是 Source，也就是發出 `LOAD_FAST self`、`LOAD_DEREF log` 的那條鏈。Source 一邊會幫忙生出 Guard、另一邊則去幫忙重建 bytecode，而這邊他的真正的使用者就是 SideEffects。
 
-也因為讀寫是兩本帳，`self.calls += 1` 這種計數器是經典踩雷組合。讀的那半被 bake 成常數、裝了 `EQUALS_MATCH` 的 Guard，寫的那半又把它加一寫回，於是每呼叫一次 Guard 必失敗、必重編。想在編譯區域裡維護計數器，用 buffer（Tensor）而不是 Python int。
-
-## 記不了帳的時候，就 Graph Break
-
-帳本能記的，前提是 Dynamo 對這個修改建得了模。建不了模的，翻譯就只能舉手 Graph Break。舉兩個原始碼裡的例子。
-
-- 對 Dynamo 不認識的 C 擴充物件呼叫會改內部狀態的方法。它連物件裡有什麼都不知道，自然記不了帳。
-- 對有 `maxlen` 的 `deque` 做修改。滿了會自動擠掉舊元素，replay「最終狀態」需要知道每筆操作的順序，但帳本只記結果不記過程，v2.8.0 直接放棄。
-
-而 Graph Break 本身也跟帳本有關。斷圖的瞬間前半段的帳要先結清，才能把控制權還給 CPython，因為接手的真實 Python 必須看到最新狀態。這是 Graph Break 貴的另一個原因，帳本被迫提前結算，原本一筆的修改被拆成好幾次 replay。
+也因為讀跟寫是分別在兩本帳，`self.calls += 1` 這種計數器是經典踩雷組合。讀的那半被 bake 成常數、裝了 `EQUALS_MATCH` 的 Guard，寫的那半又把它加一寫回，於是每呼叫一次 Guard 必失敗、必重編。想在編譯區域裡維護計數器，用 buffer（Tensor）會更好而不是使用 Python int。
 
 ## 結語
 
