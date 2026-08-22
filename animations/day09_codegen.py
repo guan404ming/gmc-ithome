@@ -9,13 +9,10 @@ for f in FONT_DIR.glob("*.ttf"):
 
 BG = "#161719"
 CARD = "#23272e"
-CARD_DIM = "#1b1e23"
-EDGE = "#3a3f47"
 TXT = "#e8e6e3"
 MUTED = "#8b8f96"
 DIM = "#5a5e66"
 ACCENT = "#e8622a"
-ACTIVE_FILL = "#2b2622"
 config.background_color = BG
 MONO = "Menlo"
 SANS = "TASA Orbiter"
@@ -26,26 +23,6 @@ def T(txt, font_size, **kw):
     return Text(txt, font_size=font_size * 4, **kw).scale(0.25)
 
 
-def label(s, size=15, color=MUTED):
-    return T(s, font=MONO, font_size=size, color=color)
-
-
-def panel(w, h, fill=CARD, edge=EDGE, r=0.12, sw=1.5):
-    return RoundedRectangle(corner_radius=r, width=w, height=h, stroke_color=edge, stroke_width=sw, fill_color=fill, fill_opacity=1)
-
-
-def header(name, sub):
-    t = T(name, font=SANS, font_size=21, weight=BOLD, color=TXT)
-    s = T(sub, font=CJK, font_size=14, color=MUTED)
-    return VGroup(t, s).arrange(RIGHT, buff=0.22, aligned_edge=DOWN)
-
-
-def titled(w, h, name, sub, fill=CARD, edge=EDGE, sw=1.5):
-    r = panel(w, h, fill=fill, edge=edge, sw=sw)
-    hdr = header(name, sub).move_to(r.get_corner(UL) + RIGHT * 0.25 + DOWN * 0.22, aligned_edge=UL)
-    return VGroup(r, hdr)
-
-
 def pill(name, zh):
     zh_font = CJK if any("一" <= ch <= "鿿" for ch in zh) else MONO
     body = T(f"{name}  ·  {zh}", font_size=17, font=SANS, color=BG, t2f={name: SANS, "·": MONO, zh: zh_font}, t2w={name: BOLD}, t2c={"·": "#666"})
@@ -54,8 +31,8 @@ def pill(name, zh):
     return VGroup(bg, t.move_to(bg))
 
 
-def rows(lines, size=12, color=TXT, buff=0.1):
-    return VGroup(*[T(l, font=MONO, font_size=size, color=color) for l in lines]).arrange(DOWN, aligned_edge=LEFT, buff=buff)
+def line(s, color=TXT, size=15):
+    return T(s, font=MONO, font_size=size, color=color)
 
 
 ORIG = [
@@ -79,6 +56,14 @@ NEW = [
     ("32", "RETURN_VALUE"),
 ]
 
+OLX = -2.35
+OY0, ODY = 1.6, 0.55
+NY0, NDY = 2.05, 0.5
+
+
+def slot(i):
+    return [OLX, NY0 - i * NDY, 0]
+
 
 class Codegen(Scene):
     def construct(self):
@@ -94,95 +79,75 @@ class Codegen(Scene):
             self.play(FadeIn(p), FadeIn(c, shift=UP * 0.1), run_time=0.3)
             cur[0], cur[1] = p, c
 
-        TOP, BOT = 2.45, -2.9
-        H = TOP - BOT
-        MIDY = (TOP + BOT) / 2
-        left = titled(3.9, H, "ORIGINAL", "原 bytecode").move_to([-4.76, MIDY, 0])
-        right = titled(5.5, H, "MODIFIED", "新 bytecode").move_to([3.94, MIDY, 0])
-        emitter = titled(3.0, 2.2, "PYCODEGEN", "codegen.py").move_to([-0.81, MIDY, 0])
-        lbls = [label("SOURCE  ·  f.__code__").next_to(left, UP, buff=0.22).align_to(left, LEFT),
-                label("OUTPUT  ·  to CPython").next_to(right, UP, buff=0.22).align_to(right, LEFT)]
-
-        RX, GX = 2.06, 1.86
-        Y0, DY = 1.35, 0.42
-        LX = left[0].get_left()[0] + 0.25
-
-        switch("SETUP", "要生一段等價改寫", "運算已經收進 __compiled_fn_1，PyCodegen 要生的只剩搬運：載入、擺輸入、呼叫、拆輸出、return")
-        self.play(FadeIn(left), FadeIn(right), FadeIn(emitter), *[FadeIn(l) for l in lbls], run_time=0.5)
-        olines = VGroup(*[T(l, font=MONO, font_size=13, color=TXT).move_to([LX, Y0 - i * DY, 0], aligned_edge=LEFT) for i, l in enumerate(ORIG)])
-        self.play(FadeIn(olines, shift=RIGHT * 0.1), run_time=0.4)
+        switch("SETUP", "原 bytecode", "f 的六條 bytecode：兩條載入、三條計算、一條 return，改寫的原料就這些")
+        olines = VGroup(*[line(s).move_to([OLX, OY0 - i * ODY, 0], aligned_edge=LEFT) for i, s in enumerate(ORIG)])
+        self.play(LaggedStart(*[FadeIn(l, shift=RIGHT * 0.2) for l in olines], lag_ratio=0.15), run_time=1.2)
         self.wait(2.5)
 
-        drv = [None]
-
-        def driver(lines_):
-            g = rows(lines_, size=11, buff=0.2).next_to(emitter[1], DOWN, buff=0.3).align_to(emitter[1], LEFT)
-            g[0].set_color(ACCENT)
-            for r in g[1:]:
-                r.set_color(MUTED)
-            anims = [FadeIn(g, shift=UP * 0.05)]
-            if drv[0] is not None:
-                anims.append(FadeOut(drv[0]))
-            self.play(*anims, run_time=0.25)
-            drv[0] = g
-
-        nrows = []
-
-        def emit(i, rt=0.3):
-            m = T(NEW[i][1], font=MONO, font_size=12, color=ACCENT).move_to([RX, Y0 - i * DY, 0], aligned_edge=LEFT)
-            self.play(FadeIn(m, shift=RIGHT * 0.25), run_time=rt)
-            nrows.append(m)
-            return m
-
-        def settle(ms, extra=()):
-            self.play(*[m.animate.set_color(TXT) for m in ms], *extra, run_time=0.15)
-
-        switch("STEP 1", "載入編譯產物", "__compiled_fn_1 是 Day 8 塞進 globals 的名字，一條 LOAD_GLOBAL 就載得到")
-        driver(["install_global()", "__compiled_fn_1"])
-        m0 = emit(0)
+        switch("ABSORB", "計算被吸走", "乘與加整段收進編譯產物，bytecode 層從此不再有任何計算")
+        cap_label = T("__compiled_fn_1", font=MONO, font_size=15, color=ACCENT)
+        cap_box = RoundedRectangle(corner_radius=0.3, width=cap_label.width + 0.8, height=0.85, stroke_color=ACCENT, stroke_width=1.8, fill_color=CARD, fill_opacity=1)
+        capsule = VGroup(cap_box, cap_label.move_to(cap_box)).move_to([3.6, OY0 - 3 * ODY, 0])
+        self.play(FadeIn(capsule, shift=LEFT * 0.2), run_time=0.5)
+        for k in (2, 3, 4):
+            self.play(olines[k].animate.set_color(ACCENT), run_time=0.25)
+            self.play(olines[k].animate.move_to(capsule.get_center()).scale(0.2).set_opacity(0), Indicate(capsule, scale_factor=1.04, color=ACCENT), run_time=0.6)
+            self.remove(olines[k])
         self.wait(3.5)
-        settle([m0])
 
-        switch("STEP 2", "按 Source 擺輸入", "x 有 Source：L['x'].reconstruct() 生一條 LOAD_FAST；n 被 bake 成常數，不用載")
-        driver(["source.reconstruct()", "L['x'] -> LOAD_FAST x"])
-        self.play(olines[0].animate.set_color(ACCENT), run_time=0.2)
-        m1 = emit(1)
-        bake = T("-> bake", font=MONO, font_size=10, color=ACCENT).next_to(olines[1], RIGHT, buff=0.2)
-        self.play(olines[1].animate.set_color(DIM), FadeIn(bake), run_time=0.3)
-        self.wait(3.5)
-        settle([m1], extra=[olines[0].animate.set_color(MUTED)])
-
-        switch("STEP 3", "一條 CALL 吃掉計算", "乘與加全部發生在編譯產物裡，三條運算指令在新 bytecode 沒有對應物")
-        driver(["create_call_function(1)"])
-        m2 = emit(2)
-        gtag = T("-> graph", font=MONO, font_size=10, color=ACCENT).next_to(olines[3], RIGHT, buff=0.2)
-        self.play(*[olines[k].animate.set_color(DIM) for k in (2, 3, 4)], FadeIn(gtag), run_time=0.35)
-        self.wait(3.5)
-        settle([m2])
-
-        switch("STEP 4", "拆輸出", "圖的輸出永遠是 tuple：暫存進 graph_out_0、取下標 0、用完 DELETE_FAST 歸還引用")
-        driver(["graph_out_0 = new_var()", "tuple -> [0]"])
-        ms = [emit(i, rt=0.22) for i in range(3, 8)]
-        self.wait(3.5)
-        settle(ms)
-
-        switch("STEP 5", "RETURN", "RETURN_VALUE 收尾；如果有 side effect，Day 7 的重播碼會插在它前面")
-        driver(["RETURN_VALUE"])
-        m8 = emit(8)
-        self.play(olines[5].animate.set_color(MUTED), run_time=0.2)
+        switch("BAKE", "n 變常數", "n 是 Python int，Day 5 已被 bake 進圖裡，圖的輸入只剩 x，這條不用留")
+        bake = T("-> baked", font=MONO, font_size=12, color=ACCENT).next_to(olines[1], RIGHT, buff=0.3)
+        self.play(olines[1].animate.set_color(DIM), FadeIn(bake), run_time=0.4)
+        self.wait(1.2)
+        self.play(FadeOut(olines[1]), FadeOut(bake), run_time=0.5)
         self.wait(2.5)
-        settle([m8])
 
-        switch("ASSEMBLE", "組回 code object", "組裝時才算 offset：跳轉參照換算回數字、EXTENDED_ARG 掃描到收斂、stacksize 重算")
-        new_hdr = header("ASSEMBLE", "組裝").move_to(emitter[0].get_corner(UL) + RIGHT * 0.25 + DOWN * 0.22, aligned_edge=UL)
-        self.play(FadeOut(emitter[1]), FadeIn(new_hdr), run_time=0.3)
-        driver(["transform_code_object", "fix_extended_args()"])
-        offs = VGroup(*[T(NEW[i][0], font=MONO, font_size=11, color=MUTED) for i in range(9)])
-        for i, o in enumerate(offs):
-            o.move_to([GX, Y0 - i * DY, 0], aligned_edge=RIGHT).match_y(nrows[i])
-        self.play(LaggedStart(*[FadeIn(o, shift=RIGHT * 0.1) for o in offs], lag_ratio=0.12), run_time=1.2)
-        self.play(right[0].animate.set_stroke(color=ACCENT, width=2).set_fill(ACTIVE_FILL), run_time=0.4)
+        switch("REWRITE", "原地改寫", "剩下兩條原指令原樣沿用，先排進新的位置，中間的洞交給新的搬運碼")
+        self.play(olines[0].animate.move_to(slot(1), aligned_edge=LEFT).set_color(DIM), olines[5].animate.move_to(slot(8), aligned_edge=LEFT).set_color(DIM), run_time=0.9)
+        self.wait(2)
+
+        switch("STEP 1", "載入編譯產物", "__compiled_fn_1 是 Day 8 塞進 globals 的名字，一條 LOAD_GLOBAL 就載上 stack")
+        n0 = line(NEW[0][1], color=ACCENT).move_to(slot(0), aligned_edge=LEFT)
+        self.play(TransformFromCopy(cap_label, n0), run_time=0.8)
+        self.wait(3.5)
+        self.play(n0.animate.set_color(TXT), run_time=0.15)
+
+        switch("STEP 2", "按 Source 擺輸入", "x 有 Source：L['x'].reconstruct() 從原位置載，不必讓圖多輸出一份")
+        self.play(olines[0].animate.set_color(ACCENT), run_time=0.3)
+        self.play(Indicate(olines[0], scale_factor=1.06, color=ACCENT), run_time=0.6)
+        self.wait(3.5)
+        self.play(olines[0].animate.set_color(TXT), run_time=0.15)
+
+        switch("STEP 3", "一條 CALL 吃掉整段計算", "被吸走的三條運算指令，等價物就是這一條 CALL，計算全部發生在膠囊裡")
+        n2 = line(NEW[2][1], color=ACCENT).move_to(slot(2), aligned_edge=LEFT)
+        self.play(ReplacementTransform(capsule, n2), run_time=0.9)
+        self.play(Flash(n2.get_left() + LEFT * 0.25, color=ACCENT, line_length=0.15, flash_radius=0.3), run_time=0.5)
+        self.wait(3.5)
+        self.play(n2.animate.set_color(TXT), run_time=0.15)
+
+        switch("STEP 4", "拆輸出", "圖的輸出永遠是 tuple：存進 graph_out_0、取下標 0、用完 DELETE_FAST 歸還引用")
+        unpack = VGroup(*[line(NEW[i][1], color=ACCENT).move_to(slot(i), aligned_edge=LEFT) for i in range(3, 8)])
+        self.play(LaggedStart(*[FadeIn(m, shift=RIGHT * 0.25) for m in unpack], lag_ratio=0.2), run_time=1.4)
+        self.wait(3.5)
+        self.play(*[m.animate.set_color(TXT) for m in unpack], run_time=0.15)
+
+        switch("STEP 5", "RETURN", "RETURN_VALUE 原樣收尾；有 side effect 的話，Day 7 的重播碼會插在它前面")
+        self.play(olines[5].animate.set_color(ACCENT), run_time=0.3)
+        self.play(Indicate(olines[5], scale_factor=1.06, color=ACCENT), run_time=0.6)
+        self.wait(2.5)
+        self.play(olines[5].animate.set_color(TXT), run_time=0.15)
+
+        newcol = VGroup(n0, olines[0], n2, *unpack, olines[5])
+
+        switch("ASSEMBLE", "組回 code object", "transform_code_object 組裝：offset 這時才算出來、EXTENDED_ARG 掃到收斂、stacksize 重算")
+        offs = VGroup(*[T(NEW[i][0], font=MONO, font_size=12, color=ACCENT).move_to([OLX - 0.4, slot(i)[1], 0], aligned_edge=RIGHT).match_y(newcol[i]) for i in range(9)])
+        self.play(LaggedStart(*[FadeIn(o, shift=RIGHT * 0.15) for o in offs], lag_ratio=0.12), run_time=1.4)
+        self.play(offs.animate.set_color(MUTED), run_time=0.4)
+        frame = RoundedRectangle(corner_radius=0.18, width=VGroup(newcol, offs).width + 0.7, height=VGroup(newcol, offs).height + 0.6, stroke_color=ACCENT, stroke_width=1.8, fill_opacity=0).move_to(VGroup(newcol, offs))
+        tag = T("code object  ->  eval hook", font=MONO, font_size=13, color=MUTED).next_to(frame, DOWN, buff=0.25)
+        self.play(Create(frame), run_time=0.8)
+        self.play(FadeIn(tag, shift=UP * 0.1), run_time=0.3)
         self.wait(3.5)
 
-        switch("RULE", "只生搬運碼", "值有 Source 就從原位置載、是圖輸出就從 graph_out_0 取、常數直接 LOAD_CONST，能省的絕不多生")
+        switch("RULE", "只生搬運碼", "值有 Source 從原位置載、是圖輸出從 graph_out_0 取、常數直接 LOAD_CONST，能省的絕不多生")
         self.wait(5.5)
