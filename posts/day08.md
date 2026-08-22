@@ -2,17 +2,17 @@
 
 ## 前言
 
-前四天我們各講了一條生產線：節點（Day 4）、包裝（Day 5）、Guard（Day 6）、修改帳（Day 7）。每條線都在產出東西，不過有一個問題我們一直沒問：這些產出到底寫到哪裡去了？節點說「往圖上加」，是往哪張圖上加？Guard 說「丟進集合」，又是誰的集合？今天就來介紹這個負責收貨的中央倉庫。簡單來說，`InstructionTranslator` 是筆，[`OutputGraph`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/output_graph.py) 就是那張紙。一個 frame 的一次編譯只會有一個 OutputGraph，所有產出都寫在它上面。
+前四天我們各講了一條生產線，分別是節點（Day 4）、包裝（Day 5）、Guard（Day 6）、修改帳（Day 7）。每條線都在產出東西，不過有一個問題我們一直沒問。這些產出到底寫到哪裡去了？節點說「往圖上加」，是往哪張圖上加？Guard 說「丟進集合」，又是誰的集合？今天就來介紹這個負責收貨的中央倉庫。簡單來說，`InstructionTranslator` 是筆，[`OutputGraph`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/output_graph.py) 就是那張紙。一個 frame 的一次編譯只會有一個 OutputGraph，所有產出都寫在它上面。
 
-原始碼裡它的 docstring 第一句話就把定位講死了：「Wrapper class to hold outputs of InstructionTranslator」。那今天我們就沿著這句話來拆三件事：產出是怎麼一筆一筆寫進去的、輸入為什麼是「用到才登記」、以及 RETURN 或 Graph Break 的那一瞬間，`compile_subgraph` 是怎麼把一切收攏成一張 FX Graph 交出去的。
+原始碼裡它的 docstring 第一句話「Wrapper class to hold outputs of InstructionTranslator」就把定位講死了。那今天我們就沿著這句話來拆三件事，產出是怎麼一筆一筆寫進去的、輸入為什麼是「用到才登記」、以及 RETURN 或 Graph Break 的那一瞬間，`compile_subgraph` 是怎麼把一切收攏成一張 FX Graph 交出去的。
 
 正文開始！
 
 ## 一個 frame，一個倉庫
 
-先來把「一對一」這件事講清楚，因為它其實解釋了前幾天看到的一個現象。docstring 接著說，OutputGraph 與被處理的 frame 一對一；當使用者的程式呼叫另一個函式，Dynamo 開的 `InliningInstructionTranslator` 會**繼續寫進 root translator 的同一個 OutputGraph**。這就是 Day 5 看到「`helper` 被 inline 之後，整條呼叫鏈攤平成一張圖」的機關。筆可以換好幾支（每 inline 一層就多一台 translator），紙從頭到尾只有一張。
+先來把「一對一」這件事講清楚，因為它其實解釋了前幾天看到的一個現象。docstring 接著說，OutputGraph 與被處理的 frame 一對一。當使用者的程式呼叫另一個函式，Dynamo 開的 `InliningInstructionTranslator` 會**繼續寫進 root translator 的同一個 OutputGraph**。這就是 Day 5 看到「`helper` 被 inline 之後，整條呼叫鏈攤平成一張圖」的機關。筆可以換好幾支（每 inline 一層就多一台 translator），紙從頭到尾只有一張。
 
-那這張紙上到底有什麼呢？看一下 `__init__` 就知道倉庫開張時擺了哪些貨架：
+那這張紙上到底有什麼呢？看一下 `__init__` 就知道倉庫開張時擺了哪些貨架。
 
 | 成員 | 裝什麼 | 誰來寫 |
 |---|---|---|
@@ -32,26 +32,26 @@
 
 ## 動筆的人：create_proxy 與 SubgraphTracer
 
-Day 4 說 `BuiltinVariable` 發現兩個運算元是 Tensor，就「往圖上加一個 `mul` 節點」。具體的路是這樣走的。variable 層呼叫 [`wrap_fx_proxy`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/variables/builder.py)，它請 `OutputGraph.create_proxy` 造節點，而 OutputGraph 這邊其實又只是轉手：
+Day 4 說 `BuiltinVariable` 發現兩個運算元是 Tensor，就「往圖上加一個 `mul` 節點」。具體的路是這樣走的。variable 層呼叫 [`wrap_fx_proxy`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/variables/builder.py)，它請 `OutputGraph.create_proxy` 造節點，而 OutputGraph 這邊其實又只是轉手。
 
 ```python
 def create_proxy(self, *args, **kwargs):
     return self.current_tracer.create_proxy(*args, **kwargs)
 ```
 
-真正動筆的是 `SubgraphTracer`，它是 `fx.Tracer` 的子類別，就定義在同一個檔案下半部。FX 本身的 `create_proxy` 只負責「在圖上造一個節點、回一個 proxy」，SubgraphTracer 覆寫它，在造完節點之後多做幾件 Dynamo 才需要的事，像是把當下正在翻譯的那條 bytecode 的原始碼位置記進 `node.meta`、記下 `nn_module_stack`（這個運算發生在哪個 module 的 forward 裡）、記下 `source_fn_stack`（是哪個使用者層級的函式產生的）。你在 `graph_code` 輸出裡看到的那行註解：
+真正動筆的是 `SubgraphTracer`，它是 `fx.Tracer` 的子類別，就定義在同一個檔案下半部。FX 本身的 `create_proxy` 只負責「在圖上造一個節點、回一個 proxy」，SubgraphTracer 覆寫它，在造完節點之後多做幾件 Dynamo 才需要的事，像是把當下正在翻譯的那條 bytecode 的原始碼位置記進 `node.meta`、記下 `nn_module_stack`（這個運算發生在哪個 module 的 forward 裡）、記下 `source_fn_stack`（是哪個使用者層級的函式產生的）。你在 `graph_code` 輸出裡看到的那行註解長得像下面這樣。
 
 ```python
 # File: /root/output_graph.py:15 in f, code: return (x @ y + bias).relu()
 ```
 
-就是這時候寫進 meta、印圖時再讀出來的。所以圖不只是節點的集合，每個節點都帶著「我從你的哪一行程式碼來」的出生證明，之後 Graph Break 訊息、profiler 歸因、AOTAutograd 的 stack trace 保留，全都吃這份 meta。
+它就是這時候寫進 meta、印圖時再讀出來的。所以圖不只是節點的集合，每個節點都帶著「我從你的哪一行程式碼來」的出生證明，之後 Graph Break 訊息、profiler 歸因、AOTAutograd 的 stack trace 保留，全都吃這份 meta。
 
 另外，每個節點還掛著一個 `example_value`，一顆只有 shape、dtype、device、沒有數值的 FakeTensor。這就是 Day 3 說「符號執行」的物質基礎，也是圖上每個值印得出 `f32[4, 4][4, 1]cuda:0` 這種標註的原因。形狀資訊一路都在，值從頭到尾不在。
 
 ## 輸入不是宣告出來的，是用到才登記
 
-節點講完了，接著來講輸入。Dynamo 不看函式簽名決定圖的輸入，一個 Tensor 要等到真的被用上，才呼叫 `create_graph_input` 建 placeholder、登記一筆 `GraphArg`。拿一小段程式驗證：
+節點講完了，接著來講輸入。Dynamo 不看函式簽名決定圖的輸入，一個 Tensor 要等到真的被用上，才呼叫 `create_graph_input` 建 placeholder、登記一筆 `GraphArg`。拿一小段程式驗證看看。
 
 ```python
 bias = torch.randn(4, device="cuda")
@@ -62,7 +62,7 @@ def f(x, y, unused):
 torch.compile(f)(torch.randn(4, 4, device="cuda"), torch.randn(4, 4, device="cuda"), torch.randn(9, device="cuda"))
 ```
 
-`graph_code` 印出來：
+`graph_code` 印出來如下。
 
 ```python
 def forward(self, L_x_: "f32[4, 4][4, 1]cuda:0", L_y_: "f32[4, 4][4, 1]cuda:0", L_bias_: "f32[4][1]cuda:0"):
@@ -72,13 +72,13 @@ def forward(self, L_x_: "f32[4, 4][4, 1]cuda:0", L_y_: "f32[4, 4][4, 1]cuda:0", 
     return (relu,)
 ```
 
-三個地方值得放大來看：
+有三個地方值得放大來看。
 
-- **`unused` 不在圖裡**。傳了但沒用到的參數不會被登記；收圖前 `remove_unused_graphargs` 還會再掃一輪，把中途變成死代碼的輸入拔掉。
+- **`unused` 不在圖裡**。傳了但沒用到的參數不會被登記，收圖前 `remove_unused_graphargs` 還會再掃一輪，把中途變成死代碼的輸入拔掉。
 - **`bias` 也是輸入**。它不是參數，是外面抓進來的 Tensor。`LOAD_DEREF` 載入它的那一刻，`VariableBuilder` 把它包成 `TensorVariable`，順手 lift 成 root graph 的輸入，placeholder 的名字 `L_bias_` 就是它的 Source。Tensor 的值永遠當輸入而不是常數，這就是 Day 5 那個押注原則在這裡的體現。
 - **中間值用完立刻 `= None`**，提早歸還引用，讓記憶體早點釋放。輸出永遠是 tuple，就算只有一個值。
 
-`create_graph_input` 的實作還有個蠻乾淨的地方。placeholder 一律插在圖的最前面（沿著上一個 placeholder 往後接），然後把 `GraphArg` 掛在 `node.meta["grapharg"]` 上。所以 OutputGraph 的 `graphargs` property 並不是另外維護的一份名單：
+`create_graph_input` 的實作還有個蠻乾淨的地方。placeholder 一律插在圖的最前面（沿著上一個 placeholder 往後接），然後把 `GraphArg` 掛在 `node.meta["grapharg"]` 上。所以 OutputGraph 的 `graphargs` property 並不是另外維護的一份名單。
 
 ```python
 @property
@@ -96,7 +96,7 @@ def graphargs(self) -> list[GraphArg]:
 
 ## SubgraphTracer 其實是一疊？
 
-上面 `create_proxy` 轉手時用的是 `self.current_tracer`，這個 `tracers` 複數的暗示其實很明顯：
+上面 `create_proxy` 轉手時用的是 `self.current_tracer`，這個 `tracers` 複數的暗示其實很明顯。
 
 ```python
 @property
@@ -114,13 +114,13 @@ def current_tracer(self):
 
 ## compile_subgraph：收圖的瞬間
 
-那倉庫收貨要收到什麼時候呢？時機只有兩種，RETURN（整個 frame 翻完了）或 Graph Break（翻不下去了）。兩條路殊途同歸，都走進 `compile_subgraph`，它的 docstring 把要做的事列得很白，呼叫編好的子圖、補做 side effect、生成 stack 和 locals 的重建碼、存回 locals。展開來是一連串動作：
+那倉庫收貨要收到什麼時候呢？時機只有兩種，RETURN（整個 frame 翻完了）或 Graph Break（翻不下去了）。兩條路殊途同歸，都走進 `compile_subgraph`，它的 docstring 把要做的事列得很白，呼叫編好的子圖、補做 side effect、生成 stack 和 locals 的重建碼、存回 locals。展開來是一連串動作。
 
-1. **算活性**：symbolic stack 和 locals 裡哪些值在這之後還會被用到（`_get_stack_values_to_restore`），它們得成為圖的輸出，不然斷點之後接不上。RETURN 時這很簡單，就是回傳值；Graph Break 時才是重頭戲，翻到一半的中間狀態全要保住。
+1. **算活性**：symbolic stack 和 locals 裡哪些值在這之後還會被用到（`_get_stack_values_to_restore`），它們得成為圖的輸出，不然斷點之後接不上。RETURN 時這很簡單，就是回傳值。Graph Break 時才是重頭戲，翻到一半的中間狀態全要保住。
 2. **side_effects 結帳**（Day 7）：`codegen_suffix` 請帳本把每筆修改的重播碼生出來。
 3. **收圖**：把活值接上 `output` 節點，`remove_unused_graphargs` 清掉沒用到的輸入，`_make_graph_module` 把 fx.Graph 包成 GraphModule。
-4. **`call_user_compiler`**：把 GraphModule 交給 backend（inductor、eager、或你自訂的），拿回一個可呼叫的函式。這一步被 `restore_global_state()` 包著，確保後端是在「編譯當下的全域狀態」下工作的；後端炸了會被包成 `BackendCompilerFailed` 丟出來。這就是 Day 2 說「第三站可以換」的接口。
-5. **`install_global`**：編譯結果塞進 frame 的 globals。名字來自 `unique_id("__compiled_fn", with_uuid=True)`，所以長成 `__compiled_fn_1_6d16fdd3_...` 這樣，帶 uuid 是為了讓不同 `torch.compile` 實例互不踩腳。實際看得到：
+4. **`call_user_compiler`**：把 GraphModule 交給 backend（inductor、eager、或你自訂的），拿回一個可呼叫的函式。這一步被 `restore_global_state()` 包著，確保後端是在「編譯當下的全域狀態」下工作的。後端炸了會被包成 `BackendCompilerFailed` 丟出來。這就是 Day 2 說「第三站可以換」的接口。
+5. **`install_global`**：編譯結果塞進 frame 的 globals。名字來自 `unique_id("__compiled_fn", with_uuid=True)`，所以長成 `__compiled_fn_1_6d16fdd3_...` 這樣，帶 uuid 是為了讓不同 `torch.compile` 實例互不踩腳。實際印出來就看得到。
 
 ```python
 >>> [k for k in g.__globals__ if k.startswith("__compiled_fn")]
@@ -129,14 +129,14 @@ def current_tracer(self):
 
 新 bytecode 之後只要一條 `LOAD_GLOBAL` 就叫得到它。還有一個對稱的細節。`install_global_unsafe` 塞東西進 globals 時會順手註冊一個 `CleanupHook`，這張圖將來被淘汰時，塞進去的東西也會被撿走，倉庫不留垃圾。
 
-這條路上還有兩個省錢的細節值得一看。其一，收圖有一條快速道。stack 上全是普通的 `TensorVariable`、帳本是空的、沒有要重建的複雜結構，就直接「呼叫圖、`UNPACK_SEQUENCE` 攤開回傳值」完事，連暫存變數 `graph_out_0` 都省了。其二，圖是空的就不叫後端：
+這條路上還有兩個省錢的細節值得一看。其一，收圖有一條快速道。stack 上全是普通的 `TensorVariable`、帳本是空的、沒有要重建的複雜結構，就直接「呼叫圖、`UNPACK_SEQUENCE` 攤開回傳值」完事，連暫存變數 `graph_out_0` 都省了。其二，圖是空的就不叫後端。
 
 ```python
 if count_calls(self.graph) != 0 or len(pass2.graph_outputs) != 0:
     output.extend(self.compile_and_call_fx_graph(...))
 ```
 
-這段程式碼根本沒有 Tensor 運算的話，`compile_and_call_fx_graph` 就整個跳過。我們可以用一個會計數的自訂 backend 來驗證：
+這段程式碼根本沒有 Tensor 運算的話，`compile_and_call_fx_graph` 就整個跳過。我們可以用一個會計數的自訂 backend 來驗證。
 
 ```python
 def no_tensor(x):
@@ -148,7 +148,7 @@ torch.compile(no_tensor, backend=counting_backend)(torch.randn(4))
 
 後端一次都沒被叫到。純 Python 的 frame 被 Dynamo 翻完、發現無圖可交，就默默放行，這也是為什麼 `torch.compile` 套在不含 Tensor 運算的函式上會幾乎無感。
 
-最後一步，`compile_and_call_fx_graph` 的收尾是一行伏筆：
+最後一步，`compile_and_call_fx_graph` 的收尾是一行伏筆。
 
 ```python
 cg = PyCodegen(self.root_tx)
@@ -158,11 +158,11 @@ return cg.get_instructions()
 
 拿回編譯結果還不夠，得有人把「載入 `__compiled_fn_1`、把參數照 Source 推上 stack、呼叫、拆開回傳的 tuple」這段新 bytecode 寫出來。而負責寫的人就叫 PyCodegen，也就是明天的主角。
 
-下面這張動畫，把今天整條「逐筆進貨、一次收攏」的流程走了一遍：
+下面這張動畫，把今天整條「逐筆進貨、一次收攏」的流程走了一遍。
 
 ![散落的節點、輸入、Guard 與修改帳逐一飛進 OutputGraph，compile_subgraph 收攏成一張 FX Graph 並交給後端](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day08/output_graph.gif)
 
-*圖一：OutputGraph 是倉庫。翻譯期間節點、輸入、Guard、修改帳逐筆匯入；RETURN 或 Graph Break 時 `compile_subgraph` 一次收攏：接上 output 節點、清掉沒用的輸入、交給後端、把 `__compiled_fn` 塞進 globals。*
+*圖一：OutputGraph 是倉庫。翻譯期間節點、輸入、Guard、修改帳逐筆匯入。RETURN 或 Graph Break 時 `compile_subgraph` 一次收攏，接上 output 節點、清掉沒用的輸入、交給後端、把 `__compiled_fn` 塞進 globals。*
 
 ## 結語
 
