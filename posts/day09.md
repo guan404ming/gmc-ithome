@@ -19,7 +19,7 @@ Day 3 的時候我們說過，eval hook 最後會還給 CPython 一段改寫過�
 5. replay side effect（Day 7 的帳本）
 6. `RETURN_VALUE`
 
-注意這張清單，裡面沒有任何一項是「計算」。乘法、加法、`torch.sin`，全都已經被搬進 `__compiled_fn_1` 裡了，留在 bytecode 層的只剩下搬運，把值從原本的位置搬上 stack、把結果搬回該在的位置、把記過的帳搬回真實世界。所以 PyCodegen 生出來的碼幾乎清一色是 `LOAD_*`、`STORE_*`、`CALL`、`BUILD_*` 這幾類指令，這也是它能做得這麼小的原因。CPython 拿到這段就照著跑，完全不知道自己正在執行一個編譯器的輸出。
+注意這張清單，裡面沒有任何一項是「計算」。乘法、加法、`torch.sin` 全都已經搬進 `__compiled_fn_1`，留在 bytecode 層的只剩搬運。所以 PyCodegen 生出來的碼幾乎清一色是 `LOAD_*`、`STORE_*`、`CALL`、`BUILD_*` 這幾類指令，這也是它能做得這麼小的原因。
 
 ## PyCodegen 怎麼挑最短路徑
 
@@ -32,9 +32,9 @@ Day 3 的時候我們說過，eval hook 最後會還給 CPython 一段改寫過�
 | 純常數 | `LOAD_CONST` |
 | 翻譯期新生的容器 | 重建碼：`BUILD_LIST`、`BUILD_MAP` |
 
-第一列是最關鍵的省。有 Source 的值本來就在 frame 裡拿得到，何必讓圖多輸出一份呢？另外可以發現，Source 鏈到這裡已經是第三次出場了。Day 6 用它生 Guard、Day 8 用它命名輸入、今天則用它生載入碼。同一條鏈，三種輸出，背後的共同點是 Dynamo 對一個值記下的最關鍵資訊不是「它是什麼」，而是「runtime 怎麼拿到它」。
+第一列是最關鍵的省。有 Source 的值本來就在 frame 裡拿得到，何必讓圖多輸出一份呢？這也是 Source 鏈第三次出場了，Day 6 生 Guard、Day 8 命名輸入、今天生載入碼，共同點是 Dynamo 對一個值記下的關鍵資訊不是「它是什麼」，而是「runtime 怎麼拿到它」。
 
-順帶一提，`reconstruct` 這個名字其實在 Day 5 的介面表就出現過。它是每個 `VariableTracker` 都要回答的問題「改寫後的 bytecode 要怎麼把我重建出來」，而 `Source` 上也有一個同名方法。分工很清楚，有 Source 的值由 `source.reconstruct()` 發指令，從原位置載回來。沒有 Source 的值，也就是翻譯期間新生的 list、dict、閉包，則由 `VariableTracker` 自己的 `reconstruct()` 發，`BUILD_LIST`、`BUILD_MAP` 一磚一瓦蓋出來。Day 4 說過 `parts` 這種翻譯期的 list 圖上根本沒有，但如果它要被 return 出去，bytecode 層就必須真的把它蓋出來，`reconstruct` 就是那本蓋法說明書。而連 `reconstruct` 都寫不出來的值（某些 C 擴充物件），就會變成一條 `Reconstruction failure` 的 graph break。
+順帶一提，`reconstruct` 這個名字在 Day 5 的介面表就出現過，回答的是「改寫後的 bytecode 要怎麼把我重建出來」。有 Source 的值由 `source.reconstruct()` 發指令，從原位置載回來。沒有 Source 的值，也就是翻譯期新生的 list、dict、閉包，由 `VariableTracker` 自己的 `reconstruct()` 用 `BUILD_LIST`、`BUILD_MAP` 一磚一瓦蓋出來，Day 4 那個圖上根本沒有的 `parts` 要被 return 出去時，走的就是這條路。而連 `reconstruct` 都寫不出來的值（某些 C 擴充物件），就會變成一條 `Reconstruction failure` 的 graph break。
 
 ## 改寫前後對照著看
 
@@ -86,7 +86,7 @@ RETURN_VALUE                     <- 任務 6
 - **`n` 沒被傳給 `__compiled_fn_1`**。它是 Python int，Day 5 已經被 bake 成常數了，圖的輸入只剩 `x`，所以擺輸入只需要一條 `LOAD_FAST x`，而這條指令就是 `LocalSource("x")` 的 `reconstruct()` 生出來的。
 - **輸出永遠是 tuple**。就算只有一個回傳值，圖的輸出也是 `(add,)`（Day 8 看過），所以要 `BINARY_SUBSCR` 取下標 0。`graph_out_0` 是現配的暫存區域變數，用完立刻 `DELETE_FAST` 歸還引用，跟圖裡中間值用完就 `= None` 是同一個潔癖。
 - **沒有任務 5**。這個 `f` 沒有 side effect，帳本是空的。Day 7 那個例子裡，replay 的 bytecode就插在 `RETURN_VALUE` 之前。
-- profiler 那段順便示範了 PyCodegen 的另外兩招。`tmp_2` 存的是 `enter` 回傳的物件，先收起來、等輸入擺完再交給 `exit` 用。`COPY 1` 加 `STORE_FAST tmp_1` 則是把剛載上來的函式順手快取一份。而快取正好就是下一節的主題。
+- profiler 那段順便示範了另外兩招。`tmp_2` 先收著 `enter` 的回傳、等輸入擺完再交給 `exit`，`COPY 1` 加 `STORE_FAST tmp_1` 則是把剛載上來的函式快取一份，而快取正好是下一節的主題。
 
 這段「原碼進、新碼出」的改寫現場，動起來就是下面這張圖。
 
@@ -169,19 +169,17 @@ def transform_code_object(code, transformations, safe=False):
 
 簡單來說就是拆開、交給你改、組回去。中間的 `transformations` 是個 callback。Dynamo 的主改寫（[`convert_frame.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/convert_frame.py) 裡的 `transform()`，跑完 `InstructionTranslator`、把 OutputGraph 收好的指令整段換上去）就是餵給它的一個 callback，而明天 resume function 的生成餵的則是另一個。Day 3 的 eval hook 還給 CPython 的，就是這個函式的回傳值。
 
-## 收尾清掃
-
 生成完、組裝前其實還有一輪 [`bytecode_analysis`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/bytecode_analysis.py)。`convert_frame.py` 的 `transform()` 收尾就這麼一行。
 
 ```python
 instructions[:] = remove_pointless_jumps(remove_dead_code(instructions))
 ```
 
-liveness 分析找出沒人讀的 `STORE_FAST` 直接拔掉，跳到下一條指令的跳轉也一併拔掉。要注意它不是檢查器，掃的是浪費，不是錯誤。而這個分工划算的地方在於複雜度只需要付一次。生成路徑有很多條（return、break、side effect、resume 的各種組合），要是每一條都得自己小心不生廢碼，小心的成本就會乘上路徑數。集中交給一個清潔工，所有路徑就都能無腦生。
+liveness 分析找出沒人讀的 `STORE_FAST` 直接拔掉，跳到下一條指令的跳轉也一併拔掉。它掃的是浪費，不是錯誤。這個分工的划算之處在於，生成路徑有很多條（return、break、side effect、resume 的各種組合），廢碼集中交給一個清潔工，每條路徑就都能無腦生。
 
 ## 結語
 
-PyCodegen 就是一位只寫搬運碼的代筆人。值有 Source 就從原位置載，是圖的輸出就從 `graph_out_0` 取，純常數 `LOAD_CONST`，新生容器照 `reconstruct` 蓋。而且會生兩遍，第一遍數帳、第二遍照帳把重複載入折進暫存變數。bytecode_transformation 則收走全部的形式問題，指令物件化、跳轉虛擬化、offset 和 `EXTENDED_ARG` 迭代到收斂、stacksize 和 linetable 重算，最後由 `transform_code_object` 吐出一個合法的新 code object，交還給 Day 3 的 eval hook。
+PyCodegen 就是一位只寫搬運碼的代筆人，按 Source 和 `reconstruct` 挑最短路徑，還會生兩遍、照帳把重複載入折進暫存變數。bytecode_transformation 則收走全部的形式問題，最後由 `transform_code_object` 吐出一個合法的新 code object，交還給 Day 3 的 eval hook。
 
 到這裡，「乖乖能翻完」的路線就全部打通了，攔截、翻譯、包裝、記前提、記修改、收圖、寫碼。不過 Day 4 就說過，翻譯隨時可能舉手放棄。明天就來把 Graph Break 的全套機制攤開，斷點前後兩段怎麼接、resume function 怎麼用今天這套工具生出來、以及 `fullgraph=True` 和 `explain()` 怎麼幫你抓 break。那我們明天見！
 

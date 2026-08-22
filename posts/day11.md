@@ -2,17 +2,17 @@
 
 ## 前言
 
-Day 5 說 Python int 被 bake 成常數是一場賭注，Day 6 說賭輸的代價是重編，結尾還埋了一個伏筆，`n` 變了一次之後，新圖的 Guard 從 `EQUALS_MATCH` 變成 `TYPE_MATCH`，`x` 的 size 也從 `[4, 4]` 變成 `[None, 4]`。昨天收尾時也說了，Dynamo 只剩最後一塊拼圖，也就是把 shape 押死的 Guard 實在太窄，batch size 一變就得重編一次。
+Day 5 說 Python int 被 bake 成常數是一場賭注，Day 6 說賭輸的代價是重編，結尾還埋了一個伏筆，`n` 變了一次之後，`x` 的 size Guard 從 `[4, 4]` 變成了 `[None, 4]`。把 shape 押死的 Guard 實在太窄，batch size 一變就得重編一次，這就是昨天說的最後一塊拼圖。
 
-今天就來把這塊拼圖補上。Guard 原本用的是一把押死的量尺，量到 4 就是 4，差一格都不行。Symbolic Shapes 給了它一把伸縮量尺，把具體的 4 換成符號 `s0`，讓一張圖吃下所有 batch size。而 automatic dynamic 決定的是什麼時候換尺。預設不換，賭輸一次才換。原始碼主要住在 [`torch/fx/experimental/symbolic_shapes.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/fx/experimental/symbolic_shapes.py)，這是 PyTorch 裡最長的檔案之一，今天會把它的核心概念一次講完。
+今天就來把這塊拼圖補上。Guard 原本用的是一把押死的量尺，量到 4 就是 4，差一格都不行。Symbolic Shapes 給了它一把伸縮量尺，把具體的 4 換成符號 `s0`，讓一張圖吃下所有 batch size。原始碼主要住在 [`torch/fx/experimental/symbolic_shapes.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/fx/experimental/symbolic_shapes.py)，這是 PyTorch 裡最長的檔案之一，今天會把它的核心概念一次講完。
 
 正文開始！
 
 ## static shape 哪裡不夠用
 
-先想清楚問題本身。Day 6 看過，每個 Tensor 輸入都吃一條 `TENSOR_MATCH`，dtype、device、shape、stride 全部押住。shape 押死有很實際的好處。Inductor 生 kernel 時，迴圈邊界是具體數字，可以完全展開、可以按大小挑演算法，特化的圖就是比較好最佳化，這是 Day 5 講過的紅利。
+Day 6 看過，每個 Tensor 輸入都吃一條 `TENSOR_MATCH`，dtype、device、shape、stride 全部押住。shape 押死有很實際的好處。Inductor 生 kernel 時，迴圈邊界是具體數字，可以完全展開、可以按大小挑演算法，特化的圖就是比較好最佳化，這是 Day 5 講過的紅利。
 
-但推論服務的 batch size 會跟著流量變、NLP 的序列長度每個 batch 都不同。如果每種 shape 都特化一張圖，Guard 樹越掛越長，撞上 `recompile_limit`（預設 8）之後整個 frame 退回 eager，編譯的收益直接歸零。這就是押死的量尺的極限，它只認識量過的那些長度。
+但推論服務的 batch size 會跟著流量變、NLP 的序列長度每個 batch 都不同。如果每種 shape 都特化一張圖，Guard 樹越掛越長，撞上 `recompile_limit`（預設 8）之後整個 frame 退回 eager，編譯的收益直接歸零。
 
 Dynamo 的解法不是把量尺丟掉，而是兩把都留著，用一套升級策略決定用哪把。
 
@@ -63,13 +63,13 @@ size 第一格不再押死（`None`），代價是樹尾多了一條 `LAMBDA_GUA
             return False
         return True
 
-接著第三、第四次呼叫，`(16, 4)`、`(100, 4)` 進來，`recompiles` 完全安靜，一張圖吃下所有 batch size。整個升級流程就是三幕劇，第一幕押死、第二幕賭輸換符號、第三幕從此通吃。
+接著第三、第四次呼叫，`(16, 4)`、`(100, 4)` 進來，`recompiles` 完全安靜，一張圖吃下所有 batch size。整個升級流程就是一齣三幕劇。
 
 ![shape 從 4 到 8 觸發 automatic dynamic 升級的三幕劇](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day11/automatic_dynamic.gif)
 
 *圖一：automatic dynamic 的三幕劇。左邊是每次呼叫的輸入，中間是 `f.__code__` 上的 cache entry 與 `frame_state`，右邊是驗票結果。`(4, 4)` 第一次編譯全部特化，`frame_state` 記下 dim 0 = 4。`(8, 4)` 進來 `TENSOR_MATCH` 失敗，`frame_state` 比對出 dim 0 會變，第二張圖改押符號 `s0`，size 變成 `[None, 4]` 加一條 `2 <= s0`。此後 `(16, 4)`、`(100, 4)` 全部命中同一個 entry，不再重編。*
 
-再補兩筆帳。第一，兩次編譯是這個機制的固定成本，第一張特化的圖幾乎注定被浪費掉。如果事先就知道某個維度一定會變，可以用 `torch._dynamo.mark_dynamic(x, 0)` 直接宣告，第一次編譯就用符號，省掉那次賭輸。`torch.compile(f, dynamic=True)` 是全部維度都這樣做的粗暴版，反過來 `dynamic=False` 則把升級機制整個關掉。第二，Guard 的驗票成本幾乎沒變。這次實驗裡兩張圖的 Guard eval latency 一個 61.67 us、一個 57.55 us，符號版少驗一個具體數字、多驗一條範圍檢查，整體打平。伸縮量尺在 runtime 不比押死的貴。
+再補兩筆帳。第一，兩次編譯是這個機制的固定成本，第一張特化的圖幾乎注定被浪費掉。如果事先就知道某個維度一定會變，可以用 `torch._dynamo.mark_dynamic(x, 0)` 直接宣告，第一次編譯就用符號，省掉那次賭輸。`torch.compile(f, dynamic=True)` 是全部維度都這樣做的粗暴版，反過來 `dynamic=False` 則把升級機制整個關掉。第二，Guard 的驗票成本幾乎沒變。這次實驗裡兩張圖的 Guard eval latency 一個 61.67 us、一個 57.55 us，符號版少驗一個具體數字、多驗一條範圍檢查，整體打平。
 
 ## 為什麼是 2 <= s0？
 
@@ -79,7 +79,7 @@ size 第一格不再押死（`None`），代價是樹尾多了一條 `LAMBDA_GUA
     to 0/1 specialization in the framework; to avoid specialization try
     torch._dynamo.mark_unbacked(tensor, dim))
 
-這是框架的 **0/1 特化**（0/1 specialization）。size 0 和 1 在 PyTorch 的語意裡太特殊。size 0 是空 Tensor，很多 kernel 要走完全不同的路徑。size 1 會觸發 broadcasting，`(1, 4)` 乘 `(8, 4)` 和 `(8, 4)` 乘 `(8, 4)` 語意根本不同。如果允許一個符號涵蓋 0 和 1，ShapeEnv 每回答一個 shape 問題都得三向分裂「等於 0？等於 1？還是一般情況？」，答案就不唯一了。所以 Dynamo 一律假設符號至少是 2，真的來了 0 或 1，就為它們各自特化一張專屬的圖。那條 Guard 的下界 2 不是從觀測值學來的，是符號誕生時就帶著的出生條件。
+這是框架的 **0/1 特化**（0/1 specialization）。size 0 和 1 在 PyTorch 的語意裡太特殊。size 0 是空 Tensor，很多 kernel 要走完全不同的路徑。size 1 會觸發 broadcasting，`(1, 4)` 乘 `(8, 4)` 和 `(8, 4)` 乘 `(8, 4)` 語意根本不同。如果允許一個符號涵蓋 0 和 1，ShapeEnv 每回答一個 shape 問題都得三向分裂「等於 0？等於 1？還是一般情況？」。所以 Dynamo 一律假設符號至少是 2，真的來了 0 或 1，就為它們各自特化一張專屬的圖。那條 Guard 的下界 2 不是從觀測值學來的，是符號誕生時就帶著的出生條件。
 
 訊息裡提到的 `mark_unbacked` 是逃生口，把維度標成 unbacked 符號，連 0/1 特化都不做，代價是 ShapeEnv 推理時沒有任何具體值可以參考，這個概念下面馬上會碰到。
 
@@ -127,7 +127,7 @@ def k(x):
         triggered by the following guard failure(s):
         - 0/0: 2 <= x.size()[0] <= 10  # if x.shape[0] > 10:
 
-第一次 hint 是 4，押 `False` 那邊走，Guard 記下 `s0 <= 10`，跟 0/1 特化的下界合成 `2 <= s0 <= 10`。size 20 進來 Guard 失敗、特化第二張圖，兩張並存。這是 Day 6 守恆定律的符號版，圖有多特化，Guard 就有多少條，只是特化單位從一個值放寬成一個區間。
+第一次 hint 是 4，押 `False` 那邊走，Guard 記下 `s0 <= 10`，跟 0/1 特化的下界合成 `2 <= s0 <= 10`。size 20 進來 Guard 失敗、特化第二張圖，兩張並存。這是 Day 6 守恆定律的符號版，只是特化單位從一個值放寬成一個區間。
 
 **第二種，問 Tensor 的值，拿不到。** `if x.sum() > 0` 的答案住在 GPU 記憶體裡，翻譯期根本不存在，ShapeEnv 再聰明也無從押注，預設只能 Graph Break（Day 3 那個 `attempted to jump with TensorVariable()`）。真的要把資料相依的分支留在圖裡，得改寫成 `torch.cond`。
 
@@ -163,7 +163,7 @@ torch.compile(bad)(x4)
       File "symbolic.py", line 65, in bad
         if x.shape[0] == 4:
 
-你宣告了「這維是動態的」，翻譯途中卻冒出一條想把它押死成 4 的約束，兩者矛盾，`produce_guards` 直接報錯，訊息連兇手那一行都指出來了。這不是 bug 是功能，它逼你面對「這段程式碼不支援動態」的事實，而不是默默重編到死。訊息裡的 `maybe_mark_dynamic` 是溫和版，同樣優先用符號，但被特化時不報錯。順帶一提，偵錯還有 `TORCH_LOGS="+dynamic"`，ShapeEnv 每發一個符號、每收一條約束、每次特化都會印出來。
+你宣告了「這維是動態的」，翻譯途中卻冒出一條想把它押死成 4 的約束，兩者矛盾，`produce_guards` 直接報錯，訊息連兇手那一行都指出來了。這不是 bug 是功能，逼你面對「這段程式碼不支援動態」的事實。訊息裡的 `maybe_mark_dynamic` 是溫和版，同樣優先用符號，但被特化時不報錯。順帶一提，偵錯還有 `TORCH_LOGS="+dynamic"`，ShapeEnv 每發一個符號、每收一條約束、每次特化都會印出來。
 
 ## dynamic shape 的代價
 
@@ -177,7 +177,7 @@ torch.compile(bad)(x4)
 
 ## 結語
 
-Dynamo 的機制到今天就完整了。攔截、翻譯、包裝、驗票、記帳、收圖、寫碼、斷了再接，最後一塊拼圖是賭輸了換符號。押死的量尺換成 SymInt 的伸縮量尺，automatic dynamic 決定何時換（第一次特化、第二次升級），ShapeEnv 負責發符號、傳播表達式、收集約束。0 和 1 永遠特化，問 shape 的 if 拿 hint 押注，問值的 if 只能斷圖或改寫。
+Dynamo 的機制到今天就完整了。攔截、翻譯、包裝、驗票、記帳、收圖、寫碼、斷了再接，最後一塊拼圖是賭輸了換符號，押死的量尺換成 SymInt 的伸縮量尺，一張圖從此吃下所有 batch size。
 
 從明天起進入第二站 AOTAutograd。Dynamo 交出來的圖只有 forward，訓練還需要 backward，而且圖裡還藏著 in-place 和 view 這些後端不想看到的東西。明天先看全景，講為什麼 backward 也要 ahead-of-time 地展開。那我們明天見！
 

@@ -4,7 +4,7 @@
 
 還記得 Day 12 留下的懸案嗎？那時候我們看到 forward 圖除了 loss 之外，還多輸出了 `le` 和 `permute` 這兩個中間值給 backward 用。當時只說「存哪些、存多少，是一個真正的取捨」，然後就把問題晾在那裡了。今天就來把這個洞補起來。
 
-答案的形狀其實蠻有趣。AOTAutograd 並不是先做好 forward 圖、再想辦法配一張 backward 圖，而是一開始就把兩者 trace 成**同一張圖**，叫做 joint graph。你可以把它想成一份夫妻共同財產的清冊，forward 和 backward 的所有運算都列在上面，中間值就是共同持有的家當。而 Partitioner 就是那位精打細算的分家公證人，它拿著清冊決定哪些節點歸 forward、哪些歸 backward，至於被切在分界線上的家當，就是 forward 結束時必須保存、留給 backward 用的 activation。
+答案的形狀其實蠻有趣。AOTAutograd 並不是先做好 forward 圖、再想辦法配一張 backward 圖，而是一開始就把兩者 trace 成**同一張圖**，叫做 joint graph，像一份夫妻共同財產的清冊，中間值就是共同持有的家當。而 Partitioner 就是那位精打細算的分家公證人，決定哪些節點歸 forward、哪些歸 backward，被切在分界線上的家當，就是 forward 結束時必須保存、留給 backward 用的 activation。
 
 這一刀落在哪，直接決定了訓練時 GPU 記憶體的大頭要花在哪裡，也是速度與記憶體之間最重要的一顆旋鈕。正文開始！
 
@@ -43,8 +43,6 @@ def forward(self, primals, tangents):
 
 這張圖的輸入同時有 `primals`（forward 的輸入）和 `tangents`（上游梯度），輸出同時有 loss 和梯度。前三行是 forward，後面六行是 backward，兩段之間沒有任何邊界標記，純粹靠資料流相連，backward 用到了 `tanh`（tanh 的導數是 `1 - tanh^2`，算導數要用它自己的輸出）和 `primals_1`（`w` 的梯度是 `x^T @ grad`，所以要轉置 `x`）。
 
-順帶一提，`primals` 和 `tangents` 這兩個名字來自微分幾何的術語，functorch 的 JVP 世界觀就是這樣稱呼「原始輸入」和「方向導數」的，AOTAutograd 從 functorch 一路繼承了這套詞彙。
-
 ## 為什麼要先合成一張 joint graph
 
 Day 12 講過 AOTAutograd 的展開手法。拿 FakeTensor 把 forward 重新執行一遍，讓 autograd 引擎在上面跑出 backward，再把整個過程 trace 下來。更精確地說，它會先把你的函式包成一個 joint function，大概是這個形狀。
@@ -56,9 +54,7 @@ def joint(primals, tangents):
     return outs, grads
 ```
 
-然後對這個 joint function 做一次 trace，得到的就是上面那張 joint graph。forward 和 backward 天生就在同一張圖上，這不是實作上的偷懶，而是刻意的設計。**只有兩邊都在手上，「存什麼、重算什麼」才是一個可以全局規劃的問題**。如果 backward 是事後才配出來的，forward 早就把「要保存哪些值」寫死了，公證人根本無從介入。
-
-而 eager 模式的 autograd 引擎正是後者，它在 forward 執行時把「backward 會用到的值」全部存進 tape，存哪些是每個 op 的 derivative 公式各自決定的，沒有任何全局視野。joint graph 把這個固定行為變成了一道可以最佳化的圖論題。
+然後對這個 joint function 做一次 trace，得到的就是上面那張 joint graph。forward 和 backward 天生就在同一張圖上，這是刻意的設計。**只有兩邊都在手上，「存什麼、重算什麼」才是一個可以全局規劃的問題**。eager 模式的 autograd 引擎正是反例，存哪些值是每個 op 的 derivative 公式各自決定的，沒有任何全局視野，joint graph 把這個固定行為變成了一道可以最佳化的圖論題。
 
 ## 存，還是重算？
 
@@ -159,21 +155,19 @@ def forward(self, primals_1, primals_2, tangents_1):
 
 Forward 一個中間值都不存，只把原始輸入原封不動傳過去。backward 開頭把 `mm`、`tanh` 整段重算，連本來禁止重算的 `mm` 都重算了，因為這是使用者明確要求的。記憶體從「存 activation」變成「存輸入」，代價是 backward 多付一次 forward 的計算量。
 
-大模型訓練裡人人都在用的 activation checkpointing，在編譯棧裡就是這麼做出來的。它不是什麼獨立的魔法機制，只是 partitioner 收到指示，把切線推到最極端的位置而已。min-cut 和 checkpoint 是同一個問題的兩個解，一個由成本模型自動找，一個由你手動指定。
+大模型訓練裡人人都在用的 activation checkpointing，在編譯棧裡就是這麼做出來的。它不是什麼獨立的魔法機制，只是 partitioner 收到指示，把切線推到最極端的位置而已。
 
 其實兩個極端之間還有一段可以微調的空間。`torch._functorch.config.activation_memory_budget` 是一個 0 到 1 之間的旋鈕，1 是預設的 min-cut 行為，0 等於整段 checkpoint，中間值則會讓 partitioner 在給定的記憶體預算內，用背包問題的解法挑出最划算的一組重算對象。旋鈕這個比喻不是修辭，它真的是一顆連續的旋鈕。
 
 ## 這一刀省下多少記憶體
 
-最後把鏡頭拉遠一點。這一刀之所以是編譯式訓練的關鍵設計，有兩個層次的原因。
+最後把鏡頭拉遠一點。這一刀之所以是編譯式訓練的關鍵設計，第一層原因是前面說的記憶體，同樣一張卡，切得好就能塞下更大的 batch 或更長的序列。
 
-第一層是前面說的記憶體。activation 是訓練記憶體的大頭，而 partitioner 把「存什麼」從 autograd 引擎的固定行為，變成一個帶成本模型的全局最佳化問題。同樣一張卡，切得好就能塞下更大的 batch 或更長的序列。
-
-第二層更隱微。**重算在編譯世界裡比在 eager 世界裡便宜得多**。eager 下做 activation checkpointing，重算就是實打實地再跑一遍那些 kernel，每個都要 launch、都要讀寫記憶體。但在這裡，backward 也是 Inductor 要編譯的一張完整的圖，重算出來的 pointwise op 往往直接融進 backward 本來就要跑的 kernel 裡，多算一個 `tanh` 只是暫存器裡多一條指令，記憶體流量一點都沒多。Day 2 算過 elementwise 的瓶頸是記憶體頻寬不是計算，所以這種重算的邊際成本趨近於零。這讓 min-cut partitioner 敢於激進地選擇重算，也是 `torch.compile` 訓練加速裡一塊很實在的來源，不只是每個 kernel 變快，而是整個「存與算」的帳本都被重新算過一遍。
+第二層更隱微。**重算在編譯世界裡比在 eager 世界裡便宜得多**。eager 下做 activation checkpointing，重算就是實打實地再跑一遍那些 kernel，每個都要 launch、都要讀寫記憶體。但在這裡，backward 也是 Inductor 要編譯的一張完整的圖，重算出來的 pointwise op 往往直接融進 backward 本來就要跑的 kernel 裡，多算一個 `tanh` 只是暫存器裡多一條指令，記憶體流量一點都沒多。Day 2 算過 elementwise 的瓶頸是記憶體頻寬不是計算，所以這種重算的邊際成本趨近於零。這讓 min-cut partitioner 敢於激進地選擇重算，也是 `torch.compile` 訓練加速裡一塊很實在的來源。
 
 ## 結語
 
-到今天，AOTAutograd 這一站的全貌就完整了。FakeTensor 重跑 forward、autograd 引擎展開 backward，合成一張 joint graph（Day 12）。Functionalization 去掉 mutation 和 aliasing（Day 13）。Decomposition 把高階 op 拆成基本運算（Day 14）。最後由 min-cut partitioner 這位分家公證人一刀切開，切線上的值就是要保存的 activation，便宜的 pointwise 傾向重算，`mm` 這類貴重家當禁止重算，checkpoint 則是把刀推到極端、只存輸入。兩張乾淨的 ATen 圖，一前一後交給下一站。
+到今天，AOTAutograd 這一站的全貌就完整了。joint graph 把 forward 和 backward 放上同一張圖，min-cut partitioner 這位分家公證人一刀切開，切線上的值就是要保存的 activation，便宜的 pointwise 傾向重算，checkpoint 則是把刀推到極端、只存輸入。兩張乾淨的 ATen 圖，一前一後交給下一站。
 
 明天就進入第三站 TorchInductor 了。它拿到圖之後的第一步不是生程式碼，而是把每個 ATen op 翻譯成它自己的中間表示，也就是一種「用 Python 函式描述的迴圈」。搞懂這層 IR，後面的 fusion 和 codegen 才讀得懂。那我們明天見！
 
