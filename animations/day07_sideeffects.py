@@ -52,7 +52,7 @@ def pill(name, zh):
     sep = T("·", font=MONO, font_size=17, color="#666")
     zt = T(zh, font=zh_font, font_size=17, color=BG)
     t = VGroup(Dot(radius=0.06, color=ACCENT), nm, sep, zt).arrange(RIGHT, buff=0.18)
-    bg = RoundedRectangle(corner_radius=0.3, width=t.width + 0.6, height=0.6, stroke_width=0, fill_color="#eceae6", fill_opacity=1)
+    bg = RoundedRectangle(corner_radius=0.26, width=t.width + 0.6, height=0.52, stroke_width=0, fill_color="#eceae6", fill_opacity=1)
     return VGroup(bg, t.move_to(bg))
 
 
@@ -90,7 +90,7 @@ def badge(en, zh, edge=EDGE, color=MUTED):
 
 class SideFx(Scene):
     def construct(self):
-        title = T("forward:  self.calls += 1;  log.append(...);  return x * 2", font=MONO, font_size=16, color=TXT).to_corner(UL, buff=0.5)
+        title = T("forward:  self.calls += 1;  log.append(...);  return x * 2", font=MONO, font_size=16, color=TXT).to_corner(UL, buff=0.5).shift(UP * 0.1)
         self.play(FadeIn(title), run_time=0.4)
         cur = [None, None]
 
