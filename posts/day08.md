@@ -66,8 +66,8 @@ def forward(self, L_x_: "f32[4, 4][4, 1]cuda:0", L_y_: "f32[4, 4][4, 1]cuda:0", 
 
 有三個地方值得放大來看。
 
-- `**unused` 不在圖裡**。傳了但沒用到的參數不會被登記，收圖前 `remove_unused_graphargs` 還會再掃一輪，把中途變成死代碼的 input 拔掉。
-- `**bias` 也是 input**。它不是參數，是外面抓進來的 Tensor。`LOAD_DEREF` 載入它的那一刻，`VariableBuilder` 把它包成 `TensorVariable`，順手 lift 成 root graph 的 input，placeholder 的名字 `L_bias_` 就是它的 Source。Tensor 的值永遠當 input 而不是常數，這就是 Day 5 那個押注原則在這裡的體現。
+- `unused` **不在圖裡**。傳了但沒用到的參數不會被登記，收圖前 `remove_unused_graphargs` 還會再掃一輪，把中途變成死代碼的 input 拔掉。
+- `bias` **也是 input**。它不是參數，是外面抓進來的 Tensor。`LOAD_DEREF` 載入它的那一刻，`VariableBuilder` 把它包成 `TensorVariable`，順手 lift 成 root graph 的 input，placeholder 的名字 `L_bias_` 就是它的 Source。Tensor 的值永遠當 input 而不是常數，這就是 Day 5 那個押注原則在這裡的體現。
 - **中間值用完立刻 `= None`**，提早歸還引用，讓記憶體早點釋放。輸出永遠是 tuple，就算只有一個值。
 
 這裡還有個蠻乾淨的設計。OutputGraph 沒有另外維護一份 input 名單，input 清單就是圖裡的 placeholder 自己，單一事實來源，登記和圖永遠不會不同步。每筆 `GraphArg` 都帶著 Source 和 fake tensor。Source 給明天的 PyCodegen 用（生出把這個值推上 stack 的 bytecode），fake tensor 則給後端當 example input。
@@ -82,20 +82,20 @@ OutputGraph 裡動筆的 tracer 其實是一個 stack。平常這個 stack 只�
 
 ## compile_subgraph 收圖時做了什麼
 
-那倉庫收貨要收到什麼時候呢？時機只有兩種，RETURN（整個 frame 翻完了）或 Graph Break（翻不下去了）。兩條路殊途同歸，都走進 `compile_subgraph`，它的 docstring 把要做的事列得很白，呼叫編好的子圖、補做 side effect、生成 stack 和 locals 的重建碼、存回 locals。展開來是一連串動作。
+那倉庫收貨要收到什麼時候呢？時機只有兩種，RETURN（整個 frame 翻完了）或 Graph Break（翻不下去了）。兩條路殊途同歸，都走進 `compile_subgraph`：
 
-1. **算活性**：symbolic stack 和 locals 裡哪些值在這之後還會被用到（`_get_stack_values_to_restore`），它們得成為圖的輸出，不然斷點之後接不上。RETURN 時這很簡單，就是回傳值。Graph Break 時才是重頭戲，翻到一半的中間狀態全要保住。
+1. **計算活性**：symbolic stack 和 locals 裡哪些值在這之後還會被用到（`_get_stack_values_to_restore`），它們得成為圖的輸出，不然斷點之後接不上。RETURN 時這很簡單，就是回傳值。Graph Break 時才是重頭戲，翻到一半的中間狀態全要保住。
 2. **side_effects 結帳**（Day 7）：`codegen_suffix` 請帳本把每筆修改的 replay 的 bytecode生出來。
-3. **收圖**：把活值接上 `output` node，`remove_unused_graphargs` 清掉沒用到的 input，`_make_graph_module` 把 fx.Graph 包成 GraphModule。
-4. `**call_user_compiler**`：把 GraphModule 交給 backend（inductor、eager、或你自訂的），拿回一個可呼叫的函式。這一步被 `restore_global_state()` 包著，確保後端是在「編譯當下的全域狀態」下工作的。後端炸了會被包成 `BackendCompilerFailed` 丟出來。這就是 Day 2 說「第三站可以換」的接口。
-5. `**install_global**`：編譯結果以 `__compiled_fn_1_6d16fdd3_...` 這樣的名字塞進 frame 的 globals（帶 uuid 是為了讓不同 `torch.compile` 實例互不踩腳），新 bytecode 之後只要一條 `LOAD_GLOBAL` 就叫得到它。
+3. **收圖**：把還活著的值接上 `output` node，`remove_unused_graphargs` 清掉沒用到的 input，`_make_graph_module` 把 fx.Graph 包成 GraphModule。
+4. `call_user_compiler`：把 GraphModule 交給 backend（inductor、eager、或你自訂的），拿回一個可呼叫的函式。這一步被 `restore_global_state()` 包著，確保後端是在「編譯當下的全域狀態」下工作的。後端炸了會被包成 `BackendCompilerFailed` 丟出來。這就是 Day 2 說「第三站可以換」的接口。
+5. `install_global`：編譯結果以 `__compiled_fn_1_6d16fdd3_...` 這樣的名字塞進 frame 的 globals（帶 uuid 是為了讓不同 `torch.compile` 實例互不衝突），新 bytecode 之後只要一條 `LOAD_GLOBAL` 就叫得到它。
 
 ```python
 >>> [k for k in g.__globals__ if k.startswith("__compiled_fn")]
 ['__compiled_fn_1_6d16fdd3_...', '__compiled_fn_4_998ecab5_...']
 ```
 
-這條路上還有一個有趣的細節，圖是空的就不叫後端。這段程式碼根本沒有 Tensor 運算的話，交給後端這一步整個跳過。我們可以用一個會計數的自訂 backend 來驗證。
+這條路上還有一個有趣的細節，只要這裡圖是空的就不呼叫後端。這段程式碼根本沒有 Tensor 運算的話，交給後端這一步整個跳過。我們可以用一個會計數的自訂 backend 來驗證。
 
 ```python
 def no_tensor(x):
@@ -109,7 +109,7 @@ torch.compile(no_tensor, backend=counting_backend)(torch.randn(4))
 
 最後留一個伏筆。拿回編譯結果還不夠，得有人把「載入 `__compiled_fn_1`、把參數照 Source 推上 stack、呼叫、拆開回傳的 tuple」這段新 bytecode 寫出來。而負責寫的人就叫 PyCodegen，也就是明天的主角。
 
-下面這張動畫，把今天整條「逐筆進貨、一次收攏」的流程走了一遍。
+下面的動畫簡單的把今天整條「逐筆進貨、一次收攏」的流程走了一遍：
 
 ![散落的 node、input、Guard 與修改帳逐一飛進 OutputGraph，compile_subgraph 收攏成一張 FX Graph 並交給後端](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day08/output_graph.gif)
 
