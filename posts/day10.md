@@ -1,4 +1,4 @@
-# Day 10 | TorchDynamo 的斷點續傳：Graph Break
+# Day 10 | Graph Break 不是失敗，是斷點續傳
 
 ## 前言
 

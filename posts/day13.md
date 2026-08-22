@@ -1,4 +1,4 @@
-# Day 13 | AOTAutograd 的潔癖抄寫員：Functionalization
+# Day 13 | 讓 in-place 消失的潔癖抄寫員 Functionalization
 
 ## 前言
 

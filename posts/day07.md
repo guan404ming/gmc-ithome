@@ -1,4 +1,4 @@
-# Day 7 | TorchDynamo 的隨行記帳員：SideEffects
+# Day 7 | 改掉的值去哪了？TorchDynamo 的隨行記帳員 SideEffects
 
 ## 前言
 

@@ -1,4 +1,4 @@
-# Day 11 | TorchDynamo 的伸縮量尺：Symbolic Shapes
+# Day 11 | 一張圖吃下所有 batch size？TorchDynamo 的伸縮量尺 Symbolic Shapes
 
 ## 前言
 

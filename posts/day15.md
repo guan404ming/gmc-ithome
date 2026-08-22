@@ -1,4 +1,4 @@
-# Day 15 | AOTAutograd 的分家公證人：min-cut Partitioner
+# Day 15 | backward 該存誰、該重算誰？min-cut 分家公證人
 
 ## 前言
 

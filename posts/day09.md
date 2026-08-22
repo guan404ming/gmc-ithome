@@ -1,4 +1,4 @@
-# Day 9 | TorchDynamo 的 bytecode 代筆人：PyCodegen 登場！
+# Day 9 | 新的 bytecode 誰來寫？PyCodegen 登場！
 
 ## 前言
 
