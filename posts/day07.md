@@ -144,9 +144,7 @@ list 不是把 `append` 重做一遍，而是整個內容用 slice 賦值換掉�
 
 最後，`codegen_update_mutated` 把每筆帳拆成「準備新值」和「執行寫入」兩半，寫入收集在 `suffixes` 裡反序附加。這就是上面 bytecode 裡 `log[:] = [1]` 插在 `__setattr__` 參數和 `CALL 3` 中間的原因。
 
-## 沒逃出去的帳，直接丟掉
-
-結帳之前還有一步過濾，叫 `prune_dead_object_new()`。它從即將被 return 的值、Graph Break 時要留給後半段的區域變數、以及所有 existing 物件這三類根出發走引用鏈，走得到的 new 物件才需要重建，走不到的整筆勾銷。
+另外，結帳之前其實還有一步過濾，叫 `prune_dead_object_new()`。它從即將被 return 的值、Graph Break 時要留給後半段的區域變數、以及所有 existing 物件這三類根出發走引用鏈，走得到的 new 物件才需要重建，走不到的整筆勾銷。
 
 實際驗證，`tmp = []; tmp.append(1); return x * 2` 改寫後的 bytecode 裡，`BUILD_LIST` 和 `append` 徹底消失，只剩一次 `__compiled_fn` 呼叫。
 
