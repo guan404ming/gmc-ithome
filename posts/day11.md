@@ -100,7 +100,7 @@ def forward(self, s77: "Sym(s77)", s27: "Sym(s27)", L_x_: "f32[s77, s27][s27, 1]
     return (reshape, mul)
 ```
 
-這張圖資訊量不小，逐項拆開。首先，符號本身成了圖的輸入，`s77` 和 `s27` 跟 `L_x_` 並列，runtime 真的會把兩個 int 傳進去，後端生的 kernel 拿它們當迴圈邊界。其次，`b * 2` 沒有被算掉，它是表達式 `Sym(2*s77)`，Day 4 那條「int 在翻譯期就地算掉」的規則對 SymInt 不成立，因為它根本沒有值可以算。最後看 reshape 的輸出 shape，`[2*s77, s27//2]` 這條表達式一路傳播下去，錯的形狀在翻譯期就會對不上。
+這張圖資訊量不小，逐項拆開。首先，符號本身成了圖的輸入，`s77` 和 `s27` 跟 `L_x_` 並列，runtime 真的會把兩個 int 傳進去，後端生的 kernel 拿它們當迴圈邊界。其次，`b * 2` 沒有被算掉，它是表達式 `Sym(2*s77)`，InstructionTranslator 那條「int 在翻譯期就地算掉」的規則對 SymInt 不成立，因為它根本沒有值可以算。最後看 reshape 的輸出 shape，`[2*s77, s27//2]` 這條表達式一路傳播下去，錯的形狀在翻譯期就會對不上。
 
 這些符號全部住在同一個 `ShapeEnv` 裡，每次編譯一個 frame 就配一個，它做的事有三件。
 
@@ -127,7 +127,7 @@ def k(x):
         triggered by the following guard failure(s):
         - 0/0: 2 <= x.size()[0] <= 10  # if x.shape[0] > 10:
 
-第一次 hint 是 4，押 `False` 那邊走，Guard 記下 `s0 <= 10`，跟 0/1 特化的下界合成 `2 <= s0 <= 10`。size 20 進來 Guard 失敗、特化第二張圖，兩張並存。這是 Day 6 守恆定律的符號版，只是特化單位從一個值放寬成一個區間。
+第一次 hint 是 4，押 `False` 那邊走，Guard 記下 `s0 <= 10`，跟 0/1 特化的下界合成 `2 <= s0 <= 10`。size 20 進來 Guard 失敗、特化第二張圖，兩張並存。這是 Guard 守恆定律的符號版，只是特化單位從一個值放寬成一個區間。
 
 **第二種，問 Tensor 的值，拿不到。** `if x.sum() > 0` 的答案住在 GPU 記憶體裡，翻譯期根本不存在，ShapeEnv 再聰明也無從押注，預設只能 Graph Break（Day 3 那個 `attempted to jump with TensorVariable()`）。真的要把資料相依的分支留在圖裡，得改寫成 `torch.cond`。
 

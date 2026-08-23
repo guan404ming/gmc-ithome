@@ -37,7 +37,7 @@ def panel(w, h, fill=CARD, edge=EDGE, r=0.12, sw=1.5):
 def header(name, sub):
     t = T(name, font=SANS, font_size=21, weight=BOLD, color=TXT)
     s = T(sub, font=CJK, font_size=14, color=MUTED)
-    return VGroup(t, s).arrange(RIGHT, buff=0.22, aligned_edge=DOWN)
+    return VGroup(t, s).arrange(RIGHT, buff=0.22)
 
 
 def titled(w, h, name, sub, fill=CARD, edge=EDGE, sw=1.5):
@@ -48,9 +48,11 @@ def titled(w, h, name, sub, fill=CARD, edge=EDGE, sw=1.5):
 
 def pill(name, zh):
     zh_font = CJK if any("一" <= ch <= "鿿" for ch in zh) else MONO
-    body = T(f"{name}  ·  {zh}", font_size=17, font=SANS, color=BG, t2f={name: SANS, "·": MONO, zh: zh_font}, t2w={name: BOLD}, t2c={"·": "#666"})
-    t = VGroup(Dot(radius=0.06, color=ACCENT), body).arrange(RIGHT, buff=0.15)
-    bg = RoundedRectangle(corner_radius=0.3, width=t.width + 0.6, height=0.6, stroke_width=0, fill_color="#eceae6", fill_opacity=1)
+    nm = T(name, font=SANS, font_size=17, weight=BOLD, color=BG)
+    sep = T("·", font=MONO, font_size=17, color="#666")
+    zt = T(zh, font=zh_font, font_size=17, color=BG)
+    t = VGroup(Dot(radius=0.06, color=ACCENT), nm, sep, zt).arrange(RIGHT, buff=0.18)
+    bg = RoundedRectangle(corner_radius=0.26, width=t.width + 0.6, height=0.52, stroke_width=0, fill_color="#eceae6", fill_opacity=1)
     return VGroup(bg, t.move_to(bg))
 
 
@@ -61,7 +63,7 @@ def rows(lines, size=12, color=TXT, buff=0.1):
 def entry_card(w, title, guards, sub=""):
     body = rows(guards, size=11, buff=0.08)
     r = panel(w, body.height + 0.65, fill=CARD_DIM, edge=EDGE, r=0.08)
-    hd = VGroup(T(title, font=MONO, font_size=12, color=TXT), T(sub, font=CJK, font_size=10, color=MUTED)).arrange(RIGHT, buff=0.2, aligned_edge=DOWN)
+    hd = VGroup(T(title, font=MONO, font_size=12, color=TXT), T(sub, font=CJK, font_size=10, color=MUTED)).arrange(RIGHT, buff=0.2)
     inner = VGroup(hd, body).arrange(DOWN, aligned_edge=LEFT, buff=0.12).move_to(r).align_to(r.get_left() + RIGHT * 0.15, LEFT)
     return VGroup(r, inner)
 

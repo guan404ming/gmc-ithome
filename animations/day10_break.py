@@ -25,9 +25,11 @@ def T(txt, font_size, **kw):
 
 def pill(name, zh):
     zh_font = CJK if any("一" <= ch <= "鿿" for ch in zh) else MONO
-    body = T(f"{name}  ·  {zh}", font_size=17, font=SANS, color=BG, t2f={name: SANS, "·": MONO, zh: zh_font}, t2w={name: BOLD}, t2c={"·": "#666"})
-    t = VGroup(Dot(radius=0.06, color=ACCENT), body).arrange(RIGHT, buff=0.15)
-    bg = RoundedRectangle(corner_radius=0.3, width=t.width + 0.6, height=0.6, stroke_width=0, fill_color="#eceae6", fill_opacity=1)
+    nm = T(name, font=SANS, font_size=17, weight=BOLD, color=BG)
+    sep = T("·", font=MONO, font_size=17, color="#666")
+    zt = T(zh, font=zh_font, font_size=17, color=BG)
+    t = VGroup(Dot(radius=0.06, color=ACCENT), nm, sep, zt).arrange(RIGHT, buff=0.18)
+    bg = RoundedRectangle(corner_radius=0.26, width=t.width + 0.6, height=0.52, stroke_width=0, fill_color="#eceae6", fill_opacity=1)
     return VGroup(bg, t.move_to(bg))
 
 
@@ -36,7 +38,7 @@ def line(s, color=TXT, size=14):
 
 
 def capsule(name, fn, codes):
-    hdr = VGroup(T(name, font=SANS, font_size=15, weight=BOLD, color=TXT), T(fn, font=MONO, font_size=13, color=ACCENT)).arrange(RIGHT, buff=0.25, aligned_edge=DOWN)
+    hdr = VGroup(T(name, font=SANS, font_size=15, weight=BOLD, color=TXT), T(fn, font=MONO, font_size=13, color=ACCENT)).arrange(RIGHT, buff=0.25)
     body = VGroup(hdr, *[T(c, font=MONO, font_size=13, color=TXT) for c in codes]).arrange(DOWN, aligned_edge=LEFT, buff=0.16)
     box = RoundedRectangle(corner_radius=0.14, width=body.width + 0.6, height=body.height + 0.5, stroke_color=ACCENT, stroke_width=1.8, fill_color=CARD, fill_opacity=1)
     return VGroup(box, body.move_to(box))

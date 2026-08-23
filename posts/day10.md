@@ -6,9 +6,9 @@
 
 正文開始！
 
-## 會斷的不是指令，是運算元
+## 會斷的不是 instruction，是 operand
 
-Day 4 講過判斷發生的位置。`dispatch_table` 對幾乎每條 opcode 都有同名 handler，查表這一步不會落空。真正斷開的時機，是 handler 接下指令、看了運算元，發現這個操作沒辦法只靠符號值走下去。所以「會不會斷」不是指令說了算，而是運算元說了算。同一條 `CALL`，呼叫 `torch.sin` 進圖、呼叫自己寫的函式被 inline、呼叫 `print` 就斷。實務上最常撞到的大概是下面這幾類。
+Day 4 講過判斷發生的位置。`dispatch_table` 對幾乎每條 opcode 都有同名 handler，查表這一步不會落空。真正斷開的時機，是 handler 接下 instruction、看了 operand，發現這個操作沒辦法只靠符號值走下去。所以「會不會斷」不是 instruction 說了算，而是 operand 說了算。同一條 `CALL`，呼叫 `torch.sin` 進圖、呼叫自己寫的函式被 inline、呼叫 `print` 就斷。實務上最常撞到的大概是下面這幾類。
 
 
 | 類別                      | 例子                             | 為什麼走不下去                     |
@@ -21,23 +21,23 @@ Day 4 講過判斷發生的位置。`dispatch_table` 對幾乎每條 opcode 都�
 
 第一類我們在 Day 3 就親眼看過了，`generic_jump` 發現 stack 頂端是 `TensorVariable`，丟出 `attempted to jump with TensorVariable()`。第二類打開 `torch._dynamo.config.capture_scalar_outputs` 之後 `.item()` 不再斷，代價留到明天 Symbolic Shapes 那篇再算。第三類的話就是今天的主角。第四類對應 Day 5 講過的 `trace_rules.py` 名單，名單上要跳過的函式，呼叫它就是潛在的斷點。
 
-## Unsupported 例外是怎麼丟出來的
+## Unsupported exception 是怎麼丟出來的
 
-handler 丟錯的方式不是回傳一個錯誤碼，而是直接丟一個 `Unsupported` 例外（[`exc.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/exc.py)），而且丟的時候固定要附上分類、現場、解釋和修法建議。這就是為什麼你看到的每一條 graph break 訊息都長同一個樣子，等一下的實驗就會看到實例。
+handler 丟錯的方式不是回傳一個錯誤碼，而是直接丟一個 `Unsupported` exception（[`exc.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/exc.py)），而且丟的時候固定要附上分類、現場、解釋和修法建議。這就是為什麼你看到的每一條 graph break 訊息都長同一個樣子，等一下的實驗就會看到實例。
 
 那丟出來之後誰來接呢？`CALL` 這類最容易出事的 handler 外面包著一層接手的 decorator（[`symbolic_convert.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/symbolic_convert.py) 的 `break_graph_if_unsupported`）。接住之後分兩條路，`fullgraph=True` 的話不收拾，原樣往上丟變成使用者看到的錯誤，否則就進入 graph break 的收拾流程。
 
-不過收拾流程有個麻煩，例外飛出來的時候，翻譯常常做到一半，stack 疊了一半、SideEffects 的帳本記了一半，直接在這裡切圖就會切出錯的東西。在這裡 Dynamo 的解法很乾脆，毫不留情全部砍掉重練。記下「走到第 N 條指令會失敗」之後整個重翻一遍，第二遍走到 N 就不往裡鑽，先把圖收乾淨、把斷點擺在乾淨的指令邊界上。這就是為什麼等一下的實驗明明只編了一次，`dynamo.explain` 裡卻會出現兩筆 compile attempt。
+不過收拾流程有個麻煩，exception 飛出來的時候，翻譯常常做到一半，stack 疊了一半、SideEffects 的帳本記了一半，直接在這裡切圖就會切出錯的東西。在這裡 Dynamo 的解法很乾脆，毫不留情全部砍掉重練。記下「走到第 N 條 instruction 會失敗」之後整個重翻一遍，第二遍走到 N 就不往裡鑽，先把圖收乾淨、把斷點擺在乾淨的 instruction 邊界上。這就是為什麼等一下的實驗明明只編了一次，`dynamo.explain` 裡卻會出現兩筆 compile attempt。
 
 ## 斷開之後 Dynamo 做的三件事
 
-收拾流程本身做的就是三件事。翻譯進行到某條指令、`Unsupported` 被接住之後，Dynamo 並不會放棄整個函式，而是照下面三步處理。
+收拾流程本身做的就是三件事。翻譯進行到某條 instruction、`Unsupported` 被接住之後，Dynamo 並不會放棄整個函式，而是照下面三步處理。
 
-1. **收前半段**：到斷點為止的節點照 Day 8 的 `compile_subgraph` 收成一張圖，該結的 SideEffects 結清，再交給後端編譯。
-2. **讓那條指令回 eager**：生成的 bytecode 裡，斷點指令原樣保留，讓 CPython 自己跑。
+1. **收前半段**：到斷點為止的節點照 OutputGraph 的 `compile_subgraph` 收成一張圖，該結的 SideEffects 結清，再交給後端編譯。
+2. **讓那條 instruction 回 eager**：生成的 bytecode 裡，斷點 instruction 原樣保留，讓 CPython 自己跑。
 3. **把剩下的包成 resume function**：斷點之後的 bytecode 被包成一個新函式，用 PyCodegen 的工具箱直接生出來。
 
-而關鍵就在第三步的後續。resume function 也是函式，一被呼叫，Day 3 的 eval hook 照樣攔截它，於是斷點之後的程式碼就編成了第二張圖。一次 break 的結果，就是兩張圖，中間夾一小段 eager。
+而關鍵就在第三步的後續。resume function 也是函式，一被呼叫，eval hook 照樣攔截它，於是斷點之後的程式碼就編成了第二張圖。一次 break 的結果，就是兩張圖，中間夾一小段 eager。
 
 ## 用 print 實際跑一次
 
@@ -98,7 +98,7 @@ MODIFIED BYTECODE f
   56 LOAD_FAST     0 (x)
  104 CALL          1
  112 STORE_FAST    1 (graph_out_0)
- 116 LOAD_GLOBAL   2 (__builtins_dict___1)          <- 斷點指令回 eager
+ 116 LOAD_GLOBAL   2 (__builtins_dict___1)          <- 斷點 instruction 回 eager
  126 LOAD_CONST    4 ('print')
  128 BINARY_SUBSCR
  132 LOAD_CONST    2 ('mid')
@@ -113,7 +113,7 @@ MODIFIED BYTECODE f
  182 RETURN_VALUE
 ```
 
-三段的接縫全都在這裡了。先呼叫 `__compiled_fn_2` 把前半算完、輸出放回 `x`，接著讓 CPython 真的呼叫 `print`，最後呼叫 `__resume_at_32_3`，把 `print` 的回傳值和 `x` 一起傳進去。這個名字的意思是「從原函式第 32 個 byte 繼續」，正好就是上面 `POP_TOP` 的位置，斷點指令自己留在外面跑，它之後的第一條指令才是續集的起點。
+三段的接縫全都在這裡了。先呼叫 `__compiled_fn_2` 把前半算完、輸出放回 `x`，接著讓 CPython 真的呼叫 `print`，最後呼叫 `__resume_at_32_3`，把 `print` 的回傳值和 `x` 一起傳進去。這個名字的意思是「從原函式第 32 個 byte 繼續」，正好就是上面 `POP_TOP` 的位置，斷點 instruction 自己留在外面跑，它之後的第一條 instruction 才是續集的起點。
 
 ## resume function：從函式中間開始跑
 
@@ -134,7 +134,7 @@ ORIGINAL BYTECODE torch_dynamo_resume_in_f_at_16
              48 RETURN_VALUE
 ```
 
-它的參數表就是斷點當下所有還活著的狀態，也就是 stack 上的值（`___stack0`，這裡是 `print` 的回傳值）加上之後還會被讀的 locals（`x`）。開場白把 `___stack0` 擺回原位，然後一條 `JUMP_FORWARD` 直接跳到斷點之後的第一條指令。合法的 Python 是寫不出「從函式第 32 個 byte 開始跑」這種函式的，但 bytecode 層沒有這個限制，[`resume_execution.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/resume_execution.py) 就直接把它拼了出來。同一個斷點的 resume function 只生成一次，之後重用。
+它的參數表就是斷點當下所有還活著的狀態，也就是 stack 上的值（`___stack0`，這裡是 `print` 的回傳值）加上之後還會被讀的 locals（`x`）。開場白把 `___stack0` 擺回原位，然後一條 `JUMP_FORWARD` 直接跳到斷點之後的第一條 instruction。合法的 Python 是寫不出「從函式第 32 個 byte 開始跑」這種函式的，但 bytecode 層沒有這個限制，[`resume_execution.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/resume_execution.py) 就直接把它拼了出來。同一個斷點的 resume function 只生成一次，之後重用。
 
 然後劇本就重演一遍。resume function 一被呼叫，eval hook 攔截它，`return x + 1` 編成下面的圖二。
 
@@ -160,7 +160,7 @@ Ops per Graph:
 
 ![翻譯游標沿 f 的 bytecode 逐條往下走，在 print 的 CALL 丟出 Unsupported，前半坍縮成圖一、print 三條掉回 eager、剩下包成 resume function 又被 eval hook 攔截編成圖二，最後執行路徑把三段縫回一條](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day10/graph_break.gif)
 
-*圖一：翻譯游標逐條走過 `f` 的 bytecode，在 `print` 的 `CALL` 丟出 `Unsupported`：斷點前的四條指令坍縮成 `__compiled_fn_2`、`print` 那三條原樣掉回 eager、offset 32 之後包成 `__resume_at_32_3` 再被 eval hook 攔截編成 `__compiled_fn_5`，最後執行順序把三段縫回一條路。*
+*圖一：翻譯游標逐條走過 `f` 的 bytecode，在 `print` 的 `CALL` 丟出 `Unsupported`：斷點前的四條 instruction 坍縮成 `__compiled_fn_2`、`print` 那三條原樣掉回 eager、offset 32 之後包成 `__resume_at_32_3` 再被 eval hook 攔截編成 `__compiled_fn_5`，最後執行順序把三段縫回一條路。*
 
 ## inline 裡的斷點會往上傳
 
@@ -194,7 +194,7 @@ User Stack:
 
 Break 不會報錯，只會默默變慢，所以我們得主動去抓，工具有三件。
 
-- `torch.compile(f, fullgraph=True)`：把所有 break 升級成錯誤。前面說過 `break_graph_if_unsupported` 在這個模式下不收拾、直接往上丟，實跑就是一個 `Unsupported` 例外，訊息跟 log 裡的一模一樣。
+- `torch.compile(f, fullgraph=True)`：把所有 break 升級成錯誤。前面說過 `break_graph_if_unsupported` 在這個模式下不收拾、直接往上丟，實跑就是一個 `Unsupported` exception，訊息跟 log 裡的一模一樣。
   ```
   Unsupported : Failed to trace builtin operator
     Explanation: Dynamo does not know how to trace builtin operator `print`
@@ -210,11 +210,11 @@ Break 不會報錯，只會默默變慢，所以我們得主動去抓，工具�
 
 ## 結語
 
-最後來收個帳，一次 break 至少要付四筆。圖被切小，跨不過斷點的 fusion 機會全沒了。中間那段 eager 本身就慢，Day 7 的帳本被迫提前結算，resume function 還要多編一次（上面 `util` 的例子，一個 `print` 換來 `big`、`util`、兩個 resume 共四次編譯）。再加上 Day 3 說過的，compiled function 執行期間每個 frame 都要繞進 Dynamo 判斷一次，圖越碎、繞的次數就越多。所以效能調校的第一課永遠是先數 break，再談其他。
+最後來收個帳，一次 break 至少要付四筆。圖被切小，跨不過斷點的 fusion 機會全沒了。中間那段 eager 本身就慢，SideEffects 的帳本被迫提前結算，resume function 還要多編一次（上面 `util` 的例子，一個 `print` 換來 `big`、`util`、兩個 resume 共四次編譯）。再加上 Day 3 說過的，compiled function 執行期間每個 frame 都要繞進 Dynamo 判斷一次，圖越碎、繞的次數就越多。所以效能調校的第一課永遠是先數 break，再談其他。
 
-今天我們看到，一次 break 會把函式切成三段，前半編成圖一、斷點那條指令回 eager、剩下的包成 resume function 再被攔截編成圖二。而斷點必須落在有 frame 的地方，所以 inline 子函式裡的 break 會傳染到 caller 的那條 `CALL`，連鎖出一串圖和 resume function。
+今天我們看到，一次 break 會把函式切成三段，前半編成圖一、斷點那條 instruction 回 eager、剩下的包成 resume function 再被攔截編成圖二。而斷點必須落在有 frame 的地方，所以 inline 子函式裡的 break 會傳染到 caller 的那條 `CALL`，連鎖出一串圖和 resume function。
 
-到今天為止，Dynamo 的主線就完整了，攔截、翻譯、包裝、驗票、記帳、收圖、寫碼、斷了再接。不過還剩下最後一塊拼圖。Day 6 那條 `EQUALS_MATCH: L['n'] == 3` 實在太窄了，值一變就得重編。明天就來講 Symbolic Shapes，看 SymInt 怎麼把具體的 4 換成符號 s0、ShapeEnv 又是怎麼管理符號之間的約束，讓一張圖吃下所有 batch size。那我們明天見！
+到今天為止，Dynamo 的主線就完整了，攔截、翻譯、包裝、驗票、記帳、收圖、寫碼、斷了再接。不過還剩下最後一塊拼圖。那條 `EQUALS_MATCH: L['n'] == 3` 的 Guard 實在太窄了，值一變就得重編。明天就來講 Symbolic Shapes，看 SymInt 怎麼把具體的 4 換成符號 s0、ShapeEnv 又是怎麼管理符號之間的約束，讓一張圖吃下所有 batch size。那我們明天見！
 
 ## 參考資料
 

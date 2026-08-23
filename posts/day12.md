@@ -78,7 +78,7 @@ def forward(self, le: "b8[4, 4][4, 1]cuda:0", permute: "f32[4, 4][1, 4]cuda:0", 
 
 最後一行輸出是 `w.grad shape: torch.Size([4, 4])`，梯度真的算出來了。這兩張圖藏了不少東西，一件一件挑出來講。
 
-**Forward 的輸出不只 loss。** 使用者只要 `sum_1`，但圖還回傳了 `le`（relu 的 mask）和 `permute`（`x` 的轉置）。這些是 backward 需要的中間值，被「存」下來從 forward 傳給 backward。仔細看 `le` 的型別是 `b8`，一個 bool tensor，每個元素只佔 1 byte。backward 算 relu 的梯度其實只需要「哪些位置小於等於零」這個資訊，存一張 f32 的 `relu` 輸出（每個元素 4 bytes）就浪費了。存哪些、存多少、存成什麼形式，是一個真正的取捨，Day 15 的 partitioner 專門管這件事。
+**Forward 的輸出不只 loss。** 使用者只要 `sum_1`，但圖還回傳了 `le`（relu 的 mask）和 `permute`（`x` 的轉置）。這些是 backward 需要的中間值，被「存」下來從 forward 傳給 backward。仔細看 `le` 的型別是 `b8`，一個 bool tensor，每個元素只佔 1 byte。backward 算 relu 的梯度其實只需要「哪些位置小於等於零」這個資訊，存一張 f32 的 `relu` 輸出（每個元素 4 bytes）就浪費了。存哪些、存多少、存成什麼形式，是一個真正的取捨，min-cut partitioner 專門管這件事。
 
 **Backward 也是一張普通的 FX Graph。** 輸入是存下來的 `le`、`permute`，加上 `tangents_1`（上游梯度，這裡 loss 對自己的梯度是純量 1，所以是 `f32[]`）。輸出對齊 forward 的輸入順序，`x` 不需要梯度所以第一格是 `None`，`w` 的梯度是 `mm_1`。因為它就是一張普通的 ATen 圖，它跟 forward 一樣交給 Inductor 編譯，backward 也享受 fusion，訓練加速的一半來自這裡。
 

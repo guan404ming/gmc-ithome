@@ -99,7 +99,7 @@ def forward(self, mm, permute, tangents_1):
 
 **第三，`permute` 根本不佔記憶體。** 它只改 stride 這種 metadata，不碰資料，「存」它等於免費，所以留在 forward 直接傳過去，backward 連轉置都不用做。
 
-**第四，Day 12 的懸案順便破了。** 那時的例子是 `relu`，forward 存的是 `le`（relu 的 mask）而不是 `relu` 的輸出。現在可以讀懂了。`le` 的 dtype 是 `b8`，一個元素一個 byte，只有 `f32` 的四分之一，公證人挑了最便宜的那件家當過戶。存什麼從來不是「backward 公式寫了什麼就存什麼」，而是成本算出來的。
+**第四，AOTAutograd 的懸案順便破了。** 那時的例子是 `relu`，forward 存的是 `le`（relu 的 mask）而不是 `relu` 的輸出。現在可以讀懂了。`le` 的 dtype 是 `b8`，一個元素一個 byte，只有 `f32` 的四分之一，公證人挑了最便宜的那件家當過戶。存什麼從來不是「backward 公式寫了什麼就存什麼」，而是成本算出來的。
 
 ## 切在哪裡是一道 min-cut 問題
 
@@ -163,7 +163,7 @@ Forward 一個中間值都不存，只把原始輸入原封不動傳過去。bac
 
 最後把鏡頭拉遠一點。這一刀之所以是編譯式訓練的關鍵設計，第一層原因是前面說的記憶體，同樣一張卡，切得好就能塞下更大的 batch 或更長的序列。
 
-第二層更隱微。**重算在編譯世界裡比在 eager 世界裡便宜得多**。eager 下做 activation checkpointing，重算就是實打實地再跑一遍那些 kernel，每個都要 launch、都要讀寫記憶體。但在這裡，backward 也是 Inductor 要編譯的一張完整的圖，重算出來的 pointwise op 往往直接融進 backward 本來就要跑的 kernel 裡，多算一個 `tanh` 只是暫存器裡多一條指令，記憶體流量一點都沒多。Day 2 算過 elementwise 的瓶頸是記憶體頻寬不是計算，所以這種重算的邊際成本趨近於零。這讓 min-cut partitioner 敢於激進地選擇重算，也是 `torch.compile` 訓練加速裡一塊很實在的來源。
+第二層更隱微。**重算在編譯世界裡比在 eager 世界裡便宜得多**。eager 下做 activation checkpointing，重算就是實打實地再跑一遍那些 kernel，每個都要 launch、都要讀寫記憶體。但在這裡，backward 也是 Inductor 要編譯的一張完整的圖，重算出來的 pointwise op 往往直接融進 backward 本來就要跑的 kernel 裡，多算一個 `tanh` 只是暫存器裡多一條 instruction，記憶體流量一點都沒多。Day 2 算過 elementwise 的瓶頸是記憶體頻寬不是計算，所以這種重算的邊際成本趨近於零。這讓 min-cut partitioner 敢於激進地選擇重算，也是 `torch.compile` 訓練加速裡一塊很實在的來源。
 
 ## 結語
 

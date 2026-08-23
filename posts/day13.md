@@ -18,7 +18,7 @@ In-place 直接毀掉這個前提。`add_` 執行之後，所有指向同一塊�
 
 那能不能叫使用者別寫 in-place？不行。PyTorch 的 API 裡幾乎每個 op 都有帶底線的就地版本，`optimizer.step()` 更新參數靠的全是 in-place，這是 eager 世界的一等公民，編譯器只能自己想辦法。
 
-先跟 Day 7 劃個界線。SideEffects 管的是 Python 層的修改，`self.counter += 1`、往 list 裡 `append`，這些東西進不了圖，所以記帳後用 bytecode replay。但 `add_` 是合法的 Tensor 運算，它進得了圖，Dynamo 也真的把它原樣放進圖裡。問題出在後端不喜歡它，所以得在 Dynamo 和 Inductor 之間有人負責把它「翻譯」掉，這個人就是 AOTAutograd 裡的 Functionalization。
+先跟 SideEffects 劃個界線。它管的是 Python 層的修改，`self.counter += 1`、往 list 裡 `append`，這些東西進不了圖，所以記帳後用 bytecode replay。但 `add_` 是合法的 Tensor 運算，它進得了圖，Dynamo 也真的把它原樣放進圖裡。問題出在後端不喜歡它，所以得在 Dynamo 和 Inductor 之間有人負責把它「翻譯」掉，這個人就是 AOTAutograd 裡的 Functionalization。
 
 ## Functionalization 的兩條規則
 
@@ -81,9 +81,9 @@ def forward(self, arg0_1: "f32[4, 4][4, 1]cuda:0"):
 
 整張圖除了最後那條 `copy_`，內部完全純函數式，後端可以放心亂序。整個過程用動畫走一遍。
 
-![in-place 指令逐條被改寫成純函數，修改集中到圖尾端的 copy_](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day13/functionalization.gif)
+![in-place instruction 逐條被改寫成純函數，修改集中到圖尾端的 copy_](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day13/functionalization.gif)
 
-*圖一：抄寫員的工作流程。左邊是使用者寫的 in-place 程式，被處理到的指令逐條劃掉、標上改寫後的名字。中間是 FunctionalTensor 的帳本，`x` 和 `y` 兩個名字接在同一條 storage 線上，每次就地改都讓帳本的最新值換一格。右邊是 functionalized 的圖一行一行長出來，`add_` 變成 `add` 加兩條 view 重放，結尾補上寫回輸入的 `copy_`。*
+*圖一：抄寫員的工作流程。左邊是使用者寫的 in-place 程式，被處理到的 instruction 逐條劃掉、標上改寫後的名字。中間是 FunctionalTensor 的帳本，`x` 和 `y` 兩個名字接在同一條 storage 線上，每次就地改都讓帳本的最新值換一格。右邊是 functionalized 的圖一行一行長出來，`add_` 變成 `add` 加兩條 view 重放，結尾補上寫回輸入的 `copy_`。*
 
 ## 邊界上那條 copy_
 
@@ -115,7 +115,7 @@ def forward(self, arg0_1: "f32[4][1]cuda:0"):
 
 輸出相等，連輸入被就地改掉的結果也相等。呼叫者完全感覺不到中間發生過一場大改寫。
 
-回頭一看，這跟 Day 7 的結構一模一樣。SideEffects 把 Python 層的修改記帳、圖跑完用 bytecode replay。Functionalization 把 Tensor 層的修改謄寫、圖尾端一條 `copy_` 寫回。兩層各管一段，語意都靠「最後一刻結算」保住。
+回頭一看，這跟 SideEffects 的結構一模一樣。SideEffects 把 Python 層的修改記帳、圖跑完用 bytecode replay。Functionalization 把 Tensor 層的修改謄寫、圖尾端一條 `copy_` 寫回。兩層各管一段，語意都靠「最後一刻結算」保住。
 
 ## 原始碼裡它在哪
 

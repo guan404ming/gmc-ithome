@@ -48,9 +48,11 @@ def titled(w, h, name, sub, fill=CARD, edge=EDGE, sw=1.5):
 
 def pill(name, zh):
     zh_font = CJK if any("一" <= ch <= "鿿" for ch in zh) else MONO
-    body = T(f"{name}  ·  {zh}", font_size=17, font=SANS, color=BG, t2f={name: SANS, "·": MONO, zh: zh_font}, t2w={name: BOLD}, t2c={"·": "#666"})
-    t = VGroup(Dot(radius=0.06, color=ACCENT), body).arrange(RIGHT, buff=0.15)
-    bg = RoundedRectangle(corner_radius=0.3, width=t.width + 0.6, height=0.6, stroke_width=0, fill_color="#eceae6", fill_opacity=1)
+    nm = T(name, font=SANS, font_size=17, weight=BOLD, color=BG)
+    sep = T("·", font=MONO, font_size=17, color="#666")
+    zt = T(zh, font=zh_font, font_size=17, color=BG)
+    t = VGroup(Dot(radius=0.06, color=ACCENT), nm, sep, zt).arrange(RIGHT, buff=0.18)
+    bg = RoundedRectangle(corner_radius=0.26, width=t.width + 0.6, height=0.52, stroke_width=0, fill_color="#eceae6", fill_opacity=1)
     return VGroup(bg, t.move_to(bg))
 
 
