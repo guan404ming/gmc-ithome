@@ -1,4 +1,4 @@
-# Day 10 | Dynamo 的破「圖」重接，Graph Break and Resume！
+# Day 10 | TorchDynamo 的破「圖」重接，Graph Break and Resume！
 
 ## 前言
 
@@ -19,23 +19,23 @@ Day 4 講過判斷發生的位置。`dispatch_table` 對幾乎每條 opcode 都�
 | 沒有符號模型的 C 函式            | 第三方套件的 C extension             | 進不去 bytecode，也沒有對應的 handler |
 
 
-第一類我們在 Day 3 就親眼看過了，`generic_jump` 發現 stack 頂端是 `TensorVariable`，丟出 `attempted to jump with TensorVariable()`。第二類打開 `torch._dynamo.config.capture_scalar_outputs` 之後 `.item()` 不再斷，代價留到明天 Symbolic Shapes 那篇再算。第三類就是今天的主角。第四類對應 Day 5 講過的 `trace_rules.py` 名單，名單上要跳過的函式，呼叫它就是潛在的斷點。
+第一類我們在 Day 3 就親眼看過了，`generic_jump` 發現 stack 頂端是 `TensorVariable`，丟出 `attempted to jump with TensorVariable()`。第二類打開 `torch._dynamo.config.capture_scalar_outputs` 之後 `.item()` 不再斷，代價留到明天 Symbolic Shapes 那篇再算。第三類的話就是今天的主角。第四類對應 Day 5 講過的 `trace_rules.py` 名單，名單上要跳過的函式，呼叫它就是潛在的斷點。
 
 ## Unsupported 例外是怎麼丟出來的
 
-handler 舉手的方式不是回傳一個錯誤碼，而是直接丟一個 `Unsupported` 例外（[`exc.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/exc.py)），而且丟的時候固定要附上分類、現場、解釋和修法建議。這就是為什麼你看到的每一條 graph break 訊息都長同一個樣子，等一下的實驗就會看到實例。
+handler 丟錯的方式不是回傳一個錯誤碼，而是直接丟一個 `Unsupported` 例外（[`exc.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/exc.py)），而且丟的時候固定要附上分類、現場、解釋和修法建議。這就是為什麼你看到的每一條 graph break 訊息都長同一個樣子，等一下的實驗就會看到實例。
 
 那丟出來之後誰來接呢？`CALL` 這類最容易出事的 handler 外面包著一層接手的 decorator（[`symbolic_convert.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/symbolic_convert.py) 的 `break_graph_if_unsupported`）。接住之後分兩條路，`fullgraph=True` 的話不收拾，原樣往上丟變成使用者看到的錯誤，否則就進入 graph break 的收拾流程。
 
-不過收拾流程有個麻煩，例外飛出來的時候，翻譯常常做到一半，stack 疊了一半、Day 7 的帳本記了一半，直接在這裡切圖就會切出錯的東西。Dynamo 的解法很乾脆，砍掉重練。記下「走到第 N 條指令會失敗」之後整個重翻一遍，第二遍走到 N 就不往裡鑽，先把圖收乾淨、把斷點擺在乾淨的指令邊界上。所以等一下的實驗明明只編了一次，`dynamo.explain` 裡卻會出現兩筆 compile attempt。
+不過收拾流程有個麻煩，例外飛出來的時候，翻譯常常做到一半，stack 疊了一半、SideEffects 的帳本記了一半，直接在這裡切圖就會切出錯的東西。在這裡 Dynamo 的解法很乾脆，毫不留情全部砍掉重練。記下「走到第 N 條指令會失敗」之後整個重翻一遍，第二遍走到 N 就不往裡鑽，先把圖收乾淨、把斷點擺在乾淨的指令邊界上。這就是為什麼等一下的實驗明明只編了一次，`dynamo.explain` 裡卻會出現兩筆 compile attempt。
 
 ## 斷開之後 Dynamo 做的三件事
 
 收拾流程本身做的就是三件事。翻譯進行到某條指令、`Unsupported` 被接住之後，Dynamo 並不會放棄整個函式，而是照下面三步處理。
 
-1. **收前半段**：到斷點為止的節點照 Day 8 的 `compile_subgraph` 收成一張圖，該結的帳（Day 7）結清，交給後端編譯。
+1. **收前半段**：到斷點為止的節點照 Day 8 的 `compile_subgraph` 收成一張圖，該結的 SideEffects 結清，再交給後端編譯。
 2. **讓那條指令回 eager**：生成的 bytecode 裡，斷點指令原樣保留，讓 CPython 自己跑。
-3. **把剩下的包成 resume function**：斷點之後的 bytecode 被包成一個新函式，用 Day 9 的工具箱直接生出來。
+3. **把剩下的包成 resume function**：斷點之後的 bytecode 被包成一個新函式，用 PyCodegen 的工具箱直接生出來。
 
 而關鍵就在第三步的後續。resume function 也是函式，一被呼叫，Day 3 的 eval hook 照樣攔截它，於是斷點之後的程式碼就編成了第二張圖。一次 break 的結果，就是兩張圖，中間夾一小段 eager。
 
