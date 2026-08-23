@@ -1,0 +1,265 @@
+/Users/wchiu/Documents/GitHub/gmc-ithome/.venv/lib/python3.12/site-packages/torch/_dynamo/pgo.py:525: UserWarning: dynamo_pgo force disabled by torch._inductor.config.force_disable_caches
+  warn_once(
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] Output code: 
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] # AOT ID: ['0_inference']
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from ctypes import c_void_p, c_long, c_int
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] import torch
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] import math
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] import random
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] import os
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] import tempfile
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from math import inf, nan
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from cmath import nanj
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from torch._inductor.hooks import run_intermediate_hooks
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from torch._inductor.utils import maybe_profile
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from torch._inductor.codegen.memory_planning import _align as align
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from torch import device, empty_strided
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from torch._inductor.async_compile import AsyncCompile
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from torch._inductor.select_algorithm import extern_kernels
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] aten = torch.ops.aten
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] inductor_ops = torch.ops.inductor
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] _quantized = torch.ops._quantized
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] assert_size_stride = torch._C._dynamo.guards.assert_size_stride
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] assert_alignment = torch._C._dynamo.guards.assert_alignment
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] empty_strided_cpu = torch._C._dynamo.guards._empty_strided_cpu
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] empty_strided_cuda = torch._C._dynamo.guards._empty_strided_cuda
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] empty_strided_xpu = torch._C._dynamo.guards._empty_strided_xpu
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] reinterpret_tensor = torch._C._dynamo.guards._reinterpret_tensor
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] alloc_from_pool = torch.ops.inductor._alloc_from_pool
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] async_compile = AsyncCompile()
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] empty_strided_p2p = torch._C._distributed_c10d._SymmetricMemory.empty_strided_p2p
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] cpp_fused_add_mul_relu_0 = async_compile.cpp_pybinding(['const float*', 'const float*', 'float*'], '''
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] #include <torch/csrc/inductor/cpp_prefix.h>
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] extern "C"  void kernel(const float* in_ptr0,
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                        const float* in_ptr1,
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                        float* out_ptr0)
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] {
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     {
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]         for(int64_t x0=static_cast<int64_t>(0LL); x0<static_cast<int64_t>(1024LL); x0+=static_cast<int64_t>(4LL))
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]         {
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]             {
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                 if(C10_LIKELY(x0 >= static_cast<int64_t>(0) && x0 < static_cast<int64_t>(1024LL)))
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                 {
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                     auto tmp0 = at::vec::Vectorized<float>::loadu(in_ptr0 + static_cast<int64_t>(x0), static_cast<int64_t>(4));
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                     auto tmp1 = at::vec::Vectorized<float>::loadu(in_ptr1 + static_cast<int64_t>(x0), static_cast<int64_t>(4));
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                     auto tmp2 = tmp0 + tmp1;
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                     auto tmp3 = at::vec::clamp_min(tmp2, decltype(tmp2)(0));
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                     auto tmp4 = static_cast<float>(2.0);
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                     auto tmp5 = at::vec::Vectorized<float>(tmp4);
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                     auto tmp6 = tmp3 * tmp5;
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                     tmp6.store(out_ptr0 + static_cast<int64_t>(x0));
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                 }
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]             }
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]         }
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     }
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] }
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] ''')
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] async_compile.wait(globals())
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] del async_compile
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] def call(args):
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     arg0_1, arg1_1 = args
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     args.clear()
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     assert_size_stride(arg0_1, (1024, ), (1, ))
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     assert_size_stride(arg1_1, (1024, ), (1, ))
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     buf0 = empty_strided_cpu((1024, ), (1, ), torch.float32)
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     cpp_fused_add_mul_relu_0(arg0_1, arg1_1, buf0)
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     del arg0_1
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     del arg1_1
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     return (buf0, )
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] def benchmark_compiled_module(times=10, repeat=10):
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     from torch._dynamo.testing import rand_strided
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     from torch._inductor.utils import print_performance
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     arg0_1 = rand_strided((1024, ), (1, ), device='cpu', dtype=torch.float32)
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     arg1_1 = rand_strided((1024, ), (1, ), device='cpu', dtype=torch.float32)
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     fn = lambda: call([arg0_1, arg1_1])
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     return print_performance(fn, times=times, repeat=repeat)
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] if __name__ == "__main__":
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     from torch._inductor.wrapper_benchmark import compiled_module_main
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     compiled_module_main('None', benchmark_compiled_module)
+V0824 02:06:12.370000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:12.373000 40180 torch/_inductor/graph.py:2356] [0/0] [__output_code] Output code written to: /var/folders/43/_mrt54md7w92w47sjfsyln2w0000gp/T/torchinductor_wchiu/tmparuw3_vj/lg/clggxa4bmcuu3jyvrfnx6zwjchkdtggp6oc3v246tnkf4oodvwr5.py
+I0824 02:06:13.424000 40180 torch/_inductor/graph.py:2317] [0/0] [__output_code] Output code written to: /var/folders/43/_mrt54md7w92w47sjfsyln2w0000gp/T/torchinductor_wchiu/tmparuw3_vj/lg/clggxa4bmcuu3jyvrfnx6zwjchkdtggp6oc3v246tnkf4oodvwr5.py
+W0824 02:06:13.442000 40180 torch/_inductor/debug.py:449] [0/0] model__0_inference_0 debug trace: /private/tmp/claude-502/-Users-wchiu-Documents-GitHub-gmc-ithome/473212a6-a3c3-4b5a-87f7-94e79febb13f/scratchpad/torch_compile_debug/run_2026_08_24_02_06_09_622667-pid_40180/torchinductor/model__0_inference_0.0
+/Users/wchiu/Documents/GitHub/gmc-ithome/.venv/lib/python3.12/site-packages/torch/_dynamo/pgo.py:525: UserWarning: dynamo_pgo force disabled by torch._inductor.config.force_disable_caches
+  warn_once(
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] Output code: 
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] # AOT ID: ['1_inference']
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from ctypes import c_void_p, c_long, c_int
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] import torch
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] import math
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] import random
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] import os
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] import tempfile
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from math import inf, nan
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from cmath import nanj
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from torch._inductor.hooks import run_intermediate_hooks
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from torch._inductor.utils import maybe_profile
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from torch._inductor.codegen.memory_planning import _align as align
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from torch import device, empty_strided
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from torch._inductor.async_compile import AsyncCompile
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] from torch._inductor.select_algorithm import extern_kernels
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] aten = torch.ops.aten
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] inductor_ops = torch.ops.inductor
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] _quantized = torch.ops._quantized
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] assert_size_stride = torch._C._dynamo.guards.assert_size_stride
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] assert_alignment = torch._C._dynamo.guards.assert_alignment
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] empty_strided_cpu = torch._C._dynamo.guards._empty_strided_cpu
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] empty_strided_cuda = torch._C._dynamo.guards._empty_strided_cuda
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] empty_strided_xpu = torch._C._dynamo.guards._empty_strided_xpu
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] reinterpret_tensor = torch._C._dynamo.guards._reinterpret_tensor
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] alloc_from_pool = torch.ops.inductor._alloc_from_pool
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] async_compile = AsyncCompile()
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] empty_strided_p2p = torch._C._distributed_c10d._SymmetricMemory.empty_strided_p2p
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] cpp_fused_add_mul_relu_0 = async_compile.cpp_pybinding(['const float*', 'const float*', 'float*'], '''
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] #include <torch/csrc/inductor/cpp_prefix.h>
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] extern "C"  void kernel(const float* in_ptr0,
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                        const float* in_ptr1,
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                        float* out_ptr0)
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] {
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     #pragma omp parallel num_threads(8)
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     {
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]         int tid = omp_get_thread_num();
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]         {
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]             #pragma omp for
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]             for(int64_t x0=static_cast<int64_t>(0LL); x0<static_cast<int64_t>(1048576LL); x0+=static_cast<int64_t>(4LL))
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]             {
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                 {
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                     if(C10_LIKELY(x0 >= static_cast<int64_t>(0) && x0 < static_cast<int64_t>(1048576LL)))
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                     {
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                         auto tmp0 = at::vec::Vectorized<float>::loadu(in_ptr0 + static_cast<int64_t>(x0), static_cast<int64_t>(4));
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                         auto tmp1 = at::vec::Vectorized<float>::loadu(in_ptr1 + static_cast<int64_t>(x0), static_cast<int64_t>(4));
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                         auto tmp2 = tmp0 + tmp1;
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                         auto tmp3 = at::vec::clamp_min(tmp2, decltype(tmp2)(0));
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                         auto tmp4 = static_cast<float>(2.0);
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                         auto tmp5 = at::vec::Vectorized<float>(tmp4);
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                         auto tmp6 = tmp3 * tmp5;
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                         tmp6.store(out_ptr0 + static_cast<int64_t>(x0));
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                     }
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]                 }
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]             }
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]         }
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     }
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] }
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] ''')
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] async_compile.wait(globals())
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] del async_compile
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] def call(args):
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     arg0_1, arg1_1 = args
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     args.clear()
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     assert_size_stride(arg0_1, (1048576, ), (1, ))
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     assert_size_stride(arg1_1, (1048576, ), (1, ))
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     buf0 = empty_strided_cpu((1048576, ), (1, ), torch.float32)
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     cpp_fused_add_mul_relu_0(arg0_1, arg1_1, buf0)
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     del arg0_1
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     del arg1_1
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     return (buf0, )
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] def benchmark_compiled_module(times=10, repeat=10):
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     from torch._dynamo.testing import rand_strided
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     from torch._inductor.utils import print_performance
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     arg0_1 = rand_strided((1048576, ), (1, ), device='cpu', dtype=torch.float32)
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     arg1_1 = rand_strided((1048576, ), (1, ), device='cpu', dtype=torch.float32)
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     fn = lambda: call([arg0_1, arg1_1])
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     return print_performance(fn, times=times, repeat=repeat)
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] if __name__ == "__main__":
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     from torch._inductor.wrapper_benchmark import compiled_module_main
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code]     compiled_module_main('None', benchmark_compiled_module)
+V0824 02:06:13.547000 40180 torch/_inductor/graph.py:2345] [0/0] [__output_code] 
+V0824 02:06:13.548000 40180 torch/_inductor/graph.py:2356] [0/0] [__output_code] Output code written to: /var/folders/43/_mrt54md7w92w47sjfsyln2w0000gp/T/torchinductor_wchiu/tmpvinvd9pd/vk/cvk6a4shwkmi5cogj4d23heklos5elsqvye4c6lhrucqtemwz5mr.py
+I0824 02:06:14.263000 40180 torch/_inductor/graph.py:2317] [0/0] [__output_code] Output code written to: /var/folders/43/_mrt54md7w92w47sjfsyln2w0000gp/T/torchinductor_wchiu/tmpvinvd9pd/vk/cvk6a4shwkmi5cogj4d23heklos5elsqvye4c6lhrucqtemwz5mr.py
+W0824 02:06:14.283000 40180 torch/_inductor/debug.py:449] [0/0] model__1_inference_1 debug trace: /private/tmp/claude-502/-Users-wchiu-Documents-GitHub-gmc-ithome/473212a6-a3c3-4b5a-87f7-94e79febb13f/scratchpad/torch_compile_debug/run_2026_08_24_02_06_09_622667-pid_40180/torchinductor/model__1_inference_1.1
+torch 2.8.0
+
+=== output_code: Inductor generated code (CPU) ===
+allclose: True
+
+=== larger input: parallel kernel ===
+
+=== registered lowerings ===
+len(lowerings): 1713
+
+=== TORCH_COMPILE_DEBUG artifacts ===
+aot_model___0_debug.log
+aot_model___1_debug.log
+model__0_inference_0.0
+   fx_graph_readable.py
+   fx_graph_runnable.py
+   fx_graph_transformed.py
+   inductor_generated_kernel_to_post_grad_nodes.json
+   inductor_provenance_tracking_node_mappings.json
+   ir_post_fusion.txt
+   ir_pre_fusion.txt
+   output_code.py
+model__1_inference_1.1
+   fx_graph_readable.py
+   fx_graph_runnable.py
+   fx_graph_transformed.py
+   inductor_generated_kernel_to_post_grad_nodes.json
+   inductor_provenance_tracking_node_mappings.json
+   ir_post_fusion.txt
+   ir_pre_fusion.txt
+   output_code.py
+
+--- fx_graph_readable.py ---
+class <lambda>(torch.nn.Module):
+    def forward(self, arg0_1: "f32[1024]", arg1_1: "f32[1024]"):
+         # File: /Users/wchiu/Documents/GitHub/gmc-ithome/code/day17/overview.py:11 in f, code: return torch.relu(x + y) * 2
+        add: "f32[1024]" = torch.ops.aten.add.Tensor(arg0_1, arg1_1);  arg0_1 = arg1_1 = None
+        relu: "f32[1024]" = torch.ops.aten.relu.default(add);  add = None
+        mul: "f32[1024]" = torch.ops.aten.mul.Tensor(relu, 2);  relu = None
+        return (mul,)
+        
+
+--- ir_pre_fusion.txt ---
+op0: SchedulerNode(ComputedBuffer)
+op0.writes = [MemoryDep('buf0', c0, {c0: 1024})]
+op0.unmet_dependencies = []
+op0.met_dependencies = [MemoryDep('arg0_1', c0, {c0: 1024}), MemoryDep('arg1_1', c0, {c0: 1024})]
+op0.outputs = [
+    buf0: ComputedBuffer
+    buf0.layout = FixedLayout('cpu', torch.float32, size=[1024], stride=[1])
+    buf0.users = [NodeUser(node=OUTPUT, can_inplace=False, is_weak=False)]
+]
+op0.group.device = cpu
+op0.group.iteration = ((1024,), ())
+op0.sizes = ([1024], [])
+arg0_1_layout = FixedLayout('cpu', torch.float32, size=[1024], stride=[1])
+arg1_1_layout = FixedLayout('cpu', torch.float32, size=[1024], stride=[1])
+buf0_layout = FixedLayout('cpu', torch.float32, size=[1024], stride=[1])
+class op0_loop_body:
+    var_ranges = {p0: 1024}
+    index0 = p0
+    def body(self, ops):
+        get_index = self.get_index('index0')
+        load = ops.load('arg0_1', get_index)
+        get_index_1 = self.get_index('index0')
+        load_1 = ops.load('arg1_1', get_index_1)
+        add = ops.add(load, load_1)
+        relu = ops.relu(add)
+        constant = ops.constant(2.0, torch.float32)
+        mul = ops.mul(relu, constant)
+        get_index_2 = self.get_index('index0')
+        store = ops.store('buf0', get_index_2, mul, None)
+        return store
+
+
+

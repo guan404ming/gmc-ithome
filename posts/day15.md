@@ -112,9 +112,9 @@ def forward(self, mm, permute, tangents_1):
 
 所以「forward 圖該輸出什麼」這個看起來很工程的問題，最後是用一條 1956 年的 max-flow min-cut 定理解掉的，個人覺得相當浪漫。整個流程視覺化出來就是下面這樣。
 
-![min-cut partitioner 在 joint graph 上比較兩種切法後選擇存 mm，節點各自歸隊成 forward 與 backward 兩張圖，最後把旋鈕轉到底變成 checkpoint](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day15/min_cut.gif)
+![一把光刀在 tanh(x @ w).sum() 的 joint graph 上先切在 tanh 右側再滑到 mm 之後，tanh 複製一份歸隊 backward，節點各自歸隊成兩張圖後跨線的邊變成 SAVED 箭頭，最後旋鈕轉到 0 變成 checkpoint、backward 開頭整段重播](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day15/min_cut.gif)
 
-*圖一：分家公證人的完整流程。上半是 `tanh(x @ w).sum()` 的 joint graph，forward 與 backward 靠資料流相連。先標出 backward 需要的值與各條邊的保存成本，一刀落在 `tanh` 右側（存 tanh）與左側（存 mm）同為 16 KB，但 pointwise 可以免費重算，於是刀往輸入方向推、`tanh` 複製一份歸隊到 backward。接著節點各自歸隊成 FORWARD 與 BACKWARD 兩張圖，中間跨線的 `mm` 與 `permute` 就是保存值。最後把旋鈕轉到底，checkpoint 只存 `primals`，backward 開頭 replay 整段 forward。*
+*圖一：分家公證人的完整流程。`tanh(x @ w).sum()` 的 joint graph 裡 forward 與 backward 只靠資料流相連，先標出 backward 需要的兩條邊與保存價格（各 16 KB，`mm` 禁止重算、`permute` 免費）。光刀先落在 `tanh` 右側試切（存 tanh），但 pointwise 重算免費，於是刀往輸入方向滑到 `mm` 之後、`tanh` 複製一份歸隊 backward。接著節點各自歸隊成 FORWARD 與 BACKWARD 兩張圖，跨線的邊 morph 成 SAVED 箭頭（`mm` 16 KB、`permute` 0 B）。最後旋鈕轉到 0，checkpoint 只存 `primals`，backward 開頭把 `mm`、`tanh` 整段 replay。*
 
 ## 轉到底就是 activation checkpointing
 

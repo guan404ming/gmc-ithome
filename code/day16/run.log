@@ -1,0 +1,126 @@
+torch 2.8.0
+
+=== 1. meta device: shape without values ===
+tensor(..., device='meta', size=(4, 8))
+shape: torch.Size([4, 8]) | dtype: torch.float32 | stride: (8, 1) | device: meta
+matmul -> torch.Size([4, 16]) meta
+item() -> RuntimeError - Tensor.item() cannot be called on meta tensors
+
+=== 2. FakeTensorMode: run ops, get fake outputs ===
+type: FakeTensor | shape: (32, 128) | dtype: torch.float32 | device: cpu
+from_tensor: FakeTensor (2, 3) cpu
+fake 65536x65536 matmul (16 GB per tensor): 0.48 ms -> (65536, 65536)
+
+=== 3. example_value inside torch.compile ===
+backend example_inputs: ['Tensor', 'Tensor']
+  placeholder   l_x_   example_value = FakeTensor(8, 16)
+  placeholder   l_w_   example_value = FakeTensor(16, 4)
+  call_function matmul example_value = FakeTensor(8, 4)
+  call_function tanh   example_value = FakeTensor(8, 4)
+
+=== 3b. TORCH_LOGS evidence: graph inputs are FakeTensor ===
+V0824 02:02:14.187000 33456 torch/_dynamo/convert_frame.py:1055] [0/0] torchdynamo start compiling f /Users/wchiu/Documents/GitHub/gmc-ithome/code/day16/fake_tensor.py:52, stack (elided 5 frames):
+V0824 02:02:14.187000 33456 torch/_dynamo/convert_frame.py:1055] [0/0]   File "/Users/wchiu/Documents/GitHub/gmc-ithome/code/day16/fake_tensor.py", line 64, in <module>
+V0824 02:02:14.187000 33456 torch/_dynamo/convert_frame.py:1055] [0/0]     torch.compile(f)(torch.randn(8, 16), torch.randn(16, 4))
+V0824 02:02:14.187000 33456 torch/_dynamo/convert_frame.py:1055] [0/0] 
+I0824 02:02:14.188000 33456 torch/_dynamo/symbolic_convert.py:3320] [0/0] Step 1: torchdynamo start tracing f /Users/wchiu/Documents/GitHub/gmc-ithome/code/day16/fake_tensor.py:52
+I0824 02:02:14.189000 33456 torch/fx/experimental/symbolic_shapes.py:3767] [0/0] create_env
+V0824 02:02:14.190000 33456 torch/_dynamo/symbolic_convert.py:1237] [0/0] [__trace_source] TRACE starts_line /Users/wchiu/Documents/GitHub/gmc-ithome/code/day16/fake_tensor.py:52 in f (f)
+V0824 02:02:14.190000 33456 torch/_dynamo/symbolic_convert.py:1237] [0/0] [__trace_source]     def f(x, w):
+V0824 02:02:14.190000 33456 torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE RESUME 0 []
+V0824 02:02:14.191000 33456 torch/_dynamo/symbolic_convert.py:1237] [0/0] [__trace_source] TRACE starts_line /Users/wchiu/Documents/GitHub/gmc-ithome/code/day16/fake_tensor.py:53 in f (f)
+V0824 02:02:14.191000 33456 torch/_dynamo/symbolic_convert.py:1237] [0/0] [__trace_source]         return torch.tanh(x @ w)
+V0824 02:02:14.191000 33456 torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_GLOBAL torch []
+V0824 02:02:14.191000 33456 torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_ATTR tanh [NullVariable, LazyVariableTracker()]
+V0824 02:02:14.192000 33456 torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_FAST x [NullVariable, LazyVariableTracker()]
+V0824 02:02:14.192000 33456 torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE LOAD_FAST w [NullVariable, LazyVariableTracker(), LazyVariableTracker()]
+V0824 02:02:14.193000 33456 torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE BINARY_OP 4 [NullVariable, LazyVariableTracker(), LazyVariableTracker(), LazyVariableTracker()]
+V0824 02:02:14.193000 33456 torch/_dynamo/variables/builder.py:3373] [0/0] wrap_to_fake L['x'] (8, 16) StatefulSymbolicContext(dynamic_sizes=[<DimDynamic.STATIC: 2>, <DimDynamic.STATIC: 2>], dynamic_strides=[<DimDynamic.INFER_STRIDE: 4>, <DimDynamic.INFER_STRIDE: 4>], constraint_sizes=[None, None], constraint_strides=[None, None], specialize_on=[[], []], view_base_context=None, tensor_source=LocalSource(local_name='x', is_input=True, dynamism=None, is_derefed_cell_contents=False), shape_env_to_source_to_symbol_cache={}) <class 'torch.Tensor'>
+V0824 02:02:14.194000 33456 torch/_dynamo/output_graph.py:2614] [0/0] create_graph_input L_x_ L['x'] FakeTensor(..., size=(8, 16)) at debug_level 0 before=False
+V0824 02:02:14.195000 33456 torch/_dynamo/variables/builder.py:3373] [0/0] wrap_to_fake L['w'] (16, 4) StatefulSymbolicContext(dynamic_sizes=[<DimDynamic.STATIC: 2>, <DimDynamic.STATIC: 2>], dynamic_strides=[<DimDynamic.INFER_STRIDE: 4>, <DimDynamic.INFER_STRIDE: 4>], constraint_sizes=[None, None], constraint_strides=[None, None], specialize_on=[[], []], view_base_context=None, tensor_source=LocalSource(local_name='w', is_input=True, dynamism=None, is_derefed_cell_contents=False), shape_env_to_source_to_symbol_cache={}) <class 'torch.Tensor'>
+V0824 02:02:14.196000 33456 torch/_dynamo/output_graph.py:2614] [0/0] create_graph_input L_w_ L['w'] FakeTensor(..., size=(16, 4)) at debug_level 0 before=False
+V0824 02:02:14.197000 33456 torch/_dynamo/output_graph.py:2462] [0/0] [__trace_call] TRACE FX call matmul from /Users/wchiu/Documents/GitHub/gmc-ithome/code/day16/fake_tensor.py:53 in f (f)
+V0824 02:02:14.197000 33456 torch/_dynamo/output_graph.py:2462] [0/0] [__trace_call]     return torch.tanh(x @ w)
+V0824 02:02:14.197000 33456 torch/_dynamo/output_graph.py:2462] [0/0] [__trace_call]                       ~~^~~
+V0824 02:02:14.197000 33456 torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE CALL 1 [NullVariable, LazyVariableTracker(), TensorVariable()]
+V0824 02:02:14.198000 33456 torch/_dynamo/output_graph.py:2462] [0/0] [__trace_call] TRACE FX call tanh from /Users/wchiu/Documents/GitHub/gmc-ithome/code/day16/fake_tensor.py:53 in f (f)
+V0824 02:02:14.198000 33456 torch/_dynamo/output_graph.py:2462] [0/0] [__trace_call]     return torch.tanh(x @ w)
+V0824 02:02:14.198000 33456 torch/_dynamo/output_graph.py:2462] [0/0] [__trace_call]            ~~~~~~~~~~^^^^^^^
+V0824 02:02:14.199000 33456 torch/_dynamo/symbolic_convert.py:1260] [0/0] [__trace_bytecode] TRACE RETURN_VALUE None [TensorVariable()]
+I0824 02:02:14.199000 33456 torch/_dynamo/symbolic_convert.py:3648] [0/0] Step 1: torchdynamo done tracing f (RETURN_VALUE)
+V0824 02:02:14.199000 33456 torch/_dynamo/symbolic_convert.py:3652] [0/0] RETURN_VALUE triggered compile
+V0824 02:02:14.200000 33456 torch/_dynamo/output_graph.py:1263] [0/0] COMPILING GRAPH due to GraphCompileReason(reason='return_value', user_stack=[<FrameSummary file /Users/wchiu/Documents/GitHub/gmc-ithome/code/day16/fake_tensor.py, line 53 in f>], graph_break=False)
+V0824 02:02:14.201000 33456 torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code] TRACED GRAPH
+V0824 02:02:14.201000 33456 torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]  ===== __compiled_fn_3_fdf8001e_0a92_4a99_b6fe_e0513f2021f6 =====
+V0824 02:02:14.201000 33456 torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]  /Users/wchiu/Documents/GitHub/gmc-ithome/.venv/lib/python3.12/site-packages/torch/fx/_lazy_graph_module.py class GraphModule(torch.nn.Module):
+V0824 02:02:14.201000 33456 torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]     def forward(self, L_x_: "f32[8, 16][16, 1]cpu", L_w_: "f32[16, 4][4, 1]cpu"):
+V0824 02:02:14.201000 33456 torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         l_x_ = L_x_
+V0824 02:02:14.201000 33456 torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         l_w_ = L_w_
+V0824 02:02:14.201000 33456 torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0824 02:02:14.201000 33456 torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]          # File: /Users/wchiu/Documents/GitHub/gmc-ithome/code/day16/fake_tensor.py:53 in f, code: return torch.tanh(x @ w)
+V0824 02:02:14.201000 33456 torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         matmul: "f32[8, 4][4, 1]cpu" = l_x_ @ l_w_;  l_x_ = l_w_ = None
+V0824 02:02:14.201000 33456 torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         tanh: "f32[8, 4][4, 1]cpu" = torch.tanh(matmul);  matmul = None
+V0824 02:02:14.201000 33456 torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         return (tanh,)
+V0824 02:02:14.201000 33456 torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code]         
+V0824 02:02:14.201000 33456 torch/_dynamo/output_graph.py:1667] [0/0] [__graph_code] 
+I0824 02:02:14.202000 33456 torch/_dynamo/output_graph.py:1842] [0/0] Step 2: calling compiler function inductor
+I0824 02:02:15.050000 33456 torch/_dynamo/output_graph.py:1847] [0/0] Step 2: done compiler function inductor
+I0824 02:02:15.053000 33456 torch/fx/experimental/symbolic_shapes.py:5238] [0/0] produce_guards
+V0824 02:02:15.054000 33456 torch/fx/experimental/symbolic_shapes.py:5458] [0/0] track_symint L['x'].size()[0] 8 None
+V0824 02:02:15.054000 33456 torch/fx/experimental/symbolic_shapes.py:5458] [0/0] track_symint L['x'].size()[1] 16 None
+V0824 02:02:15.055000 33456 torch/fx/experimental/symbolic_shapes.py:5458] [0/0] track_symint L['x'].stride()[0] 16 None
+V0824 02:02:15.055000 33456 torch/fx/experimental/symbolic_shapes.py:5458] [0/0] track_symint L['x'].stride()[1] 1 None
+V0824 02:02:15.055000 33456 torch/fx/experimental/symbolic_shapes.py:5458] [0/0] track_symint L['x'].storage_offset() 0 None
+V0824 02:02:15.056000 33456 torch/fx/experimental/symbolic_shapes.py:5458] [0/0] track_symint L['w'].size()[0] 16 None
+V0824 02:02:15.056000 33456 torch/fx/experimental/symbolic_shapes.py:5458] [0/0] track_symint L['w'].size()[1] 4 None
+V0824 02:02:15.057000 33456 torch/fx/experimental/symbolic_shapes.py:5458] [0/0] track_symint L['w'].stride()[0] 4 None
+V0824 02:02:15.057000 33456 torch/fx/experimental/symbolic_shapes.py:5458] [0/0] track_symint L['w'].stride()[1] 1 None
+V0824 02:02:15.057000 33456 torch/fx/experimental/symbolic_shapes.py:5458] [0/0] track_symint L['w'].storage_offset() 0 None
+V0824 02:02:15.058000 33456 torch/fx/experimental/symbolic_shapes.py:5679] [0/0] Skipping guard L['x'].size()[0] == 8
+V0824 02:02:15.058000 33456 torch/fx/experimental/symbolic_shapes.py:5679] [0/0] Skipping guard L['x'].size()[1] == 16
+V0824 02:02:15.059000 33456 torch/fx/experimental/symbolic_shapes.py:5679] [0/0] Skipping guard L['x'].stride()[0] == 16
+V0824 02:02:15.059000 33456 torch/fx/experimental/symbolic_shapes.py:5679] [0/0] Skipping guard L['x'].stride()[1] == 1
+V0824 02:02:15.059000 33456 torch/fx/experimental/symbolic_shapes.py:5679] [0/0] Skipping guard L['x'].storage_offset() == 0
+V0824 02:02:15.060000 33456 torch/fx/experimental/symbolic_shapes.py:5679] [0/0] Skipping guard L['w'].size()[0] == 16
+V0824 02:02:15.060000 33456 torch/fx/experimental/symbolic_shapes.py:5679] [0/0] Skipping guard L['w'].size()[1] == 4
+V0824 02:02:15.060000 33456 torch/fx/experimental/symbolic_shapes.py:5679] [0/0] Skipping guard L['w'].stride()[0] == 4
+V0824 02:02:15.061000 33456 torch/fx/experimental/symbolic_shapes.py:5679] [0/0] Skipping guard L['w'].stride()[1] == 1
+V0824 02:02:15.061000 33456 torch/fx/experimental/symbolic_shapes.py:5679] [0/0] Skipping guard L['w'].storage_offset() == 0
+V0824 02:02:15.061000 33456 torch/_dynamo/guards.py:3064] [0/0] [__guards] GUARDS:
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] 
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] TREE_GUARD_MANAGER:
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] +- RootGuardManager
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- LAMBDA_GUARD: torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None  # _dynamo/output_graph.py:633 in init_ambient_guards
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- DEFAULT_DEVICE: utils_device.CURRENT_DEVICE == None                           # _dynamo/output_graph.py:621 in init_ambient_guards
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GLOBAL_STATE: ___check_global_state()
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- TORCH_FUNCTION_MODE_STACK: ___check_torch_function_mode_stack()
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GuardManager: source=L['w'], accessed_by=FrameLocalsGuardAccessor(key='w', framelocals_idx=1)
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- TENSOR_MATCH: check_tensor(L['w'], Tensor, DispatchKeySet(CPU, BackendSelect, ADInplaceOrView, AutogradCPU), torch.float32, device=None, requires_grad=False, size=[16, 4], stride=[4, 1])  # return torch.tanh(x @ w)  # code/day16/fake_tensor.py:53 in f
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- NO_HASATTR: hasattr(L['w'], '_dynamo_dynamic_indices') == False           # return torch.tanh(x @ w)  # code/day16/fake_tensor.py:53 in f
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- NO_TENSOR_ALIASING: check_no_aliasing(L['w'], L['x'])
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GuardManager: source=L['x'], accessed_by=FrameLocalsGuardAccessor(key='x', framelocals_idx=0)
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- TENSOR_MATCH: check_tensor(L['x'], Tensor, DispatchKeySet(CPU, BackendSelect, ADInplaceOrView, AutogradCPU), torch.float32, device=None, requires_grad=False, size=[8, 16], stride=[16, 1])  # return torch.tanh(x @ w)  # code/day16/fake_tensor.py:53 in f
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- NO_HASATTR: hasattr(L['x'], '_dynamo_dynamic_indices') == False           # return torch.tanh(x @ w)  # code/day16/fake_tensor.py:53 in f
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- NO_TENSOR_ALIASING
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | +- GuardManager: source=G, accessed_by=GlobalsGuardAccessor
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | | +- GuardManager: source=G['torch'], accessed_by=DictGetItemGuardAccessor('torch')
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | | | +- ID_MATCH: ___check_obj_id(G['torch'], 4343469200)                       # return torch.tanh(x @ w)  # code/day16/fake_tensor.py:53 in f
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | | | +- GuardManager: source=G['torch'].tanh, accessed_by=GetAttrGuardAccessor(tanh)
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] | | | | +- ID_MATCH: ___check_obj_id(G['torch'].tanh, 4347356608)                  # return torch.tanh(x @ w)  # code/day16/fake_tensor.py:53 in f
+V0824 02:02:15.062000 33456 torch/_dynamo/guards.py:2863] [0/0] [__guards] 
+V0824 02:02:15.070000 33456 torch/_dynamo/guards.py:2894] [0/0] [__guards] Guard eval latency = 32.54 us
+I0824 02:02:15.071000 33456 torch/_dynamo/pgo.py:785] [0/0] put_code_state: no cache key, skipping
+I0824 02:02:15.071000 33456 torch/_dynamo/convert_frame.py:1175] [0/0] run_gc_after_compile: running gc
+V0824 02:02:15.074000 33456 torch/_dynamo/convert_frame.py:1458] skipping: inner (reason: in skipfiles, file: /Users/wchiu/Documents/GitHub/gmc-ithome/.venv/lib/python3.12/site-packages/torch/_compile.py)
+V0824 02:02:15.075000 33456 torch/_dynamo/convert_frame.py:1458] skipping: _fn (reason: in skipfiles, file: /Users/wchiu/Documents/GitHub/gmc-ithome/.venv/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py)
+  create_graph_input L_x_ L['x'] FakeTensor(..., size=(8, 16)) at debug_level 0 before=False
+  create_graph_input L_w_ L['w'] FakeTensor(..., size=(16, 4)) at debug_level 0 before=False
+
+=== 4. what a fake value cannot answer ===
+fake item() -> DataDependentOutputException
+   aten._local_scalar_dense.default
+compile data-dependent branch -> Unsupported
+Data-dependent branching
+  Explanation: Detected data-dependent branching (e.g. `if my_tensor.sum() > 0:`). Dynamo does not support tracing dynamic control flow.
+  Hint: This graph break is fundamental - it is unlikely that Dynamo will ever be able to trace through your code. Consider finding a workaround.
+  Hint: Use `torch.cond` to express dynamic control flow.

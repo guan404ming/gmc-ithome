@@ -1,0 +1,269 @@
+== case 1: chain ==
+/Users/wchiu/Documents/GitHub/gmc-ithome/.venv/lib/python3.12/site-packages/torch/_dynamo/pgo.py:525: UserWarning: dynamo_pgo force disabled by torch._inductor.config.force_disable_caches
+  warn_once(
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] BEFORE FUSION
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0: SchedulerNode(ComputedBuffer)
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.writes = [MemoryDep('buf0', c0, {c0: 1048576})]
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.unmet_dependencies = []
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.met_dependencies = [MemoryDep('arg0_1', c0, {c0: 1048576})]
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.outputs = [
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf0: ComputedBuffer
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf0.layout = FixedLayout('cpu', torch.float32, size=[1024, 1024], stride=[1024, 1])
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf0.users = [NodeUser(node=OUTPUT, can_inplace=False, is_weak=False)]
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] ]
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.group.device = cpu
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.group.iteration = ((1048576,), ())
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.sizes = ([1048576], [])
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] arg0_1_layout = FixedLayout('cpu', torch.float32, size=[1024, 1024], stride=[1024, 1])
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] buf0_layout = FixedLayout('cpu', torch.float32, size=[1024, 1024], stride=[1024, 1])
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] class op0_loop_body:
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     var_ranges = {p0: 1048576}
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     index0 = p0
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     def body(self, ops):
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         get_index = self.get_index('index0')
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         load = ops.load('arg0_1', get_index)
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         sin = ops.sin(load)
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         constant = ops.constant(1.0, torch.float32)
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         add = ops.add(sin, constant)
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         relu = ops.relu(add)
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         get_index_1 = self.get_index('index0')
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         store = ops.store('buf0', get_index_1, relu, None)
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         return store
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+I0824 02:08:51.331000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+V0824 02:08:51.333000 45573 torch/_inductor/scheduler.py:2618] [0/0] [__fusion] ===== attempting fusion (1/10): 1 nodes =====
+V0824 02:08:51.333000 45573 torch/_inductor/scheduler.py:3075] [0/0] [__fusion] fuse_nodes_once, candidates:
+V0824 02:08:51.334000 45573 torch/_inductor/scheduler.py:3077] [0/0] [__fusion]   SchedulerNode(name='op0'), Pointwise(['[1024, 1024]', 'origins=OrderedSet([relu, add, sin])'])
+V0824 02:08:51.334000 45573 torch/_inductor/scheduler.py:3272] [0/0] [__fusion] found 0 possible fusions
+V0824 02:08:51.334000 45573 torch/_inductor/scheduler.py:2625] [0/0] [__fusion] completed fusion round (1/10): fused 1 nodes into 1 nodes
+V0824 02:08:51.334000 45573 torch/_inductor/scheduler.py:2625] [0/0] [__fusion] 
+V0824 02:08:51.335000 45573 torch/_inductor/scheduler.py:2632] [0/0] [__fusion] ===== fusion complete (1 iterations) =====
+kernels: ['cpp_fused_add_relu_sin_0']
+loops: 1
+allocs: ['buf0 = empty_strided_cpu((1024, 1024), (1024, 1), torch.float32)']
+== case 2: epilogue ==
+/Users/wchiu/Documents/GitHub/gmc-ithome/.venv/lib/python3.12/site-packages/torch/_dynamo/pgo.py:525: UserWarning: dynamo_pgo force disabled by torch._inductor.config.force_disable_caches
+  warn_once(
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] BEFORE FUSION
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0: SchedulerNode(ComputedBuffer)
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.writes = [MemoryDep('buf0', c0, {c0: 1024})]
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.unmet_dependencies = []
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.met_dependencies = [MemoryDep('arg0_1', c0, {c0: 1048576})]
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.outputs = [
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf0: ComputedBuffer
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf0.layout = FixedLayout('cpu', torch.float32, size=[1024], stride=[1])
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf0.users = [NodeUser(node=SchedulerNode(name='op1'), can_inplace=True, is_weak=False)]
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] ]
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.group.device = cpu
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.group.iteration = ((1024,), (1024,))
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.sizes = ([1024], [1024])
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] arg0_1_layout = FixedLayout('cpu', torch.float32, size=[1024, 1024], stride=[1024, 1])
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] buf0_layout = FixedLayout('cpu', torch.float32, size=[1024], stride=[1])
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] class op0_loop_body:
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     var_ranges = {p0: 1024, p1: 1024}
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     index0 = 1024*p0 + p1
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     index1 = p0
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     def body(self, ops):
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         get_index = self.get_index('index0')
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         load = ops.load('arg0_1', get_index)
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         sin = ops.sin(load)
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         constant = ops.constant(1.0, torch.float32)
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         add = ops.add(sin, constant)
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         reduction = ops.reduction(torch.float32, torch.float32, 'sum', add)
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         get_index_1 = self.get_index('index1')
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         store_reduction = ops.store_reduction('buf0', get_index_1, reduction)
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         return store_reduction
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1: SchedulerNode(ComputedBuffer)
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.writes = [MemoryDep('buf1', c0, {c0: 1024})]
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.unmet_dependencies = [MemoryDep('buf0', c0, {c0: 1024})]
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.met_dependencies = []
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.outputs = [
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf1: ComputedBuffer
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf1.layout = FixedLayout('cpu', torch.float32, size=[1024], stride=[1])
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf1.users = [NodeUser(node=OUTPUT, can_inplace=False, is_weak=False)]
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] ]
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.group.device = cpu
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.group.iteration = ((1024,), ())
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.sizes = ([1024], [])
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] buf0_layout = FixedLayout('cpu', torch.float32, size=[1024], stride=[1])
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] buf1_layout = FixedLayout('cpu', torch.float32, size=[1024], stride=[1])
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] class op1_loop_body:
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     var_ranges = {p0: 1024}
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     index0 = p0
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     def body(self, ops):
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         get_index = self.get_index('index0')
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         load = ops.load('buf0', get_index)
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         relu = ops.relu(load)
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         constant = ops.constant(2.0, torch.float32)
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         mul = ops.mul(relu, constant)
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         get_index_1 = self.get_index('index0')
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         store = ops.store('buf1', get_index_1, mul, None)
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         return store
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+I0824 02:08:55.035000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+V0824 02:08:55.036000 45573 torch/_inductor/scheduler.py:2618] [0/0] [__fusion] ===== attempting fusion (1/10): 2 nodes =====
+V0824 02:08:55.036000 45573 torch/_inductor/scheduler.py:3075] [0/0] [__fusion] fuse_nodes_once, candidates:
+V0824 02:08:55.037000 45573 torch/_inductor/scheduler.py:3077] [0/0] [__fusion]   SchedulerNode(name='op0'), Reduction(['[1024]', 'sum', 'origins=OrderedSet([sum_1, add, sin])'])
+V0824 02:08:55.037000 45573 torch/_inductor/scheduler.py:3077] [0/0] [__fusion]   SchedulerNode(name='op1'), Pointwise(['[1024]', 'origins=OrderedSet([mul, relu])'])
+V0824 02:08:55.038000 45573 torch/_inductor/scheduler.py:3736] [0/0] [__loop_ordering] op0 and op1 has 4096 shared data
+V0824 02:08:55.042000 45573 torch/_inductor/scheduler.py:3272] [0/0] [__fusion] found 1 possible fusions
+V0824 02:08:55.042000 45573 torch/_inductor/scheduler.py:3736] [0/0] [__loop_ordering] op0 and op1 has 4096 shared data
+V0824 02:08:55.043000 45573 torch/_inductor/scheduler.py:3089] [0/0] [__fusion] fusing op0 with op1
+V0824 02:08:55.043000 45573 torch/_inductor/scheduler.py:2625] [0/0] [__fusion] completed fusion round (1/10): fused 2 nodes into 1 nodes
+V0824 02:08:55.043000 45573 torch/_inductor/scheduler.py:2625] [0/0] [__fusion] 
+V0824 02:08:55.044000 45573 torch/_inductor/scheduler.py:2632] [0/0] [__fusion] ===== fusion complete (1 iterations) =====
+kernels: ['cpp_fused_add_mul_relu_sin_sum_0']
+loops: 1
+allocs: ['buf0 = empty_strided_cpu((1024, ), (1, ), torch.float32)']
+== case 3: wall ==
+/Users/wchiu/Documents/GitHub/gmc-ithome/.venv/lib/python3.12/site-packages/torch/_dynamo/pgo.py:525: UserWarning: dynamo_pgo force disabled by torch._inductor.config.force_disable_caches
+  warn_once(
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] BEFORE FUSION
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0: SchedulerNode(ComputedBuffer)
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.writes = [MemoryDep('buf0', 0, {})]
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.unmet_dependencies = []
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.met_dependencies = [MemoryDep('arg0_1', c0, {c0: 1048576})]
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.outputs = [
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf0: ComputedBuffer
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf0.layout = FixedLayout('cpu', torch.float32, size=[], stride=[])
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf0.users = [NodeUser(node=SchedulerNode(name='op1'), can_inplace=False, is_weak=False)]
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] ]
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.group.device = cpu
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.group.iteration = ((), (1048576,))
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.sizes = ([], [1048576])
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] arg0_1_layout = FixedLayout('cpu', torch.float32, size=[1024, 1024], stride=[1024, 1])
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] buf0_layout = FixedLayout('cpu', torch.float32, size=[], stride=[])
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] class op0_loop_body:
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     var_ranges = {p0: 1048576}
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     index0 = p0
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     index1 = 0
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     def body(self, ops):
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         get_index = self.get_index('index0')
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         load = ops.load('arg0_1', get_index)
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         sin = ops.sin(load)
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         reduction = ops.reduction(torch.float32, torch.float32, 'sum', sin)
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         get_index_1 = self.get_index('index1')
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         store_reduction = ops.store_reduction('buf0', get_index_1, reduction)
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         return store_reduction
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1: SchedulerNode(ComputedBuffer)
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.writes = [MemoryDep('buf1', c0, {c0: 1048576})]
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.unmet_dependencies = [MemoryDep('buf0', 0, {})]
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.met_dependencies = [MemoryDep('arg0_1', c0, {c0: 1048576})]
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.outputs = [
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf1: ComputedBuffer
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf1.layout = FixedLayout('cpu', torch.float32, size=[1024, 1024], stride=[1024, 1])
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf1.users = [NodeUser(node=OUTPUT, can_inplace=False, is_weak=False)]
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] ]
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.group.device = cpu
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.group.iteration = ((1048576,), ())
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.sizes = ([1048576], [])
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] arg0_1_layout = FixedLayout('cpu', torch.float32, size=[1024, 1024], stride=[1024, 1])
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] buf0_layout = FixedLayout('cpu', torch.float32, size=[], stride=[])
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] buf1_layout = FixedLayout('cpu', torch.float32, size=[1024, 1024], stride=[1024, 1])
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] class op1_loop_body:
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     var_ranges = {p0: 1048576}
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     index0 = p0
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     index1 = 0
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     def body(self, ops):
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         get_index = self.get_index('index0')
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         load = ops.load('arg0_1', get_index)
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         sin = ops.sin(load)
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         get_index_1 = self.get_index('index1')
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         load_1 = ops.load('buf0', get_index_1)
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         add = ops.add(sin, load_1)
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         relu = ops.relu(add)
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         get_index_2 = self.get_index('index0')
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         store = ops.store('buf1', get_index_2, relu, None)
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         return store
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+I0824 02:08:55.937000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+V0824 02:08:55.937000 45573 torch/_inductor/scheduler.py:2618] [0/0] [__fusion] ===== attempting fusion (1/10): 2 nodes =====
+V0824 02:08:55.938000 45573 torch/_inductor/scheduler.py:3075] [0/0] [__fusion] fuse_nodes_once, candidates:
+V0824 02:08:55.938000 45573 torch/_inductor/scheduler.py:3077] [0/0] [__fusion]   SchedulerNode(name='op0'), Reduction(['[1024, 1024]', 'sum', 'origins=OrderedSet([sum_1, sin])'])
+V0824 02:08:55.938000 45573 torch/_inductor/scheduler.py:3077] [0/0] [__fusion]   SchedulerNode(name='op1'), Pointwise(['[1024, 1024]', 'origins=OrderedSet([relu, add, sin])'])
+V0824 02:08:55.939000 45573 torch/_inductor/scheduler.py:3736] [0/0] [__loop_ordering] op0 and op1 has 4194308 shared data
+V0824 02:08:55.939000 45573 torch/_inductor/scheduler.py:3272] [0/0] [__fusion] found 0 possible fusions
+V0824 02:08:55.940000 45573 torch/_inductor/scheduler.py:2625] [0/0] [__fusion] completed fusion round (1/10): fused 2 nodes into 2 nodes
+V0824 02:08:55.940000 45573 torch/_inductor/scheduler.py:2625] [0/0] [__fusion] 
+V0824 02:08:55.940000 45573 torch/_inductor/scheduler.py:2632] [0/0] [__fusion] ===== fusion complete (1 iterations) =====
+kernels: ['cpp_fused_add_relu_sin_sum_0']
+loops: 2
+allocs: ['buf0 = empty_strided_cpu((), (), torch.float32)', 'buf1 = empty_strided_cpu((1024, 1024), (1024, 1), torch.float32)']
+== case 4: mismatch ==
+/Users/wchiu/Documents/GitHub/gmc-ithome/.venv/lib/python3.12/site-packages/torch/_dynamo/pgo.py:525: UserWarning: dynamo_pgo force disabled by torch._inductor.config.force_disable_caches
+  warn_once(
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] BEFORE FUSION
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0: SchedulerNode(ComputedBuffer)
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.writes = [MemoryDep('buf0', c0, {c0: 1048576})]
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.unmet_dependencies = []
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.met_dependencies = [MemoryDep('arg0_1', c0, {c0: 1048576})]
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.outputs = [
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf0: ComputedBuffer
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf0.layout = FixedLayout('cpu', torch.float32, size=[1024, 1024], stride=[1024, 1])
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf0.users = [NodeUser(node=OUTPUT, can_inplace=False, is_weak=False)]
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] ]
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.group.device = cpu
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.group.iteration = ((1048576,), ())
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op0.sizes = ([1048576], [])
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] arg0_1_layout = FixedLayout('cpu', torch.float32, size=[1024, 1024], stride=[1024, 1])
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] buf0_layout = FixedLayout('cpu', torch.float32, size=[1024, 1024], stride=[1024, 1])
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] class op0_loop_body:
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     var_ranges = {p0: 1048576}
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     index0 = p0
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     def body(self, ops):
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         get_index = self.get_index('index0')
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         load = ops.load('arg0_1', get_index)
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         sin = ops.sin(load)
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         get_index_1 = self.get_index('index0')
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         store = ops.store('buf0', get_index_1, sin, None)
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         return store
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1: SchedulerNode(ComputedBuffer)
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.writes = [MemoryDep('buf1', c0, {c0: 1048576})]
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.unmet_dependencies = []
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.met_dependencies = [MemoryDep('arg0_1', c0 + 1024*c1, {c0: 1024, c1: 1024})]
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.outputs = [
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf1: ComputedBuffer
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf1.layout = FixedLayout('cpu', torch.float32, size=[1024, 1024], stride=[1024, 1])
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     buf1.users = [NodeUser(node=OUTPUT, can_inplace=False, is_weak=False)]
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] ]
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.group.device = cpu
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.group.iteration = ((1024, 1024), ())
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] op1.sizes = ([1024, 1024], [])
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] arg0_1_layout = FixedLayout('cpu', torch.float32, size=[1024, 1024], stride=[1024, 1])
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] buf1_layout = FixedLayout('cpu', torch.float32, size=[1024, 1024], stride=[1024, 1])
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] class op1_loop_body:
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     var_ranges = {p0: 1024, p1: 1024}
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     index0 = p0 + 1024*p1
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     index1 = 1024*p0 + p1
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]     def body(self, ops):
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         get_index = self.get_index('index0')
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         load = ops.load('arg0_1', get_index)
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         cos = ops.cos(load)
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         get_index_1 = self.get_index('index1')
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         store = ops.store('buf1', get_index_1, cos, None)
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion]         return store
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+I0824 02:08:56.792000 45573 torch/_inductor/debug.py:672] [0/0] [__ir_pre_fusion] 
+V0824 02:08:56.793000 45573 torch/_inductor/scheduler.py:2618] [0/0] [__fusion] ===== attempting fusion (1/10): 2 nodes =====
+V0824 02:08:56.793000 45573 torch/_inductor/scheduler.py:3075] [0/0] [__fusion] fuse_nodes_once, candidates:
+V0824 02:08:56.794000 45573 torch/_inductor/scheduler.py:3077] [0/0] [__fusion]   SchedulerNode(name='op0'), Pointwise(['[1024, 1024]', 'origins=OrderedSet([sin])'])
+V0824 02:08:56.794000 45573 torch/_inductor/scheduler.py:3077] [0/0] [__fusion]   SchedulerNode(name='op1'), Pointwise(['[1024, 1024]', 'origins=OrderedSet([clone, cos])'])
+V0824 02:08:56.794000 45573 torch/_inductor/scheduler.py:3736] [0/0] [__loop_ordering] op0 and op1 has 0 shared data
+V0824 02:08:56.795000 45573 torch/_inductor/scheduler.py:904] [0/0] [__fusion] cannot fuse op0 with op1: no shared data
+V0824 02:08:56.795000 45573 torch/_inductor/scheduler.py:3272] [0/0] [__fusion] found 0 possible fusions
+V0824 02:08:56.795000 45573 torch/_inductor/scheduler.py:2625] [0/0] [__fusion] completed fusion round (1/10): fused 2 nodes into 2 nodes
+V0824 02:08:56.795000 45573 torch/_inductor/scheduler.py:2625] [0/0] [__fusion] 
+V0824 02:08:56.795000 45573 torch/_inductor/scheduler.py:2632] [0/0] [__fusion] ===== fusion complete (1 iterations) =====
+kernels: ['cpp_fused_clone_cos_sin_0']
+loops: 2
+allocs: ['buf0 = empty_strided_cpu((1024, 1024), (1024, 1), torch.float32)', 'buf1 = empty_strided_cpu((1024, 1024), (1024, 1), torch.float32)']

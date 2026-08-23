@@ -1,0 +1,212 @@
+/Users/wchiu/Documents/GitHub/gmc-ithome/.venv/lib/python3.12/site-packages/torch/_dynamo/pgo.py:525: UserWarning: dynamo_pgo force disabled by torch._inductor.config.force_disable_caches
+  warn_once(
+W0824 02:04:12.448000 36673 torch/_inductor/debug.py:449] [0/0] model__0_inference_0 debug trace: /private/tmp/claude-502/-Users-wchiu-Documents-GitHub-gmc-ithome/473212a6-a3c3-4b5a-87f7-94e79febb13f/scratchpad/day18_debug/torch_compile_debug/run_2026_08_24_02_04_08_574717-pid_36673/torchinductor/model__0_inference_0.0
+W0824 02:04:13.241000 36673 torch/_inductor/debug.py:449] [1/0] model__1_inference_1 debug trace: /private/tmp/claude-502/-Users-wchiu-Documents-GitHub-gmc-ithome/473212a6-a3c3-4b5a-87f7-94e79febb13f/scratchpad/day18_debug/torch_compile_debug/run_2026_08_24_02_04_08_574717-pid_36673/torchinductor/model__1_inference_1.1
+torch 2.8.0 device cpu
+
+=== lowering table ===
+lowerings entries: 1713
+aten.add.Tensor                  in lowerings
+aten.relu.default                in lowerings
+aten.sum.default                 in lowerings
+aten.mm.default                  in lowerings
+aten.convolution.default         in lowerings
+aten._cdist_forward.default      in lowerings (fallback)
+lowerings[aten.relu.default] -> torch._inductor.lowering.make_pointwise.<locals>.inner
+lowerings[aten.sum.default] -> torch._inductor.lowering.sum_
+
+=== model__0_inference_0.0/ir_pre_fusion.txt ===
+op0: SchedulerNode(ComputedBuffer)
+op0.writes = [MemoryDep('buf0', c0, {c0: 32})]
+op0.unmet_dependencies = []
+op0.met_dependencies = [MemoryDep('arg0_1', c0, {c0: 32})]
+op0.outputs = [
+    buf0: ComputedBuffer
+    buf0.layout = FixedLayout('cpu', torch.float32, size=[4, 8], stride=[8, 1])
+    buf0.users = [
+        NodeUser(node=SchedulerNode(name='op1'), can_inplace=False, is_weak=False),
+        NodeUser(node=OUTPUT, can_inplace=False, is_weak=False),
+    ]
+]
+op0.group.device = cpu
+op0.group.iteration = ((32,), ())
+op0.sizes = ([32], [])
+arg0_1_layout = FixedLayout('cpu', torch.float32, size=[4, 8], stride=[8, 1])
+buf0_layout = FixedLayout('cpu', torch.float32, size=[4, 8], stride=[8, 1])
+class op0_loop_body:
+    var_ranges = {p0: 32}
+    index0 = p0
+    def body(self, ops):
+        get_index = self.get_index('index0')
+        load = ops.load('arg0_1', get_index)
+        constant = ops.constant(2.0, torch.float32)
+        mul = ops.mul(load, constant)
+        constant_1 = ops.constant(1.0, torch.float32)
+        add = ops.add(mul, constant_1)
+        relu = ops.relu(add)
+        get_index_1 = self.get_index('index0')
+        store = ops.store('buf0', get_index_1, relu, None)
+        return store
+
+
+op1: SchedulerNode(ComputedBuffer)
+op1.writes = [MemoryDep('buf1', c0, {c0: 4})]
+op1.unmet_dependencies = [MemoryDep('buf0', c0, {c0: 32})]
+op1.met_dependencies = []
+op1.outputs = [
+    buf1: ComputedBuffer
+    buf1.layout = FixedLayout('cpu', torch.float32, size=[4], stride=[1])
+    buf1.users = [NodeUser(node=OUTPUT, can_inplace=False, is_weak=False)]
+]
+op1.group.device = cpu
+op1.group.iteration = ((4,), (8,))
+op1.sizes = ([4], [8])
+buf0_layout = FixedLayout('cpu', torch.float32, size=[4, 8], stride=[8, 1])
+buf1_layout = FixedLayout('cpu', torch.float32, size=[4], stride=[1])
+class op1_loop_body:
+    var_ranges = {p0: 4, p1: 8}
+    index0 = 8*p0 + p1
+    index1 = p0
+    def body(self, ops):
+        get_index = self.get_index('index0')
+        load = ops.load('buf0', get_index)
+        reduction = ops.reduction(torch.float32, torch.float32, 'sum', load)
+        get_index_1 = self.get_index('index1')
+        store_reduction = ops.store_reduction('buf1', get_index_1, reduction)
+        return store_reduction
+
+
+
+
+=== model__1_inference_1.1/ir_pre_fusion.txt ===
+op0: SchedulerNode(ComputedBuffer)
+op0.writes = [MemoryDep('buf0', c0, {c0: 4})]
+op0.unmet_dependencies = []
+op0.met_dependencies = [MemoryDep('arg0_1', c0, {c0: 32})]
+op0.outputs = [
+    buf0: ComputedBuffer
+    buf0.layout = FixedLayout('cpu', torch.float32, size=[4], stride=[1])
+    buf0.users = [NodeUser(node=OUTPUT, can_inplace=False, is_weak=False)]
+]
+op0.group.device = cpu
+op0.group.iteration = ((4,), (8,))
+op0.sizes = ([4], [8])
+arg0_1_layout = FixedLayout('cpu', torch.float32, size=[4, 8], stride=[8, 1])
+buf0_layout = FixedLayout('cpu', torch.float32, size=[4], stride=[1])
+class op0_loop_body:
+    var_ranges = {p0: 4, p1: 8}
+    index0 = 8*p0 + p1
+    index1 = p0
+    def body(self, ops):
+        get_index = self.get_index('index0')
+        load = ops.load('arg0_1', get_index)
+        constant = ops.constant(2.0, torch.float32)
+        mul = ops.mul(load, constant)
+        constant_1 = ops.constant(1.0, torch.float32)
+        add = ops.add(mul, constant_1)
+        relu = ops.relu(add)
+        reduction = ops.reduction(torch.float32, torch.float32, 'sum', relu)
+        get_index_1 = self.get_index('index1')
+        store_reduction = ops.store_reduction('buf0', get_index_1, reduction)
+        return store_reduction
+
+
+
+
+=== model__0_inference_0.0/ir_post_fusion.txt ===
+op0: SchedulerNode(ComputedBuffer)
+op0.writes = [MemoryDep('buf0', c0, {c0: 32})]
+op0.unmet_dependencies = []
+op0.met_dependencies = [MemoryDep('arg0_1', c0, {c0: 32})]
+op0.outputs = [
+    buf0: ComputedBuffer
+    buf0.layout = FixedLayout('cpu', torch.float32, size=[4, 8], stride=[8, 1])
+    buf0.users = [
+        NodeUser(node=SchedulerNode(name='op1'), can_inplace=False, is_weak=False),
+        NodeUser(node=OUTPUT, can_inplace=False, is_weak=False),
+    ]
+]
+op0.group.device = cpu
+op0.group.iteration = ((32,), ())
+op0.sizes = ([32], [])
+arg0_1_layout = FixedLayout('cpu', torch.float32, size=[4, 8], stride=[8, 1])
+buf0_layout = FixedLayout('cpu', torch.float32, size=[4, 8], stride=[8, 1])
+class op0_loop_body:
+    var_ranges = {p0: 32}
+    index0 = p0
+    def body(self, ops):
+        get_index = self.get_index('index0')
+        load = ops.load('arg0_1', get_index)
+        constant = ops.constant(2.0, torch.float32)
+        mul = ops.mul(load, constant)
+        constant_1 = ops.constant(1.0, torch.float32)
+        add = ops.add(mul, constant_1)
+        relu = ops.relu(add)
+        get_index_1 = self.get_index('index0')
+        store = ops.store('buf0', get_index_1, relu, None)
+        return store
+
+
+op1: SchedulerNode(ComputedBuffer)
+op1.writes = [MemoryDep('buf1', c0, {c0: 4})]
+op1.unmet_dependencies = [MemoryDep('buf0', c0, {c0: 32})]
+op1.met_dependencies = []
+op1.outputs = [
+    buf1: ComputedBuffer
+    buf1.layout = FixedLayout('cpu', torch.float32, size=[4], stride=[1])
+    buf1.users = [NodeUser(node=OUTPUT, can_inplace=False, is_weak=False)]
+]
+op1.group.device = cpu
+op1.group.iteration = ((4,), (8,))
+op1.sizes = ([4], [8])
+buf0_layout = FixedLayout('cpu', torch.float32, size=[4, 8], stride=[8, 1])
+buf1_layout = FixedLayout('cpu', torch.float32, size=[4], stride=[1])
+class op1_loop_body:
+    var_ranges = {p0: 4, p1: 8}
+    index0 = 8*p0 + p1
+    index1 = p0
+    def body(self, ops):
+        get_index = self.get_index('index0')
+        load = ops.load('buf0', get_index)
+        reduction = ops.reduction(torch.float32, torch.float32, 'sum', load)
+        get_index_1 = self.get_index('index1')
+        store_reduction = ops.store_reduction('buf1', get_index_1, reduction)
+        return store_reduction
+
+
+
+
+=== model__1_inference_1.1/ir_post_fusion.txt ===
+op0: SchedulerNode(ComputedBuffer)
+op0.writes = [MemoryDep('buf0', c0, {c0: 4})]
+op0.unmet_dependencies = []
+op0.met_dependencies = [MemoryDep('arg0_1', c0, {c0: 32})]
+op0.outputs = [
+    buf0: ComputedBuffer
+    buf0.layout = FixedLayout('cpu', torch.float32, size=[4], stride=[1])
+    buf0.users = [NodeUser(node=OUTPUT, can_inplace=False, is_weak=False)]
+]
+op0.group.device = cpu
+op0.group.iteration = ((4,), (8,))
+op0.sizes = ([4], [8])
+arg0_1_layout = FixedLayout('cpu', torch.float32, size=[4, 8], stride=[8, 1])
+buf0_layout = FixedLayout('cpu', torch.float32, size=[4], stride=[1])
+class op0_loop_body:
+    var_ranges = {p0: 4, p1: 8}
+    index0 = 8*p0 + p1
+    index1 = p0
+    def body(self, ops):
+        get_index = self.get_index('index0')
+        load = ops.load('arg0_1', get_index)
+        constant = ops.constant(2.0, torch.float32)
+        mul = ops.mul(load, constant)
+        constant_1 = ops.constant(1.0, torch.float32)
+        add = ops.add(mul, constant_1)
+        relu = ops.relu(add)
+        reduction = ops.reduction(torch.float32, torch.float32, 'sum', relu)
+        get_index_1 = self.get_index('index1')
+        store_reduction = ops.store_reduction('buf0', get_index_1, reduction)
+        return store_reduction
+
+
+

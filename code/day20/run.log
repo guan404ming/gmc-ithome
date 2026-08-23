@@ -1,0 +1,111 @@
+torch 2.8.0 | device: cpu
+
+===== A: pointwise chain =====
+  ===== attempting fusion (1/10): 1 nodes =====
+  fuse_nodes_once, candidates:
+  SchedulerNode(name='op0'), Pointwise(['[1024, 1024]', 'origins=OrderedSet([sin, mul, relu, add])'])
+  found 0 possible fusions
+  completed fusion round (1/10): fused 1 nodes into 1 nodes
+  ===== fusion complete (1 iterations) =====
+  compiled kernels: ['cpp_fused_add_mul_relu_sin_0']
+  call sequence: ['cpp_fused_add_mul_relu_sin_0']
+  outer loop nests in cpp kernels: 1
+
+===== B: pointwise + row sum =====
+  ===== attempting fusion (1/10): 1 nodes =====
+  fuse_nodes_once, candidates:
+  SchedulerNode(name='op0'), Reduction(['[1024]', 'sum', 'origins=OrderedSet([sum_1, relu, add])'])
+  found 0 possible fusions
+  completed fusion round (1/10): fused 1 nodes into 1 nodes
+  ===== fusion complete (1 iterations) =====
+  compiled kernels: ['cpp_fused_add_relu_sum_0']
+  call sequence: ['cpp_fused_add_relu_sum_0']
+  outer loop nests in cpp kernels: 1
+
+===== C: softmax (row reduction + pointwise) =====
+  ===== attempting fusion (1/10): 4 nodes =====
+  fuse_nodes_once, candidates:
+  SchedulerNode(name='op0'), Reduction(['[1024]', 'max', 'origins=OrderedSet([amax])'])
+  SchedulerNode(name='op1'), Pointwise(['[1024, 1024]', 'origins=OrderedSet([exp, sub])'])
+  SchedulerNode(name='op2'), Reduction(['[1024]', 'sum', 'origins=OrderedSet([sum_1])'])
+  SchedulerNode(name='op3'), Pointwise(['[1024, 1024]', 'origins=OrderedSet([div])'])
+  cannot fuse op1 with op3: intermediate nodes between node1 & node2
+  found 1 possible fusions
+  fusing op1 with op2
+  completed fusion round (1/10): fused 4 nodes into 3 nodes
+  ===== attempting fusion (2/10): 3 nodes =====
+  fuse_nodes_once, candidates:
+  SchedulerNode(name='op0'), Reduction(['[1024]', 'max', 'origins=OrderedSet([amax])'])
+  FusedSchedulerNode(nodes=op1_op2), snodes: ["SchedulerNode(name='op1'), Pointwise(['[1024, 1024]', 'origins=OrderedSet([exp, sub])'])", "SchedulerNode(name='op2'), Reduction(['[1024]', 'sum', 'origins=OrderedSet([sum_1])'])"]
+  SchedulerNode(name='op3'), Pointwise(['[1024, 1024]', 'origins=OrderedSet([div])'])
+  found 2 possible fusions
+  fusing op0 with op1_op2
+  fusing op0_op1_op2 with op3
+  completed fusion round (2/10): fused 3 nodes into 1 nodes
+  ===== fusion complete (2 iterations) =====
+  compiled kernels: ['cpp_fused_amax_div_exp_sub_sum_0']
+  call sequence: ['cpp_fused_amax_div_exp_sub_sum_0']
+  outer loop nests in cpp kernels: 1
+
+===== D: global mean then pointwise =====
+  ===== attempting fusion (1/10): 2 nodes =====
+  fuse_nodes_once, candidates:
+  SchedulerNode(name='op0'), Reduction(['[1024, 1024]', 'sum', 'origins=OrderedSet([mean])'])
+  SchedulerNode(name='op1'), Pointwise(['[1024, 1024]', 'origins=OrderedSet([relu, sub, mean])'])
+  found 0 possible fusions
+  completed fusion round (1/10): fused 2 nodes into 2 nodes
+  ===== fusion complete (1 iterations) =====
+  compiled kernels: ['cpp_fused_mean_relu_sub_0']
+  call sequence: ['cpp_fused_mean_relu_sub_0']
+  outer loop nests in cpp kernels: 2
+
+===== E: sibling reductions over same input =====
+  ===== attempting fusion (1/10): 2 nodes =====
+  fuse_nodes_once, candidates:
+  SchedulerNode(name='op0'), Reduction(['[1024]', 'max', 'origins=OrderedSet([amax])'])
+  SchedulerNode(name='op1'), Reduction(['[1024]', 'sum', 'origins=OrderedSet([sum_1])'])
+  found 1 possible fusions
+  fusing op0 with op1
+  completed fusion round (1/10): fused 2 nodes into 1 nodes
+  ===== fusion complete (1 iterations) =====
+  compiled kernels: ['cpp_fused_amax_sum_0']
+  call sequence: ['cpp_fused_amax_sum_0']
+  outer loop nests in cpp kernels: 1
+
+===== F: sibling branches, nothing shared =====
+  ===== attempting fusion (1/10): 2 nodes =====
+  fuse_nodes_once, candidates:
+  SchedulerNode(name='op0'), Pointwise(['[1024]', 'origins=OrderedSet([relu, add])'])
+  SchedulerNode(name='op1'), Pointwise(['[1024]', 'origins=OrderedSet([sin, mul])'])
+  found 0 possible fusions
+  completed fusion round (1/10): fused 2 nodes into 2 nodes
+  ===== fusion complete (1 iterations) =====
+  compiled kernels: ['cpp_fused_add_mul_relu_sin_0']
+  call sequence: ['cpp_fused_add_mul_relu_sin_0']
+  outer loop nests in cpp kernels: 2
+
+===== G: pointwise -> mm -> pointwise =====
+  ===== attempting fusion (1/10): 3 nodes =====
+  fuse_nodes_once, candidates:
+  SchedulerNode(name='op0'), Pointwise(['[256, 256]', 'origins=OrderedSet([add])'])
+  ExternKernelSchedulerNode(name='op1')
+  SchedulerNode(name='op2'), Pointwise(['[256, 256]', 'origins=OrderedSet([relu])'])
+  found 0 possible fusions
+  completed fusion round (1/10): fused 3 nodes into 3 nodes
+  ===== fusion complete (1 iterations) =====
+  compiled kernels: ['cpp_fused_add_0', 'cpp_fused_relu_1']
+  call sequence: ['cpp_fused_add_0', 'extern_kernels.mm', 'cpp_fused_relu_1']
+  outer loop nests in cpp kernels: 2
+
+===== H: seven ops across one wall =====
+  ===== attempting fusion (1/10): 2 nodes =====
+  fuse_nodes_once, candidates:
+  SchedulerNode(name='op0'), Reduction(['[1024, 1024]', 'sum', 'origins=OrderedSet([mean, sin, mul, relu, add])'])
+  SchedulerNode(name='op1'), Pointwise(['[1024, 1024]', 'origins=OrderedSet([relu_1, sub, sin, mul, relu, add, mean])'])
+  found 0 possible fusions
+  completed fusion round (1/10): fused 2 nodes into 2 nodes
+  ===== fusion complete (1 iterations) =====
+  compiled kernels: ['cpp_fused_add_mean_mul_relu_sin_sub_0']
+  call sequence: ['cpp_fused_add_mean_mul_relu_sin_sub_0']
+  outer loop nests in cpp kernels: 2
+

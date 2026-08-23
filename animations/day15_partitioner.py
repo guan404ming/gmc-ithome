@@ -26,26 +26,6 @@ def T(txt, font_size, **kw):
     return Text(txt, font_size=font_size * 4, **kw).scale(0.25)
 
 
-def label(s, size=15, color=MUTED):
-    return T(s, font=MONO, font_size=size, color=color)
-
-
-def panel(w, h, fill=CARD, edge=EDGE, r=0.12, sw=1.5):
-    return RoundedRectangle(corner_radius=r, width=w, height=h, stroke_color=edge, stroke_width=sw, fill_color=fill, fill_opacity=1)
-
-
-def header(name, sub):
-    t = T(name, font=SANS, font_size=20, weight=BOLD, color=TXT)
-    s = T(sub, font=CJK, font_size=14, color=MUTED)
-    return VGroup(t, s).arrange(RIGHT, buff=0.22, aligned_edge=DOWN)
-
-
-def titled(w, h, name, sub, fill=CARD, edge=EDGE, sw=1.5):
-    r = panel(w, h, fill=fill, edge=edge, sw=sw)
-    hdr = header(name, sub).move_to(r.get_corner(UL) + RIGHT * 0.25 + DOWN * 0.22, aligned_edge=UL)
-    return VGroup(r, hdr)
-
-
 def pill(name, zh):
     zh_font = CJK if any("一" <= ch <= "鿿" for ch in zh) else MONO
     nm = T(name, font=SANS, font_size=17, weight=BOLD, color=BG)
@@ -56,24 +36,24 @@ def pill(name, zh):
     return VGroup(bg, t.move_to(bg))
 
 
-def rows(lines, size=12, color=TXT, buff=0.12):
-    items = []
-    for l in lines:
-        if l == "":
-            items.append(Rectangle(width=0.01, height=size * 4 / 100 * 0.25, stroke_width=0, fill_opacity=0))
-        else:
-            items.append(T(l, font=MONO, font_size=size, color=color))
-    return VGroup(*items).arrange(DOWN, aligned_edge=LEFT, buff=buff)
+def label(s, size=16, color=MUTED):
+    return T(s, font=MONO, font_size=size, color=color)
+
+
+def node(txt, accent=False):
+    t = T(txt, font=MONO, font_size=16, color=TXT)
+    r = RoundedRectangle(corner_radius=0.09, width=t.width + 0.5, height=0.55, stroke_color=ACCENT if accent else EDGE, stroke_width=2 if accent else 1.5, fill_color=ACTIVE_FILL if accent else CARD_DIM, fill_opacity=1)
+    return VGroup(r, t.move_to(r))
 
 
 def arrow(a, b, color=MUTED, w=2):
     return Arrow(a, b, buff=0.06, color=color, stroke_width=w, tip_length=0.14, max_tip_length_to_length_ratio=1, max_stroke_width_to_length_ratio=20)
 
 
-def node(txt, w=1.5, accent=False):
-    r = panel(w, 0.5, fill=ACTIVE_FILL if accent else CARD_DIM, edge=ACCENT if accent else EDGE, r=0.08, sw=2 if accent else 1.5)
-    t = T(txt, font=MONO, font_size=12, color=TXT).move_to(r)
-    return VGroup(r, t)
+def blade(p, q):
+    glow = Line(p, q, stroke_color=ACCENT, stroke_width=14, stroke_opacity=0.2)
+    core = Line(p, q, stroke_color=ACCENT, stroke_width=4)
+    return VGroup(glow, core)
 
 
 class MinCut(Scene):
@@ -90,91 +70,99 @@ class MinCut(Scene):
             self.play(FadeIn(p), FadeIn(c, shift=UP * 0.1), run_time=0.3)
             cur[0], cur[1] = p, c
 
-        joint = titled(13.2, 3.7, "JOINT GRAPH", "forward 和 backward 先畫成一張").move_to([0, 0.8, 0])
-        jlbl = label("JOINT  ·  aot_joint_graph").next_to(joint, UP, buff=0.22).align_to(joint, LEFT)
-        switch("SETUP", "共同財產清冊", "AOTAutograd 先把 forward 和 backward trace 成同一張 joint graph，中間值是兩邊共同持有的家當")
-        self.play(FadeIn(joint), FadeIn(jlbl), run_time=0.5)
-
-        Y1, Y2 = 1.55, -0.25
-        n_pr = node("primals", w=1.5).move_to([-5.2, Y1, 0])
-        n_mm = node("mm", w=1.1).move_to([-3.3, Y1, 0])
-        n_th = node("tanh", w=1.2).move_to([-1.55, Y1, 0])
-        n_sm = node("sum_1", w=1.3).move_to([-0.1, Y1, 0])
-        n_d = node("1 - tanh^2", w=1.9).move_to([1.6, Y2, 0])
-        n_ml = node("mul_1", w=1.2).move_to([3.35, Y2, 0])
-        n_gw = node("mm_1 = grad_w", w=2.0).move_to([5.2, Y2, 0])
-        fw_tag = label("forward", size=12).move_to([-5.2, 0.95, 0])
-        bw_tag = label("backward", size=12).move_to([5.2, 0.45, 0])
+        Y1, Y2 = 1.7, -0.7
+        n_pr = node("primals").move_to([-5.3, Y1, 0])
+        n_mm = node("mm").move_to([-3.6, Y1, 0])
+        n_th = node("tanh").move_to([-2.0, Y1, 0])
+        n_sm = node("sum_1").move_to([-0.4, Y1, 0])
+        n_d = node("1 - tanh^2").move_to([1.0, Y2, 0])
+        n_ml = node("mul_1").move_to([3.05, Y2, 0])
+        n_gw = node("grad_w").move_to([4.9, Y2, 0])
         a1 = arrow(n_pr[0].get_right(), n_mm[0].get_left())
         a2 = arrow(n_mm[0].get_right(), n_th[0].get_left())
         a3 = arrow(n_th[0].get_right(), n_sm[0].get_left())
         a_x = arrow(n_th[0].get_bottom(), n_d[0].get_left())
         a4 = arrow(n_d[0].get_right(), n_ml[0].get_left())
         a5 = arrow(n_ml[0].get_right(), n_gw[0].get_left())
-        self.play(FadeIn(n_pr), GrowArrow(a1), FadeIn(n_mm), GrowArrow(a2), FadeIn(n_th), GrowArrow(a3), FadeIn(n_sm), FadeIn(fw_tag), run_time=0.9)
-        self.play(GrowArrow(a_x), FadeIn(n_d), GrowArrow(a4), FadeIn(n_ml), GrowArrow(a5), FadeIn(n_gw), FadeIn(bw_tag), run_time=0.9)
+        arc = CubicBezier(n_pr[0].get_bottom() + DOWN * 0.06, [-5.3, -1.9, 0], [2.0, -2.4, 0], n_gw[0].get_bottom() + DOWN * 0.06).set_stroke(DIM, 2)
+        fw_tag = label("forward", color=DIM).next_to(n_pr, UP, buff=0.25)
+        bw_tag = label("backward", color=DIM).next_to(n_gw, UP, buff=0.25)
+
+        switch("SETUP", "共同財產清冊", "joint graph 把 forward 和 backward 畫在同一張圖上，中間沒有邊界，只靠資料流相連")
+        self.play(LaggedStart(FadeIn(n_pr), GrowArrow(a1), FadeIn(n_mm), GrowArrow(a2), FadeIn(n_th), GrowArrow(a3), FadeIn(n_sm), lag_ratio=0.15), FadeIn(fw_tag), run_time=1.1)
+        self.play(LaggedStart(GrowArrow(a_x), FadeIn(n_d), GrowArrow(a4), FadeIn(n_ml), GrowArrow(a5), FadeIn(n_gw), lag_ratio=0.15), Create(arc), FadeIn(bw_tag), run_time=1.1)
         self.wait(3.5)
 
-        switch("NEED", "backward 要什麼", "backward 靠資料流用到 tanh 和 primals_1：這些值要嘛 forward 存下來、要嘛 backward 自己重算")
+        switch("NEED", "backward 要什麼", "backward 要 tanh 算導數、要 primals_1 轉置成 permute：這兩條邊把值從 forward 拉過去")
         self.play(a_x.animate.set_color(ACCENT), Indicate(n_th, color=ACCENT, scale_factor=1.08), run_time=0.6)
+        self.play(arc.animate.set_stroke(ACCENT, 2), Indicate(n_pr, color=ACCENT, scale_factor=1.06), run_time=0.6)
         self.wait(2.5)
 
-        tag_th = label("16 KB", size=10, color=TXT).next_to(n_th, DOWN, buff=0.12).shift(LEFT * 0.55)
-        tag_mm = VGroup(label("16 KB", size=10, color=TXT), label("no recompute", size=9, color=ACCENT)).arrange(DOWN, buff=0.05).next_to(n_mm, DOWN, buff=0.12)
-        switch("COST", "邊上有價格", "min-cut 建模：保存一個值的成本是它的 bytes，mm 這種計算密集的 op 禁止重算，容量無限大")
-        self.play(FadeIn(tag_th), FadeIn(tag_mm), run_time=0.4)
+        t_th = label("16 KB", color=TXT).move_to([-0.3, 0.55, 0])
+        t_mm = label("16 KB", color=TXT).move_to([-2.88, 2.15, 0])
+        no_re = label("no recompute", color=ACCENT).next_to(n_mm, DOWN, buff=0.2).shift(LEFT * 0.35)
+        t_pm = label("permute · 0 B", color=TXT).move_to([0, -2.15, 0])
+        switch("COST", "邊上有價格", "每條邊標上保存的價格：保存成本就是 bytes，mm 計算密集禁止重算，permute 只改 metadata 免費")
+        self.play(FadeIn(t_th), FadeIn(t_mm), FadeIn(no_re), FadeIn(t_pm), arc.animate.set_stroke(MUTED, 2), run_time=0.5)
         self.wait(3.5)
 
-        cutA = DashedLine([1.2, 2.3, 0], [-0.5, -0.9, 0], color=ACCENT, stroke_width=3, dash_length=0.12)
-        cutA_l = T("cut A", font=MONO, font_size=13, color=ACCENT, weight=BOLD).next_to(cutA.get_start(), UP, buff=0.08)
-        switch("CUT A", "存 tanh", "先試切在 tanh 之後：保存 tanh，跨線的量是 16 KB")
-        self.play(Create(cutA), FadeIn(cutA_l), run_time=0.7)
+        bld = blade([-1.1, 2.2, 0], [-2.1, -1.9, 0]).shift(UP * 4.5)
+        labA = label("cut A · keep tanh · 16 KB", color=ACCENT).move_to([-1.35, 2.6, 0])
+        switch("CUT A", "光刀落下試切", "一刀落在 tanh 之後：割斷 tanh 過去的邊，forward 就得保存 tanh，帳單 16 KB")
+        self.play(bld.animate.shift(DOWN * 4.5), run_time=0.5, rate_func=rush_into)
+        self.play(Flash([-1.43, 0.8, 0], color=ACCENT, line_length=0.18, flash_radius=0.4), FadeIn(labA), run_time=0.5)
         self.wait(2.5)
 
-        cutB = DashedLine([-2.5, 2.05, 0], [-1.9, -0.85, 0], color=ACCENT, stroke_width=3, dash_length=0.12)
-        cutB_l = T("cut B", font=MONO, font_size=13, color=ACCENT, weight=BOLD).move_to([-2.6, -0.6, 0])
-        n_re = node("tanh", w=1.2, accent=True).move_to([-0.9, Y2, 0])
-        re_tag = label("recompute", size=10, color=ACCENT).next_to(n_re, DOWN, buff=0.1)
+        labB = label("cut B · keep mm · 16 KB", color=ACCENT).move_to([-3.0, 2.6, 0])
+        n_re = node("tanh", accent=True).move_to([-1.5, Y2, 0])
+        re_tag = label("recompute · free", color=ACCENT).move_to([-1.5, -1.2, 0])
         a_sv = arrow(n_mm[0].get_bottom(), n_re[0].get_left(), color=ACCENT, w=2.5)
-        a_re = arrow(n_re[0].get_right(), n_d[0].get_left(), color=MUTED)
-        switch("CUT B", "刀往輸入推", "存 mm 也是 16 KB，但 tanh 是 pointwise，重算免費還能融合：tanh 複製一份歸隊 backward")
-        self.play(Transform(cutA, cutB), Transform(cutA_l, cutB_l), FadeOut(tag_th), FadeOut(tag_mm), run_time=0.7)
-        self.play(FadeOut(a_x), TransformFromCopy(n_th, n_re), FadeIn(re_tag), run_time=0.7)
+        a_re = arrow(n_re[0].get_right(), n_d[0].get_left())
+        switch("CUT B", "刀往輸入滑", "存 mm 同樣 16 KB，但 tanh 是 pointwise、重算免費：刀滑到 mm 之後，tanh 複製一份歸隊 backward")
+        self.play(Transform(bld, blade([-2.7, 2.3, 0], [-3.0, -1.5, 0])), Transform(labA, labB), FadeOut(t_th), FadeOut(t_mm), FadeOut(no_re), run_time=0.8)
+        self.play(FadeOut(a_x), TransformFromCopy(n_th, n_re, path_arc=-PI / 3), FadeIn(re_tag), run_time=0.8)
         self.play(GrowArrow(a_sv), GrowArrow(a_re), n_mm[0].animate.set_stroke(ACCENT, width=2).set_fill(ACTIVE_FILL), run_time=0.6)
         self.wait(3.5)
 
-        joint_all = VGroup(joint, jlbl, n_pr, n_mm, n_th, n_sm, n_d, n_ml, n_gw, fw_tag, bw_tag, a1, a2, a3, a4, a5, a_sv, a_re, n_re, re_tag, cutA, cutA_l)
-        fw_card = titled(5.6, 3.9, "FORWARD", "只到切線為止").move_to([-3.85, -0.05, 0])
-        bw_card = titled(5.6, 3.9, "BACKWARD", "切線之後 + 重算").move_to([3.85, -0.05, 0])
-        fw_lbl = label("FW  ·  saves activations").next_to(fw_card, UP, buff=0.22).align_to(fw_card, LEFT)
-        bw_lbl = label("BW  ·  recomputes tanh").next_to(bw_card, UP, buff=0.22).align_to(bw_card, LEFT)
-        sv_lbl = label("SAVED", size=12).move_to([0, 1.0, 0])
-        switch("SPLIT", "節點歸隊", "沿著切線分成兩張圖：跨線的 mm 和 permute 成為 forward 的輸出、backward 的輸入")
-        self.play(FadeOut(joint_all), run_time=0.5)
-        self.play(FadeIn(fw_card), FadeIn(bw_card), FadeIn(fw_lbl), FadeIn(bw_lbl), FadeIn(sv_lbl), run_time=0.5)
-        fw_body = rows(["mm = mm(primals_1, primals_2)", "tanh = tanh(mm)", "sum_1 = sum(tanh)", "permute = permute(primals_1)", "", "return (sum_1, mm, permute)"], size=11, buff=0.14).next_to(fw_card[1], DOWN, buff=0.3).align_to(fw_card[1], LEFT)
-        fw_body[5].set_color(ACCENT)
-        bw_body = rows(["tanh = tanh(mm)", "mul = tanh * tanh", "sub = 1 - mul", "mul_1 = expand * sub", "mm_1 = mm(permute, mul_1)", "", "return (None, mm_1)"], size=11, buff=0.14).next_to(bw_card[1], DOWN, buff=0.3).align_to(bw_card[1], LEFT)
-        bw_body[0].set_color(ACCENT)
-        s1 = arrow([-1.05, 0.35, 0], [1.05, 0.35, 0], color=ACCENT, w=2.5)
-        s2 = arrow([-1.05, -0.55, 0], [1.05, -0.55, 0], color=ACCENT, w=2.5)
-        c1 = label("mm  ·  16 KB", size=11, color=ACCENT).next_to(s1, UP, buff=0.1)
-        c2 = label("permute  ·  0 B", size=11, color=ACCENT).next_to(s2, UP, buff=0.1)
-        self.play(FadeIn(fw_body, shift=RIGHT * 0.1), run_time=0.4)
-        self.play(GrowArrow(s1), FadeIn(c1), GrowArrow(s2), FadeIn(c2), run_time=0.5)
-        self.play(FadeIn(bw_body, shift=RIGHT * 0.1), run_time=0.4)
+        FX, BX = -4.2, 4.2
+        switch("SPLIT", "節點歸隊", "節點沿切線各自歸隊成兩張圖：跨線的 mm 和 permute 就是 forward 的輸出、backward 的輸入")
+        self.play(FadeOut(bld), FadeOut(labA), FadeOut(t_pm), FadeOut(re_tag), FadeOut(fw_tag), FadeOut(bw_tag), FadeOut(a1), FadeOut(a2), FadeOut(a3), FadeOut(a4), FadeOut(a5), FadeOut(a_re), run_time=0.4)
+        self.play(n_pr.animate.move_to([FX, 2.1, 0]), n_mm.animate.move_to([FX, 1.15, 0]), n_th.animate.move_to([FX, 0.2, 0]), n_sm.animate.move_to([FX, -0.75, 0]), n_re.animate.move_to([BX, 1.15, 0]), n_d.animate.move_to([BX, 0.2, 0]), n_ml.animate.move_to([BX, -0.75, 0]), n_gw.animate.move_to([BX, -1.7, 0]), run_time=1.2)
+        n_pm = node("permute").move_to([FX, -1.7, 0])
+        fw_h = label("FORWARD").move_to([FX, 2.8, 0])
+        bw_h = label("BACKWARD").move_to([BX, 2.8, 0])
+        sv_h = label("SAVED").move_to([0, 1.85, 0])
+        f_a1 = arrow(n_pr[0].get_bottom(), n_mm[0].get_top())
+        f_a2 = arrow(n_mm[0].get_bottom(), n_th[0].get_top())
+        f_a3 = arrow(n_th[0].get_bottom(), n_sm[0].get_top())
+        b_a1 = arrow(n_re[0].get_bottom(), n_d[0].get_top())
+        b_a2 = arrow(n_d[0].get_bottom(), n_ml[0].get_top())
+        b_a3 = arrow(n_ml[0].get_bottom(), n_gw[0].get_top())
+        self.play(FadeIn(fw_h), FadeIn(bw_h), FadeIn(n_pm), GrowArrow(f_a1), GrowArrow(f_a2), GrowArrow(f_a3), GrowArrow(b_a1), GrowArrow(b_a2), GrowArrow(b_a3), run_time=0.6)
+        s1 = arrow([-3.6, 1.15, 0], [3.45, 1.15, 0], color=ACCENT, w=2.5)
+        s2 = arrow([-3.0, -1.7, 0], [3.3, -1.7, 0], color=ACCENT, w=2.5)
+        c1 = label("mm · 16 KB", color=ACCENT).move_to([0, 1.45, 0])
+        c2 = label("permute · 0 B", color=ACCENT).move_to([0, -1.4, 0])
+        self.play(Transform(a_sv, s1), Transform(arc, s2), FadeIn(sv_h), FadeIn(c1), FadeIn(c2), run_time=0.9)
         self.wait(3.5)
 
-        fw_body2 = rows(["mm = mm(primals_1, primals_2)", "tanh = tanh(mm)", "sum_1 = sum(tanh)", "", "return (sum_1, primals_1, primals_2)"], size=11, buff=0.14).next_to(fw_card[1], DOWN, buff=0.3).align_to(fw_card[1], LEFT)
-        fw_body2[4].set_color(ACCENT)
-        bw_body2 = rows(["mm = mm(primals_1, primals_2)", "tanh = tanh(mm)", "mul = tanh * tanh", "sub = 1 - mul", "mul_1 = expand * sub", "permute = permute(primals_1)", "mm_1 = mm(permute, mul_1)", "", "return (None, mm_1)"], size=11, buff=0.14).next_to(bw_card[1], DOWN, buff=0.3).align_to(bw_card[1], LEFT)
-        for i in (0, 1, 5):
-            bw_body2[i].set_color(ACCENT)
-        c1b = label("primals_1  ·  16 KB", size=11, color=ACCENT).next_to(s1, UP, buff=0.1)
-        c2b = label("primals_2  ·  16 KB", size=11, color=ACCENT).next_to(s2, UP, buff=0.1)
-        switch("CHECKPOINT", "旋鈕轉到底", "checkpoint 只存 primals，backward 開頭把整段 forward 重播一遍，用計算換記憶體")
-        self.play(Transform(fw_body, fw_body2), Transform(bw_body, bw_body2), Transform(c1, c1b), Transform(c2, c2b), run_time=0.8)
+        ring = Circle(radius=0.45, stroke_color=EDGE, stroke_width=3, fill_color=CARD, fill_opacity=1).move_to([0, -2.55, 0])
+        ptr = Line(ring.get_center(), ring.get_center() + rotate_vector(UP * 0.34, 50 * DEGREES), stroke_color=ACCENT, stroke_width=4)
+        lab_min = label("1 · min-cut").next_to(ring, LEFT, buff=0.3)
+        lab_ck = label("0 · checkpoint", color=ACCENT).next_to(ring, RIGHT, buff=0.3)
+        switch("CHECKPOINT", "旋鈕轉到底", "旋鈕轉到 0 就是 checkpoint：只保存 primals，backward 開頭把整段 forward 重播一遍")
+        self.play(FadeIn(ring), FadeIn(ptr), FadeIn(lab_min), FadeIn(lab_ck), run_time=0.4)
+        self.play(Rotate(ptr, angle=-100 * DEGREES, about_point=ring.get_center()), run_time=1.0)
+        c1b = label("primals_1 · 16 KB", color=ACCENT).move_to(c1)
+        c2b = label("primals_2 · 16 KB", color=ACCENT).move_to(c2)
+        self.play(Transform(c1, c1b), Transform(c2, c2b), run_time=0.6)
+        b_mm = node("mm", accent=True).move_to([BX, 2.1, 0])
+        b_ar = arrow([BX, 1.825, 0], [BX, 1.425, 0], color=ACCENT)
+        self.play(TransformFromCopy(n_mm, b_mm, path_arc=-PI / 5), n_pm.animate.move_to([BX, -2.6, 0]), run_time=0.9)
+        rp_line = Line([5.3, 2.38, 0], [5.3, 0.87, 0], stroke_color=ACCENT, stroke_width=3)
+        rp_lab = label("replay", color=ACCENT).move_to([5.95, 1.62, 0])
+        self.play(GrowArrow(b_ar), n_pm[0].animate.set_stroke(ACCENT, width=2).set_fill(ACTIVE_FILL), Create(rp_line), FadeIn(rp_lab), run_time=0.5)
         self.wait(3.5)
 
-        switch("RULE", "切線就是記憶體帳單", "切線往 forward 靠是多存、往 backward 靠是多算：min-cut 自動找折衷，checkpoint 是極端值")
+        switch("RULE", "切線就是記憶體帳單", "切線往 forward 靠是多存、往 backward 靠是多算：min-cut 自動找折衷，checkpoint 是推到極端")
         self.wait(5.5)
