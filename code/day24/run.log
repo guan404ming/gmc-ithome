@@ -1,0 +1,36 @@
+[run 1: fresh cache dir, n=512]
+  first call (compile):   3.75 s
+  second call (cached):   1.03 ms
+  fxgraph_cache_miss=1 fxgraph_cache_hit=0
+[run 2: same cache dir, n=512]
+  first call (compile):   0.79 s
+  second call (cached):   0.73 ms
+  fxgraph_cache_miss=0 fxgraph_cache_hit=1
+[cache dir contents]
+  3b/c3b5dchwczelzcuy6vgbf56y5ycgcs5f5imcnyqztbduxgwcqnhj.py  (5 KB)
+  aotautograd/ae7ovyzz7gtp7s2l7imxtwrtul3tnk5iyrsuzsv7iofjnwjn4nfi/pvjhno2m3ulqefopwlqu7hl7wg5vewnw7m5vtofyduifarxr4ry  (42 KB)
+  b7/cb7wkkioof5pkquoovazf5u7tubwi65tnzsp6psbxafpkeexwd2w.main.cpp  (5 KB)
+  b7/cb7wkkioof5pkquoovazf5u7tubwi65tnzsp6psbxafpkeexwd2w.main.so  (53 KB)
+  dq/cdqdltvbalg3t3on3nulfqdrac4xhwkkplet7ypqfruiazm33qkc.cpp  (0 KB)
+  dq/cdqdltvbalg3t3on3nulfqdrac4xhwkkplet7ypqfruiazm33qkc.so  (49 KB)
+  fxgraph/ih/fih5y2v32k3xkqrqilffnjrj36iym4ih5wnqc46hpvqv4bwj3hgr/3wllna56mmhxckjexy2lg7vlpok73hgbfrkepzzttbtcfkf4mzv  (47 KB)
+  locks/cb7wkkioof5pkquoovazf5u7tubwi65tnzsp6psbxafpkeexwd2w.lock  (0 KB)
+  locks/cdqdltvbalg3t3on3nulfqdrac4xhwkkplet7ypqfruiazm33qkc.lock  (0 KB)
+[run 3: same cache dir, n=768]
+  first call (compile):   3.12 s
+  second call (cached):   1.51 ms
+  fxgraph_cache_miss=1 fxgraph_cache_hit=0
+[run 4: same cache dir, n=512, TORCHINDUCTOR_FX_GRAPH_CACHE=0]
+  first call (compile):   2.02 s
+  second call (cached):   1.13 ms
+  fxgraph_cache_miss=0 fxgraph_cache_hit=0
+[run 5: same cache dir, n=512, TORCHINDUCTOR_CPP_WRAPPER=1]
+  first call (compile):   3.19 s
+  second call (cached):   0.71 ms
+  fxgraph_cache_miss=1 fxgraph_cache_hit=0
+[codecache log, n=512 again]
+[run 6: TORCH_LOGS=+torch._inductor.codecache]
+  first call (compile):   0.91 s
+  second call (cached):   0.89 ms
+  fxgraph_cache_miss=0 fxgraph_cache_hit=1
+  [0/0] fx graph cache hit for key fih5y2v32k3xkqrqilffnjrj36iym4ih5wnqc46hpvqv4bwj3hgr

@@ -1,0 +1,103 @@
+✓ Initialized. View run at 
+https://modal.com/apps/guan404ming/main/ap-t3GMtK1EBmULd2MtGPRFfY
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/wchiu/Documents/GitHub/gmc-ithome/code/day23/autotune.py
+└── 🔨 Created function run.
+torch 2.8.0+cu128 | NVIDIA L40S
+max-autotune options: {'max_autotune': True, 'triton.cudagraphs': True, 'coordinate_descent_tuning': True}
+
+=== mm 2048x2048x2048 fp16 ===
+[default] compile time: 1.0 s
+    extern_kernels.mm(...)
+E0823 18:49:20.365000 7 site-packages/torch/_inductor/select_algorithm.py:2555] [0/0] Exception No valid triton configs. OutOfMemoryError: out of resource: triton_mm Required: 131072 Hardware limit:101376 Reducing block sizes or `num_stages` may help. for benchmark choice TritonTemplateCaller(/tmp/torchinductor_root/gf/cgfmsjlwoov5dnzs2lfi7uj7hypkkluo5xkw5ky3czh4znezdspt.py, ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=64, BLOCK_M=128, BLOCK_N=128, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=5, num_warps=8)
+E0823 18:49:20.414000 7 site-packages/torch/_inductor/select_algorithm.py:2555] [0/0] Exception No valid triton configs. OutOfMemoryError: out of resource: triton_mm Required: 147456 Hardware limit:101376 Reducing block sizes or `num_stages` may help. for benchmark choice TritonTemplateCaller(/tmp/torchinductor_root/ud/cudx3gbke6vfcggqgqqqrjcrp55cs42kcbjawtbewbrkgfyj7coi.py, ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=128, BLOCK_M=64, BLOCK_N=128, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=4, num_warps=4)
+E0823 18:49:20.549000 7 site-packages/torch/_inductor/select_algorithm.py:2555] [0/0] Exception No valid triton configs. OutOfMemoryError: out of resource: triton_mm Required: 131072 Hardware limit:101376 Reducing block sizes or `num_stages` may help. for benchmark choice TritonTemplateCaller(/tmp/torchinductor_root/54/c54xbszk3n3jsorw2wwmgacgi5bbtg2qwzcvhua5sfx22pnd2d2z.py, ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=128, BLOCK_M=64, BLOCK_N=64, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=5, num_warps=4)
+E0823 18:49:20.967000 7 site-packages/torch/_inductor/select_algorithm.py:2691] [0/0] Runtime error during autotuning: 
+E0823 18:49:20.967000 7 site-packages/torch/_inductor/select_algorithm.py:2691] [0/0] No valid triton configs. OutOfMemoryError: out of resource: triton_mm Required: 131072 Hardware limit:101376 Reducing block sizes or `num_stages` may help.. 
+E0823 18:49:20.967000 7 site-packages/torch/_inductor/select_algorithm.py:2691] [0/0] Ignoring this choice.
+E0823 18:49:21.079000 7 site-packages/torch/_inductor/select_algorithm.py:2691] [0/0] Runtime error during autotuning: 
+E0823 18:49:21.079000 7 site-packages/torch/_inductor/select_algorithm.py:2691] [0/0] No valid triton configs. OutOfMemoryError: out of resource: triton_mm Required: 147456 Hardware limit:101376 Reducing block sizes or `num_stages` may help.. 
+E0823 18:49:21.079000 7 site-packages/torch/_inductor/select_algorithm.py:2691] [0/0] Ignoring this choice.
+E0823 18:49:21.267000 7 site-packages/torch/_inductor/select_algorithm.py:2691] [0/0] Runtime error during autotuning: 
+E0823 18:49:21.267000 7 site-packages/torch/_inductor/select_algorithm.py:2691] [0/0] No valid triton configs. OutOfMemoryError: out of resource: triton_mm Required: 131072 Hardware limit:101376 Reducing block sizes or `num_stages` may help.. 
+E0823 18:49:21.267000 7 site-packages/torch/_inductor/select_algorithm.py:2691] [0/0] Ignoring this choice.
+AUTOTUNE mm(2048x2048, 2048x2048)
+strides: [2048, 1], [2048, 1]
+dtypes: torch.float16, torch.float16
+  mm 0.0848 ms 100.0% 
+  triton_mm_16 0.0870 ms 97.4% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=32, BLOCK_M=128, BLOCK_N=128, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=3, num_warps=4
+  triton_mm_17 0.0932 ms 91.0% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=64, BLOCK_M=128, BLOCK_N=128, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=3, num_warps=4
+  triton_mm_9 0.1004 ms 84.5% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=32, BLOCK_M=64, BLOCK_N=128, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=3, num_warps=4
+  triton_mm_11 0.1014 ms 83.6% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=64, BLOCK_M=64, BLOCK_N=128, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=3, num_warps=4
+  triton_mm_15 0.1075 ms 78.9% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=32, BLOCK_M=128, BLOCK_N=128, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=2, num_warps=8
+  triton_mm_10 0.1095 ms 77.5% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=32, BLOCK_M=64, BLOCK_N=128, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=4, num_warps=8
+  triton_mm_14 0.1149 ms 73.8% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=32, BLOCK_M=128, BLOCK_N=64, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=4, num_warps=8
+  triton_mm_13 0.1198 ms 70.8% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=32, BLOCK_M=128, BLOCK_N=64, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=3, num_warps=4
+  triton_mm_7 0.1239 ms 68.4% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=64, BLOCK_M=64, BLOCK_N=64, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=3, num_warps=8
+SingleProcess AUTOTUNE benchmarking takes 0.7160 seconds and 2.7616 seconds precompiling for 20 choices
+[max-autotune] compile time: 3.8 s
+    extern_kernels.mm(...)
+eager           0.0697 ms
+default         0.0699 ms
+max-autotune    0.0700 ms
+
+=== mm 16x4096x4096 fp16 ===
+[default] compile time: 0.1 s
+    extern_kernels.mm(...)
+E0823 18:49:22.654000 7 site-packages/torch/_inductor/select_algorithm.py:2691] [0/0] Runtime error during autotuning: 
+E0823 18:49:22.654000 7 site-packages/torch/_inductor/select_algorithm.py:2691] [0/0] No valid triton configs. OutOfMemoryError: out of resource: triton_mm Required: 110592 Hardware limit:101376 Reducing block sizes or `num_stages` may help.. 
+E0823 18:49:22.654000 7 site-packages/torch/_inductor/select_algorithm.py:2691] [0/0] Ignoring this choice.
+AUTOTUNE mm(16x4096, 4096x4096)
+strides: [4096, 1], [4096, 1]
+dtypes: torch.float16, torch.float16
+  triton_mm_35 0.0655 ms 100.0% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=64, BLOCK_M=16, BLOCK_N=128, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=5, num_warps=8
+  triton_mm_30 0.0666 ms 98.5% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=64, BLOCK_M=16, BLOCK_N=128, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=3, num_warps=4
+  mm 0.0676 ms 97.0% 
+  triton_mm_26 0.0676 ms 97.0% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=64, BLOCK_M=16, BLOCK_N=64, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=3, num_warps=4
+  triton_mm_29 0.0676 ms 97.0% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=32, BLOCK_M=16, BLOCK_N=128, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=4, num_warps=8
+  triton_mm_20 0.0696 ms 94.1% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=128, BLOCK_M=16, BLOCK_N=32, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=2, num_warps=2
+  triton_mm_21 0.0696 ms 94.1% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=32, BLOCK_M=16, BLOCK_N=64, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=5, num_warps=4
+  triton_mm_27 0.0696 ms 94.1% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=128, BLOCK_M=16, BLOCK_N=64, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=5, num_warps=4
+  triton_mm_33 0.0717 ms 91.4% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=32, BLOCK_M=16, BLOCK_N=64, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=4, num_warps=4
+  triton_mm_23 0.0727 ms 90.1% ACC_TYPE='tl.float32', ALLOW_TF32=False, BLOCK_K=128, BLOCK_M=16, BLOCK_N=32, EVEN_K=True, GROUP_M=8, USE_FAST_ACCUM=False, num_stages=5, num_warps=2
+SingleProcess AUTOTUNE benchmarking takes 0.6576 seconds and 0.5891 seconds precompiling for 18 choices
+[max-autotune] compile time: 1.6 s
+    triton_tem_fused_mm_0.run(...)
+eager           0.0295 ms
+default         0.0296 ms
+max-autotune    0.0200 ms
+
+=== mm + relu epilogue 2048x2048x2048 ===
+[default] compile time: 0.3 s
+    extern_kernels.mm(...)
+    triton_poi_fused_relu_0.run(...)
+V0823 18:49:23.668000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:77] [0/0]   CACHED
+V0823 18:49:23.668000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:242] [0/0] = Do coordinate descent tuning for triton_ =
+V0823 18:49:23.668000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:243] [0/0] Baseline Config XBLOCK: 1024, num_warps: 4, num_ctas: 1, num_stages: 1, maxnreg: None, baseline timing 0.034816
+V0823 18:49:23.669000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:214] [0/0] Try config XBLOCK: 2048, num_warps: 4, num_ctas: 1, num_stages: 1, maxnreg: None
+V0823 18:49:23.759000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:214] [0/0] Try config XBLOCK: 512, num_warps: 4, num_ctas: 1, num_stages: 1, maxnreg: None
+V0823 18:49:23.847000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:214] [0/0] Try config XBLOCK: 1024, num_warps: 8, num_ctas: 1, num_stages: 1, maxnreg: None
+V0823 18:49:23.934000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:214] [0/0] Try config XBLOCK: 1024, num_warps: 2, num_ctas: 1, num_stages: 1, maxnreg: None
+V0823 18:49:24.023000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:293] [0/0] Improve from XBLOCK: 1024, num_warps: 4, num_ctas: 1, num_stages: 1, maxnreg: None 0.034816 -> XBLOCK: 1024, num_warps: 4, num_ctas: 1, num_stages: 1, maxnreg: None 0.034816, 1.000x
+[max-autotune] compile time: 1.5 s
+    triton_tem_fused_mm_relu_0.run(...)
+eager           0.0704 ms
+default         0.0716 ms
+max-autotune    0.0731 ms
+
+=== coordinate descent tuning: softmax ===
+V0823 18:49:25.944000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:77]   CACHED
+V0823 18:49:25.944000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:242] = Do coordinate descent tuning for triton_red_fused__softmax_add_0 =
+V0823 18:49:25.945000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:243] Baseline Config XBLOCK: 8, R0_BLOCK: 512, num_warps: 16, num_ctas: 1, num_stages: 1, maxnreg: None, baseline timing 0.013312
+V0823 18:49:25.945000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:214] Try config XBLOCK: 16, R0_BLOCK: 512, num_warps: 16, num_ctas: 1, num_stages: 1, maxnreg: None
+V0823 18:49:26.162000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:214] Try config XBLOCK: 4, R0_BLOCK: 512, num_warps: 16, num_ctas: 1, num_stages: 1, maxnreg: None
+V0823 18:49:26.331000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:214] Try config XBLOCK: 8, R0_BLOCK: 1024, num_warps: 16, num_ctas: 1, num_stages: 1, maxnreg: None
+V0823 18:49:26.536000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:214] Try config XBLOCK: 8, R0_BLOCK: 256, num_warps: 16, num_ctas: 1, num_stages: 1, maxnreg: None
+V0823 18:49:26.683000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:214] Try config XBLOCK: 8, R0_BLOCK: 512, num_warps: 32, num_ctas: 1, num_stages: 1, maxnreg: None
+V0823 18:49:26.848000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:214] Try config XBLOCK: 8, R0_BLOCK: 512, num_warps: 8, num_ctas: 1, num_stages: 1, maxnreg: None
+V0823 18:49:27.052000 7 site-packages/torch/_inductor/runtime/coordinate_descent_tuner.py:293] Improve from XBLOCK: 8, R0_BLOCK: 512, num_warps: 16, num_ctas: 1, num_stages: 1, maxnreg: None 0.013312 -> XBLOCK: 8, R0_BLOCK: 512, num_warps: 16, num_ctas: 1, num_stages: 1, maxnreg: None 0.013312, 1.000x
+Stopping app - local entrypoint completed.
+compile time: 2.0 s
+✓ App completed. View run at 
+https://modal.com/apps/guan404ming/main/ap-t3GMtK1EBmULd2MtGPRFfY

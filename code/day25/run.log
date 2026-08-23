@@ -1,0 +1,42 @@
+✓ Initialized. View run at 
+https://modal.com/apps/guan404ming/main/ap-57JAVwdfv98pL9dHRhHVIi
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/wchiu/Documents/GitHub/gmc-ithome/code/day25/cudagraph.py
+└── 🔨 Created function run.
+torch 2.8.0+cu128 | NVIDIA L40S
+
+=== 32 x Linear(256, 256) + ReLU, batch=8 ===
+/usr/local/lib/python3.12/site-packages/torch/_inductor/compile_fx.py:282: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+eager            1.124 ms (+/- 0.008)
+compile default  0.960 ms (+/- 0.019)
+reduce-overhead  0.119 ms (+/- 0.003)
+default vs eager          1.17x
+reduce-overhead vs eager  9.45x
+reduce-overhead vs default 8.07x
+
+=== same model, batch=8192 ===
+eager            2.228 ms (+/- 0.002)
+compile default  1.585 ms (+/- 0.003)
+reduce-overhead  1.567 ms (+/- 0.004)
+reduce-overhead vs default 1.01x
+
+=== reduce-overhead outputs live in the graph pool ===
+release output, call again: ptr 22480592838656 -> 22480592830464, same: False
+hold output alive, call again: ptr 22480592830464 -> 22480592830464, same: True
+
+=== skip reason: input mutation ===
+W0823 18:47:12.134000 7 site-packages/torch/_inductor/cudagraph_utils.py:201] [__perf_hints] skipping cudagraphs due to mutated inputs (1 instances). Found from : 
+W0823 18:47:12.134000 7 site-packages/torch/_inductor/cudagraph_utils.py:201] [__perf_hints]    File "/root/cudagraph.py", line 90, in mutate
+W0823 18:47:12.134000 7 site-packages/torch/_inductor/cudagraph_utils.py:201] [__perf_hints]     x.add_(1)
+W0823 18:47:12.134000 7 site-packages/torch/_inductor/cudagraph_utils.py:201] [__perf_hints] 
+
+=== manual torch.cuda.CUDAGraph capture / replay ===
+replay result matches eager: True
+eager 64 launches  1.116 ms
+graph replay       0.113 ms
+replay vs eager    9.90x
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/guan404ming/main/ap-57JAVwdfv98pL9dHRhHVIi
