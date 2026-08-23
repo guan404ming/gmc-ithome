@@ -1,8 +1,8 @@
-# Day 10 | Graph Break 不是失敗，是斷點續傳
+# Day 10 | Dynamo 的破「圖」重接，Graph Break and Resume！
 
 ## 前言
 
-Day 4 的結尾留過一句話，Graph Break 不是查表失敗，而是 handler 做到一半主動舉手。前面幾天我們把「乖乖翻完」的路整條走通了，今天回頭走那條一直沒走的岔路。什麼樣的程式碼會踩到斷點、一個函式怎麼被切成三段、resume function 怎麼做到「從函式中間開始跑」，以及為什麼深層函式裡的一個 `print`，會劈開最外層的圖。
+在 Day 4 InstructionTranslator 的結尾有一句話說：Graph Break 不是查表失敗，而是 handler 做到一半主動舉手。前面幾天我們把「乖乖翻完」的路整條走通了，今天回頭走那條一直沒走的岔路。什麼樣的程式碼會踩到斷點、一個函式怎麼被切成三段、resume function 怎麼做到「從函式中間開始跑」，以及為什麼深層函式裡的一個 `print`，會劈開最外層的圖。
 
 正文開始！
 
@@ -10,12 +10,14 @@ Day 4 的結尾留過一句話，Graph Break 不是查表失敗，而是 handler
 
 Day 4 講過判斷發生的位置。`dispatch_table` 對幾乎每條 opcode 都有同名 handler，查表這一步不會落空。真正斷開的時機，是 handler 接下指令、看了運算元，發現這個操作沒辦法只靠符號值走下去。所以「會不會斷」不是指令說了算，而是運算元說了算。同一條 `CALL`，呼叫 `torch.sin` 進圖、呼叫自己寫的函式被 inline、呼叫 `print` 就斷。實務上最常撞到的大概是下面這幾類。
 
-| 類別 | 例子 | 為什麼走不下去 |
-| --- | --- | --- |
-| 依賴資料的控制流 | `if x.sum() > 0:` | 要有真值才知道往哪跳，符號 Tensor 沒有真假 |
-| 把 Tensor 值抽成 Python 純量 | `.item()`、`int(t)`、`.tolist()` | 值要離開圖回到 Python 世界，預設不追 |
-| 有 side effect 的 builtin | `print`、`input` | 效果發生在真實世界，圖裡建不了模 |
-| 沒有符號模型的 C 函式 | 第三方套件的 C extension | 進不去 bytecode，也沒有對應的 handler |
+
+| 類別                      | 例子                             | 為什麼走不下去                     |
+| ----------------------- | ------------------------------ | --------------------------- |
+| 依賴資料的控制流                | `if x.sum() > 0:`              | 要有真值才知道往哪跳，符號 Tensor 沒有真假   |
+| 把 Tensor 值抽成 Python 純量  | `.item()`、`int(t)`、`.tolist()` | 值要離開圖回到 Python 世界，預設不追      |
+| 有 side effect 的 builtin | `print`、`input`                | 效果發生在真實世界，圖裡建不了模            |
+| 沒有符號模型的 C 函式            | 第三方套件的 C extension             | 進不去 bytecode，也沒有對應的 handler |
+
 
 第一類我們在 Day 3 就親眼看過了，`generic_jump` 發現 stack 頂端是 `TensorVariable`，丟出 `attempted to jump with TensorVariable()`。第二類打開 `torch._dynamo.config.capture_scalar_outputs` 之後 `.item()` 不再斷，代價留到明天 Symbolic Shapes 那篇再算。第三類就是今天的主角。第四類對應 Day 5 講過的 `trace_rules.py` 名單，名單上要跳過的函式，呼叫它就是潛在的斷點。
 
@@ -193,7 +195,6 @@ User Stack:
 Break 不會報錯，只會默默變慢，所以我們得主動去抓，工具有三件。
 
 - `torch.compile(f, fullgraph=True)`：把所有 break 升級成錯誤。前面說過 `break_graph_if_unsupported` 在這個模式下不收拾、直接往上丟，實跑就是一個 `Unsupported` 例外，訊息跟 log 裡的一模一樣。
-
   ```
   Unsupported : Failed to trace builtin operator
     Explanation: Dynamo does not know how to trace builtin operator `print`
@@ -222,3 +223,4 @@ Break 不會報錯，只會默默變慢，所以我們得主動去抓，工具�
 - [torch/_dynamo/symbolic_convert.py 的 break_graph_if_unsupported 與 SpeculationLog（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/symbolic_convert.py)
 - [Dynamo Deep-Dive（PyTorch 官方文件）](https://pytorch.org/docs/stable/torch.compiler_dynamo_deepdive.html)
 - [torch.compile 疑難排解的 Graph Breaks 一節](https://pytorch.org/docs/stable/torch.compiler_troubleshooting.html)
+
