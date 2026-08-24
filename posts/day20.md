@@ -12,9 +12,9 @@
 
 昨天點過名的兩種融法，今天先把差別講清楚。**垂直融合**融的是 producer 和 consumer，下游 node 讀的正是上游 node 剛寫出的 buffer，融在一起之後，值直接在暫存器裡交棒，中間那顆 buffer 從此不存在。**水平融合**融的是兄弟，兩個 node 誰也不吃誰的輸出，但讀同一份 input，而且 loop 範圍相同，併進同一個 kernel 之後，input 只需要從記憶體讀一次。
 
-判斷的入口是 `Scheduler.can_fuse`。它先擋掉昨天照過面的那幾種硬性不合格，extern kernel 不融、device 要相同、融了不能把依賴圖繞成 cycle。接著算 `score_fusion_memory`，估這一對共享了多少讀寫。最後分流，兩個 node 之間有依賴就走 `can_fuse_vertical`，沒有就走 `can_fuse_horizontal`，並且各自再問 backend 一次，因為 loop 縫不縫得起來只有負責 codegen 的人知道。
+判斷的入口是 `Scheduler.can_fuse`。它先擋掉昨天照過面的那幾種硬性不合格，extern kernel 不融、device 要相同、融了不能把依賴圖繞成 cycle。接著估這一對共享了多少讀寫。最後分流，兩個 node 之間有依賴就走 `can_fuse_vertical`，沒有就走 `can_fuse_horizontal`，並且各自再問 backend 一次，因為 loop 縫不縫得起來只有負責 codegen 的人知道。
 
-配對本身也有誘因門檻。融合的收益全部來自省下的記憶體流量，所以 `get_possible_fusions` 只把有共享資料的 node 湊成候選，一對兄弟要是什麼都不共享，連上場的資格都沒有。昨天看過的 `fuse_nodes` 外圈就拿著這些判準一輪一輪融到收斂為止，今天要做的就是把每一關的判準攤開來看。
+配對本身也有誘因門檻。融合的收益全部來自省下的記憶體流量，所以配對階段只把有共享資料的 node 湊成候選，一對兄弟要是什麼都不共享，連上場的資格都沒有。昨天看過的 `fuse_nodes` 外圈就拿著這些判準一輪一輪融到收斂為止，今天要做的就是把每一關的判準攤開來看。
 
 ## 用對照組把邊界畫出來
 
@@ -83,19 +83,19 @@ def wall(x):
 
 ## 牆的其他幾種長相
 
-reduction 之外還有幾面牆。第一面是 extern kernel。matmul、convolution 這類 op 調的是外部程式庫或預先寫好的 template，Inductor 手上根本沒有它的 loop 可以縫。拿 `relu((x + 1) @ w)` 一試，`mm` 在候選名單裡是 `ExternKernelSchedulerNode`，前後兩段 pointwise 只能各自成家。
+reduction 之外還有幾面牆。第一面是 extern kernel。matmul、convolution 這類 op 調的是外部程式庫或預先寫好的 template，Inductor 手上根本沒有它的 loop 可以縫。拿 `relu((x + 1) @ w)` 一試，`mm` 被包成一個呼叫外部 kernel 的節點進了候選名單，前後兩段 pointwise 只能各自成家。
 
     call sequence: ['cpp_fused_add_0', 'extern_kernels.mm', 'cpp_fused_relu_1']
 
-想把 matmul 前後的 pointwise 也吃進來，得換一條路，讓 Inductor 用 Triton template 自己生 matmul，再把 pointwise 當 epilogue 縫上去，`can_fuse` 開頭那幾個 `is_template` 的分支處理的就是這件事，這裡先點到為止。
+想把 matmul 前後的 pointwise 也吃進來，得換一條路，讓 Inductor 用 Triton template 自己生 matmul，再把 pointwise 當 epilogue 縫上去，`can_fuse` 開頭有幾個專門為 template 開的分支，處理的就是這件事，這裡先點到為止。
 
 第二面是 layout。共享同一個 buffer 不代表共享了資料，兩個 node 要是用不同的 stride 去讀同一塊記憶體，例如一個順著讀、一個轉置著讀，索引式對不上，省流量就無從談起，`can_fuse` 會留下 `no shared data due to indexing mismatch` 的紀錄。Triton 那邊還會再檢查一次 tiling，兩個 node 各自選好的分塊方式拼不起來，一樣作罷。
 
-第三面牆是 Inductor 自己砌的。融合不是越多越好，一顆 kernel 同時算的東西越多，活著的中間值就越多，而它們全都佔著暫存器，融過頭 register 溢出到慢速記憶體，省下的頻寬全數賠回去。所以 [`choices.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/choices.py) 裡有幾條明著踩剎車的規則，單顆 kernel 超過 `max_fusion_size` 個 node 直接喊停，融合會推高 peak memory 的擋下，兩個 node 在原圖裡離得太遠的也擋下，免得中間值的生命週期被拉得老長。另外 `can_fuse` 回 True 也只是及格，同一輪裡誰先融，還是由昨天看過的 `score_fusion` 依省下的流量和距離排序。
+第三面牆是 Inductor 自己砌的。融合不是越多越好，一顆 kernel 同時算的東西越多，活著的中間值就越多，而它們全都佔著暫存器，融過頭 register 溢出到慢速記憶體，省下的頻寬全數賠回去。所以 [`choices.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/choices.py) 裡有幾條明著踩剎車的規則，單顆 kernel 融進的 node 數超過上限直接喊停，融合會推高 peak memory 的擋下，兩個 node 在原圖裡離得太遠的也擋下，免得中間值的生命週期被拉得老長。另外 `can_fuse` 回 True 也只是及格，同一輪裡誰先融，還是由昨天看過的 `score_fusion` 依省下的流量和距離排序。
 
 ## 從 output_code 判讀融合結果
 
-最後整理一份實務小抄。kernel 的名字本身就是融合報告，`cpp_fused_add_relu_sum_0` 或 GPU 上的 `triton_per_fused_...`，名字裡的 op 清單就是被融進來的 origins，一個名字對應一顆 kernel。想數 kernel 就看 wrapper 裡的 call 順序，每一行呼叫就是一次 launch，中間插著的 `extern_kernels.*` 是編譯器管不到的地界。而想知道「為什麼沒融」，開 `TORCH_LOGS="fusion"`，`WhyNoFuse` 會把每一次失敗的理由印給你，從 loop 對不上到嫌你們離太遠都有。唯一要記得的是 CPU 的 cpp backend 會把多個沒融合的 node 包進同一個函式，數函式會數錯，得看 loop nest 或直接看 fusion log 的收斂結果。
+最後整理一份實務小抄。kernel 的名字本身就是融合報告，`cpp_fused_add_relu_sum_0` 或 GPU 上的 `triton_per_fused_...`，名字裡的 op 清單就是被融進來的 origins，一個名字對應一顆 kernel。想數 kernel 就看 wrapper 裡的 call 順序，每一行呼叫就是一次 launch，中間插著的 `extern_kernels.*` 是編譯器管不到的地界。而想知道「為什麼沒融」，開 `TORCH_LOGS="fusion"`，每一次失敗的理由都會印給你，從 loop 對不上到嫌你們離太遠都有。唯一要記得的是 CPU 的 cpp backend 會把多個沒融合的 node 包進同一個函式，數函式會數錯，得看 loop nest 或直接看 fusion log 的收斂結果。
 
 ## 結語
 

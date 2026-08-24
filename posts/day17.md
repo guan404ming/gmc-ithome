@@ -22,16 +22,16 @@
 
 ## 從 compile_fx 走一遍管線
 
-Inductor 的正門在 [`torch/_inductor/compile_fx.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/compile_fx.py) 的 `compile_fx`。翻原始碼會發現一件有趣的事，AOTAutograd 其實是被它呼叫的。`compile_fx` 拿到 Dynamo 的圖後先跑一輪 pre-grad passes，接著把 `fw_compiler` 和 `bw_compiler` 交給 `aot_autograd`，讓它展開出兩張 ATen 圖，再各自送回 `compile_fx_inner` 手上。所以 Day 2 說 Inductor 是第三站，是使用者視角的說法，以呼叫關係來說是 Inductor 把第二站包了起來。
+Inductor 的正門在 [`torch/_inductor/compile_fx.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/compile_fx.py) 的 `compile_fx`。翻原始碼會發現一件有趣的事，AOTAutograd 其實是被它呼叫的。`compile_fx` 拿到 Dynamo 的圖後先跑一輪 pre-grad passes，接著把後續的編譯工作打包成 callback 交給 AOTAutograd，讓它展開出兩張 ATen 圖，再各自送回 Inductor 手上。所以 Day 2 說 Inductor 是第三站，是使用者視角的說法，以呼叫關係來說是 Inductor 把第二站包了起來。
 
-從 `compile_fx_inner` 開始，一張圖固定走四步。
+從這裡開始，一張圖固定走四步。
 
 1. **graph passes**：還在 FX 層，joint graph passes 與 post-grad passes 做 pattern matching 式的最後整理。
-2. **lowering**：`GraphLowering.run()` 逐 node 走訪 FX Graph，查一張對照表把每個 ATen op 翻成上面說的 loop-level IR。這張表在 [`lowering.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/lowering.py)，實測有 1713 條 entry。
-3. **scheduling**：[`scheduler.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/scheduler.py) 的 `Scheduler` 接手所有 IR node，決定執行順序、哪些 node 融成同一個 kernel、哪些 buffer 可以重用。
+2. **lowering**：逐 node 走訪 FX Graph，查一張對照表把每個 ATen op 翻成上面說的 loop-level IR。這張表在 [`lowering.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/lowering.py)，實測有 1713 條 entry。
+3. **scheduling**：[`scheduler.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/scheduler.py) 接手所有 IR node，決定執行順序、哪些 node 融成同一個 kernel、哪些 buffer 可以重用。
 4. **codegen**：每一組融合好的 node 交給後端生出 kernel 原始碼，GPU 上生 Triton，CPU 上生 C++ 加 OpenMP，最後編譯、載入、寫進快取。
 
-四步走完，`graph.compile_to_module()` 把生成的原始碼寫進快取目錄、丟給編譯器，組裝成一個可以直接呼叫的 Python module，交還給 Dynamo 改寫後的 bytecode 使用。快取這件事做得很徹底，實驗時 log 印出 `Output code written to: .../torchinductor_wchiu/...` 這樣的路徑，生成的程式碼以內容的 hash 命名存在磁碟上。第二次跑同一個實驗時，整張圖直接命中 FX graph cache，連中間產物都不再產生，這也是為什麼同一個模型第二次編譯會快很多。
+四步走完，生成的原始碼被寫進快取目錄、丟給編譯器，組裝成一個可以直接呼叫的 Python module，交還給 Dynamo 改寫後的 bytecode 使用。快取這件事做得很徹底，實驗時 log 印出 `Output code written to: .../torchinductor_wchiu/...` 這樣的路徑，生成的程式碼以內容的 hash 命名存在磁碟上。第二次跑同一個實驗時，整張圖直接命中 FX graph cache，連中間產物都不再產生，這也是為什麼同一個模型第二次編譯會快很多。
 
 整個流程用動畫走一遍。
 
@@ -104,7 +104,7 @@ def call(args):
     return (buf0, )
 ```
 
-kernel 只是零件，wrapper 是組裝說明書。它檢查輸入的 size 和 stride、配置輸出 buffer、按正確順序呼叫每一個 kernel、及時 `del` 釋放引用。Day 9 那條 bytecode 裡的 `__compiled_fn` 被呼叫之後，最後真正執行的就是這個 `call`。真實模型會生出幾十個 kernel，wrapper 就是串起它們的那條主線。另外 wrapper 預設生成 Python，好讀好改，但也有 `torch._inductor.config.cpp_wrapper` 這個開關可以改生 C++ 版本，把 Python 呼叫的 overhead 也省掉。
+kernel 只是零件，wrapper 是組裝說明書。它檢查輸入的 size 和 stride、配置輸出 buffer、按正確順序呼叫每一個 kernel、及時 `del` 釋放引用。Day 9 那條 bytecode 裡的 `__compiled_fn` 被呼叫之後，最後真正執行的就是這個 `call`。真實模型會生出幾十個 kernel，wrapper 就是串起它們的那條主線。另外 wrapper 預設生成 Python，好讀好改，但也有開關可以改生 C++ 版本，把 Python 呼叫的 overhead 也省掉。
 
 中間產物也留得下痕跡。設環境變數 `TORCH_COMPILE_DEBUG=1` 重跑一次，Inductor 會把每一站的產物寫進 `torch_compile_debug/` 目錄，實測列出來有 `fx_graph_readable.py`、`ir_pre_fusion.txt`、`ir_post_fusion.txt`、`output_code.py` 這些檔案，正好對應進廠的 FX Graph、scheduler 前後的 IR、最終程式碼。打開 `ir_pre_fusion.txt`，loop-level IR 就在裡面（節錄）。
 
@@ -146,7 +146,7 @@ GPU 那一側還有一個值得記下的選擇。Inductor 生的不是 CUDA C �
 
 ## 結語
 
-把今天的地圖收攏一下。Inductor 從 AOTAutograd 手上接過純函數式、metadata 齊全的 ATen 圖，先 lower 成 define-by-run 的 loop-level IR,scheduler 在 IR 上決定融合與順序，codegen 按裝置生出 Triton 或 C++ kernel,wrapper 負責把零件組裝成一個可呼叫的 module，成品進快取，下次直接取用。三個 pointwise op 進來，一個 kernel 出去，這就是這座鑄造廠的日常。
+把今天的地圖收攏一下。Inductor 從 AOTAutograd 手上接過純函數式、metadata 齊全的 ATen 圖，先 lower 成 define-by-run 的 loop-level IR，scheduler 在 IR 上決定融合與順序，codegen 按裝置生出 Triton 或 C++ kernel，wrapper 負責把零件組裝成一個可呼叫的 module，成品進快取，下次直接取用。三個 pointwise op 進來，一個 kernel 出去，這就是這座鑄造廠的日常。
 
 明天先從第一道閘開始，把 lowering 和 loop-level IR 打開來看，搞懂這層 IR，後面的 scheduler 和 fusion 才讀得懂。那我們明天見！
 

@@ -59,7 +59,7 @@ def inner(*inputs):
 
 這個設計還有一層聰明之處。`ops.load`、`ops.add` 這些呼叫的實際意義不是寫死的，它們會被轉發給當下掛著的 handler。debug 時掛一個印字串的 handler，把 inner_fn 跑一遍，就得到人類可讀的 body。分析時掛一個計數的 handler，跑一遍就知道這條鏈讀了幾個 buffer。到了 codegen，掛的是 Triton 或 C++ 的 handler，同一條函式跑出來的就是 kernel 原始碼。IR 只寫一份，解讀方式隨掛上的 handler 換，等一下實驗印出來的 loop body 就是這麼來的。
 
-另一個主角 Reduction 多帶兩樣東西，`reduction_ranges` 記哪幾個軸要被收掉，`reduction_type` 記用什麼方式收（sum、max、prod）。兩個類別都繼承自 [`ir.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/ir.py) 裡的 `Loops`，這層 IR 的絕大多數運算就落在這兩大類，一類是每格獨立算，一類是一群格子收成一格。
+另一個主角 Reduction 多帶兩樣東西，記著哪幾個軸要被收掉、用什麼方式收（sum、max、prod）。兩個類別都繼承自 [`ir.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/ir.py) 裡的 `Loops`，這層 IR 的絕大多數運算就落在這兩大類，一類是每格獨立算，一類是一群格子收成一格。
 
 順帶交代包在外面的兩層殼。lowering 函式實際回傳的是 `TensorBox(StorageBox(Pointwise(...)))`，TensorBox 對應一個 tensor 名字，StorageBox 對應一塊儲存，兩層 box 的功能就是讓內容物可以換。之後某個時刻這顆 Pointwise 需要落地成真的 buffer 時，box 裡面會被原地換成 `ComputedBuffer`，拿著 box 的下游全都不用改。點到為止，知道有這兩層殼就好。
 

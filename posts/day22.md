@@ -10,7 +10,7 @@
 
 CPU 後端收到的原料跟 Triton 後端一模一樣，就是 scheduler 融好的 node，裡面還是那個用 `ops.load`、`ops.store` 描述「迴圈每一輪做什麼」的 body 函式。差別在輸出的形狀。Triton kernel 天生是「每個 program 抓一塊 tile」的平行寫法，誰跑哪一塊由 grid 決定。C++ kernel 就是一條普通的 for 迴圈，誰來跑、一步走多寬、要不要開多執行緒，全部得由 codegen 自己寫明在程式碼裡。
 
-負責這件事的類別是 `cpp.py` 裡的 `CppScheduling`，它從 scheduler 手上接過一組組 node，逐組生出 `extern "C" void kernel(...)` 這樣的 C 函式，指標進、指標出，函式本體就是迴圈。Day 20 提過一個判讀陷阱在這裡也補一句，cpp 後端會把沒融合的多個 node 打包進同一個 C++ 函式，一個函式裡可能有好幾個獨立的 loop nest，數融合結果要看 loop 而不是函式。
+負責這件事的角色就在 `cpp.py` 裡，它從 scheduler 手上接過一組組 node，逐組生出 `extern "C" void kernel(...)` 這樣的 C 函式，指標進、指標出，函式本體就是迴圈。Day 20 提過一個判讀陷阱在這裡也補一句，cpp 後端會把沒融合的多個 node 打包進同一個 C++ 函式，一個函式裡可能有好幾個獨立的 loop nest，數融合結果要看 loop 而不是函式。
 
 本篇實驗都在本機 CPU 上跑（Apple M1 Max，arm64，torch 2.8.0），完整程式與 log 在 `code/day22/`。實驗品沿用 Day 17 用過的函式。
 
@@ -19,11 +19,11 @@ def f(x, y):
     return torch.relu(x + y) * 2
 ```
 
-用 `TORCH_LOGS="output_code"` 或 `run_and_get_code` 把生成的 kernel 抓出來，接下來三段變速一段一段看。
+用 `TORCH_LOGS="output_code"` 把生成的 kernel 抓出來，接下來三段變速一段一段看。
 
 ## 第一段，純量迴圈
 
-先看最素的版本。把 `torch._inductor.config.cpp.simdlen` 設成 1 關掉向量化，1024 個元素的輸入生出來的 kernel 長這樣（節錄）。
+先看最素的版本。把 config 裡的向量寬度設成 1 關掉向量化，1024 個元素的輸入生出來的 kernel 長這樣（節錄）。
 
 ```cpp
     for(int64_t x0=static_cast<int64_t>(0LL); x0<static_cast<int64_t>(1024LL); x0+=static_cast<int64_t>(1LL))
@@ -44,7 +44,7 @@ def f(x, y):
 
 ## 第二段，SIMD 一步四格
 
-把 `simdlen` 還原成預設再編一次，同一條迴圈換了一副身體（節錄）。
+把向量寬度還原成預設再編一次，同一條迴圈換了一副身體（節錄）。
 
 ```cpp
     for(int64_t x0=static_cast<int64_t>(0LL); x0<static_cast<int64_t>(1024LL); x0+=static_cast<int64_t>(4LL))
@@ -60,7 +60,7 @@ def f(x, y):
     }
 ```
 
-`x0` 一次前進 4 格，每個 `tmp` 都從單一 float 變成 `at::vec::Vectorized<float>`，加法還是寫 `+`、relu 換成 `clamp_min`，但每個運算元都是一整包 SIMD 暫存器。`Vectorized` 是 PyTorch 自己的跨 ISA 向量抽象，好處是 codegen 不必認識每一種指令集，永遠生同一種樣子的程式碼，`Vectorized<float>` 在編譯 `.cpp` 的時候才按目標機器展開成對應的 intrinsic。同一份原始碼，在 AVX2 的機器上一包是 8 個 float，AVX512 是 16 個，這台 M1 Max 用的 NEON 是 128-bit，所以一包 4 個。log 第一行印出的 `isa: asimd | bit_width: 128` 就是 `cpu_vec_isa.pick_vec_isa()` 探測的結果，`cpp.py` 的 `CppVecKernel` 按它決定步幅，128 除以 float 的 32 位元，正好就是迴圈裡那個 4。
+`x0` 一次前進 4 格，每個 `tmp` 都從單一 float 變成 `at::vec::Vectorized<float>`，加法還是寫 `+`、relu 換成 `clamp_min`，但每個運算元都是一整包 SIMD 暫存器。`Vectorized` 是 PyTorch 自己的跨 ISA 向量抽象，好處是 codegen 不必認識每一種指令集，永遠生同一種樣子的程式碼，`Vectorized<float>` 在編譯 `.cpp` 的時候才按目標機器展開成對應的 intrinsic。同一份原始碼，在 AVX2 的機器上一包是 8 個 float，AVX512 是 16 個，這台 M1 Max 用的 NEON 是 128-bit，所以一包 4 個。log 第一行印出的 `isa: asimd | bit_width: 128` 就是編譯期探測指令集的結果，codegen 按它決定步幅，128 除以 float 的 32 位元，正好就是迴圈裡那個 4。
 
 原本以為小張量會退回純量版，實測發現不是。把輸入縮到只剩 3 個元素，生出來的迴圈照樣是向量版，只是 load 和 store 都多帶了一個長度參數，`loadu(in_ptr0 + x0, 3LL)` 用 masked load 只搬 3 格。也就是說在 v2.8.0 的 cpp 後端裡，向量化幾乎總是開著，零頭用遮罩處理掉，真正跟張量大小掛鉤的是下一段。
 
@@ -85,7 +85,7 @@ n=16384: single thread
 n=32768: omp parallel
 ```
 
-這條線劃在 `cpp.py` 的 `decide_parallel_depth`，規則是總工作量除以 thread 數小於 `config.cpp.min_chunk_size`（預設 4096）就不開，原始碼裡的註解只有一句 not enough work。8 條 thread 乘 4096，門檻正好是 32768，跟實測的分界完全對上。thread 不是免費的，起手就要付建立與同步的成本，每條 thread 分不到幾千個元素的活，省下的時間還不夠付開工錢，攤不回來就乖乖單執行緒。這種按 shape 換檔的決策全部發生在編譯期，靠的又是 FakeTensor 一路推下來的 shape metadata，今天算是把 Day 17 那個現象的出處找到了。
+這條線劃在 `cpp.py` 的 `decide_parallel_depth`，規則是總工作量除以 thread 數小於一條最小工作量門檻（預設 4096）就不開，原始碼裡的註解只有一句 not enough work。8 條 thread 乘 4096，門檻正好是 32768，跟實測的分界完全對上。thread 不是免費的，起手就要付建立與同步的成本，每條 thread 分不到幾千個元素的活，省下的時間還不夠付開工錢，攤不回來就乖乖單執行緒。這種按 shape 換檔的決策全部發生在編譯期，靠的又是 FakeTensor 一路推下來的 shape metadata，今天算是把 Day 17 那個現象的出處找到了。
 
 三段變速用動畫走一遍。
 
@@ -134,7 +134,7 @@ pointwise 切一切就能分工，reduction 不行，8 條 thread 各自加各�
 compile cmd: clang++ .../ck3n4ozn...main.cpp ... -shared -fPIC ... -O3 -DNDEBUG ... -Xclang -fopenmp ... -o .../ck3n4ozn...main.so -lomp ...
 ```
 
-組裝命令的人是 [`cpp_builder.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/cpp_builder.py)，它按平台挑編譯器、湊齊 include 路徑和連結參數，在這台 Mac 上用的是 clang++ 加 Homebrew 裝的 libomp。生成的 kernel 以內容 hash 命名存成 `.main.cpp`，開著 `-O3` 和 `-fopenmp` 編成同名的 `.main.so`，翻 cache 目錄就能看到成對躺著的兩個檔案，旁邊還有一份 wrapper 的 `.py`。wrapper 透過 `cpp_pybinding` 把這個動態庫載回 Python，之後每次呼叫都直接進 C++，Day 9 那條改寫過的 bytecode 呼叫下來，最後落點就是這個 `.so` 裡的函式。編譯一次要花上一兩秒，所以 Day 17 講過的快取在 CPU 後端格外有感，hash 沒變就不再叫醒 clang++。
+組裝命令的人是 [`cpp_builder.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/cpp_builder.py)，它按平台挑編譯器、湊齊 include 路徑和連結參數，在這台 Mac 上用的是 clang++ 加 Homebrew 裝的 libomp。生成的 kernel 以內容 hash 命名存成 `.main.cpp`，開著 `-O3` 和 `-fopenmp` 編成同名的 `.main.so`，翻 cache 目錄就能看到成對躺著的兩個檔案，旁邊還有一份 wrapper 的 `.py`。wrapper 再把這個動態庫載回 Python，之後每次呼叫都直接進 C++，Day 9 那條改寫過的 bytecode 呼叫下來，最後落點就是這個 `.so` 裡的函式。編譯一次要花上一兩秒，所以 Day 17 講過的快取在 CPU 後端格外有感，hash 沒變就不再叫醒 clang++。
 
 ## 結語
 

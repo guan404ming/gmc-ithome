@@ -10,7 +10,7 @@
 
 先交代 Triton 是什麼。它是 OpenAI 開源的專案，後來成了 PyTorch 預設 GPU 後端的地基。表面上它是一個用 Python 語法寫 GPU kernel 的語言，但真正的差別不在語法，在抽象的高度。CUDA 的心智模型是 thread，寫的人要自己安排每條 thread 摸哪個元素、幾條 thread 湊成一組、shared memory 怎麼擺、記憶體存取怎麼對齊，這些細節寫錯任何一個，效能就直接掉一截。Triton 的心智模型是 block，一份 kernel 描述的是「一個 program instance 一次處理一塊資料」，塊內怎麼分工給 thread、存取怎麼 coalesce，全部交給 Triton 的編譯器處理。用昨天的話說，CUDA 寫的是每個工人的動作，Triton 寫的是每塊磚的處理流程，工人怎麼分配是工頭的事。
 
-這個高度剛好接得上 Inductor 的 IR。Day 18 的 loop-level IR 描述「迴圈的每一輪做什麼」，把一輪放大成一塊，`ops.load` 翻成 `tl.load`、`ops.store` 翻成 `tl.store`，中間的算術逐條照抄，一顆 kernel 就成形了。負責這段翻譯的是 `codegen/triton.py` 裡的 `TritonKernel`，生成器不需要懂任何 GPU 微架構，難寫對的部分讓 Triton 兜底，這正是 PyTorch 2 論文裡選 Triton 當 GPU 後端的理由，生成器可以寫得簡單，產物又常能追上手寫 CUDA 的效能。
+這個高度剛好接得上 Inductor 的 IR。Day 18 的 loop-level IR 描述「迴圈的每一輪做什麼」，把一輪放大成一塊，`ops.load` 翻成 `tl.load`、`ops.store` 翻成 `tl.store`，中間的算術逐條照抄，一顆 kernel 就成形了。負責這段翻譯的生成器就住在 `codegen/triton.py` 裡，它不需要懂任何 GPU 微架構，難寫對的部分讓 Triton 兜底，這正是 PyTorch 2 論文裡選 Triton 當 GPU 後端的理由，生成器可以寫得簡單，產物又常能追上手寫 CUDA 的效能。
 
 ## 逐行讀一顆 pointwise kernel
 
@@ -38,7 +38,7 @@ def triton_poi_fused_add_mul_relu_0(in_ptr0, in_ptr1, out_ptr0, xnumel, XBLOCK :
 
 再來逐行讀開頭四行，這是所有 pointwise kernel 共用的模板。Inductor 先把輸出攤平成一條長度 xnumel 的線性索引，切成 XBLOCK 大小的磚。GPU 會同時發射一大批 program instance，每個 instance 用 `tl.program_id(0)` 拿到自己的編號，乘上 XBLOCK 就是自己那塊磚的起點，再加上 `tl.arange` 展開，xindex 就是這塊磚裡每條 lane 負責的元素編號。一個 instance 一次操作的是整塊 XBLOCK 長的向量，而不是單一元素，這是讀 Triton 程式最需要切換的視角。然後是 mask。一百萬除不盡 1024，最後一塊磚只有一部分是真的，`xindex < xnumel` 把越界的 lane 關掉，load 和 store 都帶著它，被遮住的 lane 不讀也不寫，尾巴就這麼安全地處理掉了。
 
-中段就是 Day 18 的 loop body 直譯。兩筆 `tl.load` 把磚吸進來，接著加法、`maximum`（relu 在 lowering 之後的長相）、乘 2，中間值 tmp2 到 tmp6 全部活在暫存器，最後一筆 `tl.store` 把磚放回去。三個 op 一顆 kernel，讀兩次寫一次，fusion 昨天承諾的事在這十幾行裡兌現。對照 Day 17 的 C++ 版本會發現結構一模一樣，CPU 用 `at::vec` 一次搬 4 個 float，GPU 用一塊磚一次搬 XBLOCK 個，同一層 IR，兩種方言。
+中段就是 Day 18 的 loop body 直譯。兩筆 `tl.load` 把磚吸進來，接著加法、`maximum`（relu 在 lowering 之後的長相）、乘 2，中間值 tmp2 到 tmp6 全部活在暫存器，最後一筆 `tl.store` 把磚放回去。三個 op 一顆 kernel，讀兩次寫一次，fusion 昨天承諾的事在這十幾行裡兌現。對照 Day 17 的 C++ 版本會發現結構一模一樣，CPU 版一次搬 4 個 float，GPU 用一塊磚一次搬 XBLOCK 個，同一層 IR，兩種方言。
 
 還有兩個容易忽略的細節。一是 `xnumel = 1000000` 這行，參數明明傳進來了，第一行卻直接用常數蓋掉，這是 Day 11 說過的 static shape 特化，shape 押死之後編譯器能做更多假設，如果當初走了 dynamic shape，這裡就會留著變數。二是 XBLOCK 宣告成 `tl.constexpr`，整份原始碼裡卻沒有它的具體數值。這是故意留白的，同一份程式配上不同的 XBLOCK 就是不同的效能，這個決定被推遲到了 launch 的時刻。
 
@@ -64,7 +64,7 @@ def call(args):
     return (buf0, )
 ```
 
-注意 `.run` 只傳了指標和 xnumel，沒有 XBLOCK 也沒有 grid。答案在 kernel 定義上方那圈 `@triton_heuristics.pointwise` 裝飾器，它拿著 size_hints 從幾組候選 config 裡挑，必要時逐一實測比快慢，這就是 autotune，原始碼在 [`runtime/triton_heuristics.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/runtime/triton_heuristics.py)。實驗最後把它實際選中的參數印了出來。
+注意 `.run` 只傳了指標和 xnumel，沒有 XBLOCK 也沒有 grid。答案在 kernel 定義上方那圈裝飾器，它按 shape 的量級從幾組候選 config 裡挑，必要時逐一實測比快慢，這就是 autotune，原始碼在 [`runtime/triton_heuristics.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/runtime/triton_heuristics.py)。實驗最後把它實際選中的參數印了出來。
 
     triton_poi_fused_add_mul_relu_0: picked {'XBLOCK': 1024} num_warps=4 num_stages=1
     triton_poi_fused_add_mul_relu_0: grid = (ceil(1000000 / 1024), 1, 1) = (977, 1, 1)
@@ -91,7 +91,7 @@ def triton_per_fused_add_relu_sum_0(in_ptr0, out_ptr0, xnumel, r0_numel):
     tl.store(out_ptr0 + (x0), tmp7, None)
 ```
 
-`per` 是 persistent reduction。一個 row 有 1024 個元素，R0_BLOCK 直接開到 1024，一塊磚裝下一整個 row，load 進來、pointwise 順路做完、`tl.sum` 一口氣收掉，一個 instance 負責一個 row，昨天說的「pointwise 融進 reduction 的迴圈」生出來就是這副模樣。模板怎麼選看的是收縮段的長度，塞得進一塊磚就走 persistent，塞不進才走待會的迴圈版。索引這邊出現了新面孔，x 開頭的變數管平行維度，r 開頭的管收縮維度，`r0_1 + 1024*x0` 讀作第 x0 個 row 的第 r0_1 格，Day 19 的 MemoryDep 裡那些 index 式指的就是這個東西。另外兩筆 load 和 store 的 mask 位置都是 None，因為 1024 恰好塞滿 R0_BLOCK，沒有尾巴要遮，連檢查都省了。
+`per` 是 persistent reduction。一個 row 有 1024 個元素，R0_BLOCK 直接開到 1024，一塊磚裝下一整個 row，load 進來、pointwise 順路做完、`tl.sum` 一口氣收掉，一個 instance 負責一個 row，昨天說的「pointwise 融進 reduction 的迴圈」生出來就是這副模樣。模板怎麼選看的是收縮段的長度，塞得進一塊磚就走 persistent，塞不進才走待會的迴圈版。索引這邊出現了新面孔，x 開頭的變數管平行維度，r 開頭的管收縮維度，`r0_1 + 1024*x0` 讀作第 x0 個 row 的第 r0_1 格，Day 19 依賴分析記下的那些 index 式指的就是這個東西。另外兩筆 load 和 store 的 mask 位置都是 None，因為 1024 恰好塞滿 R0_BLOCK，沒有尾巴要遮，連檢查都省了。
 
 換成全域的 `x.sum()` 就沒這麼舒服了，4096x4096 一千六百多萬個元素，一顆磚吞不下，只派一個 instance 收又會讓整張 GPU 閒著。Inductor 的解法是拆成兩段，第一段 `triton_red_fused_sum_0` 派 512 個 instance 各自負責 32768 個元素，`red` 代表這種帶迴圈的 reduction，核心是一個 for 迴圈抱著累加器一輪一輪吃（節錄）。
 

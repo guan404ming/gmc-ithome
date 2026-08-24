@@ -47,7 +47,7 @@ y = m @ torch.empty(8, 16, device="meta")
 
 所以 [`torch/_subclasses/fake_tensor.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_subclasses/fake_tensor.py) 定義了 `FakeTensor`，一個 `torch.Tensor` 的 subclass。它的本體是一顆 meta tensor，身上多帶一個 `fake_device` 欄位，記著它假裝自己所在的 device。任何人問 `.device`，它回答的是 `fake_device` 而不是 `meta`。原始碼的 docstring 把這個結構講得很直白，「FakeTensor extends MetaTensors to also carry an additional `fake_device`」。也就是說，資料層面它活在 meta device 上，對外卻聲稱自己是一顆 `cpu` 或 `cuda:0` 的 Tensor，整條編譯管線就被這個謊安穩地騙了過去。
 
-搭配它的是 `FakeTensorMode`，一個 `TorchDispatchMode`。啟用之後，所有 Tensor op 在 dispatch 層被攔截，交給它處理。它的處理流程概念上是三步，先把參與運算的 FakeTensor 們攤開成裡面的 meta tensor，把 op 丟給 meta kernel 推出輸出的 metadata，再把結果包回 FakeTensor、貼上正確的 `fake_device`。實際跑一段。
+搭配它的是 `FakeTensorMode`。啟用之後，所有 Tensor op 在 dispatch 層被攔截，交給它處理。它的處理流程概念上是三步，先把參與運算的 FakeTensor 們攤開成裡面的 meta tensor，把 op 丟給 meta kernel 推出輸出的 metadata，再把結果包回 FakeTensor、貼上正確的 `fake_device`。實際跑一段。
 
 ```python
 from torch._subclasses.fake_tensor import FakeTensorMode
@@ -61,7 +61,7 @@ with mode:
 
     type: FakeTensor | shape: (32, 128) | dtype: torch.float32 | device: cpu
 
-在 mode 裡面連 `torch.randn` 都被攔掉了，沒有任何亂數被生成，但 `a @ b` 過 relu 之後的 shape、dtype、device 全部推對，而且 `device` 顯示 `cpu` 而不是 `meta`，謊撒得很完整。已經存在的真 Tensor 則用 `mode.from_tensor()` 轉換，內部走 `FakeTensorConverter.from_real_tensor`，抽掉數值、留下 metadata。這種乾跑有多便宜，拿一個誇張的 shape 就看得出來。
+在 mode 裡面連 `torch.randn` 都被攔掉了，沒有任何亂數被生成，但 `a @ b` 過 relu 之後的 shape、dtype、device 全部推對，而且 `device` 顯示 `cpu` 而不是 `meta`，謊撒得很完整。已經存在的真 Tensor 則用 `mode.from_tensor()` 轉換，抽掉數值、留下 metadata。這種乾跑有多便宜，拿一個誇張的 shape 就看得出來。
 
     fake 65536x65536 matmul (16 GB per tensor): 0.48 ms -> (65536, 65536)
 
@@ -96,14 +96,14 @@ torch.compile(f, backend=peek)(torch.randn(8, 16), torch.randn(16, 4))
     call_function matmul example_value = FakeTensor(8, 4)
     call_function tanh   example_value = FakeTensor(8, 4)
 
-從輸入到中間結果，全是 FakeTensor。流程上，輸入的 Tensor 在被包成 `TensorVariable` 的那一刻就被 `wrap_to_fake` 轉成 fake（就是 Day 5 講的 `VariableBuilder` 裡），之後圖上每長一個 node，[`torch/_dynamo/utils.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/utils.py) 的 `get_fake_value` 就拿著輸入 node 們的 fake 值，在 `FakeTensorMode` 下把這個 op 乾跑一次，得到的輸出掛回 node 當 `example_value`。追蹤到 `y.view(-1)` 時 Dynamo 能回答 shape 問題、Day 12 圖上那些 `"f32[8, 4]"` 標註，靠的都是這一套。用 `TORCH_LOGS="+dynamo"` 也能看到 Dynamo 建圖輸入時的自白（節錄）。
+從輸入到中間結果，全是 FakeTensor。流程上，輸入的 Tensor 在被包成 `TensorVariable` 的那一刻（就是 Day 5 講的包裝流程裡）就被轉成 fake，之後圖上每長一個 node，[`torch/_dynamo/utils.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/utils.py) 的 `get_fake_value` 就拿著輸入 node 們的 fake 值，在 `FakeTensorMode` 下把這個 op 乾跑一次，得到的輸出掛回 node 當 `example_value`。追蹤到 `y.view(-1)` 時 Dynamo 能回答 shape 問題、Day 12 圖上那些 `"f32[8, 4]"` 標註，靠的都是這一套。用 `TORCH_LOGS="+dynamo"` 也能看到 Dynamo 建圖輸入時的自白（節錄）。
 
     create_graph_input L_x_ L['x'] FakeTensor(..., size=(8, 16)) at debug_level 0 before=False
     create_graph_input L_w_ L['w'] FakeTensor(..., size=(16, 4)) at debug_level 0 before=False
 
-到了 AOTAutograd，同一批 FakeTensor 直接接手。Day 12 說它「拿 FakeTensor 把 forward 重新執行一遍，讓 autograd 引擎在上面展開 backward」，現在可以讀懂這句話的全部了。joint graph 的 trace 是一次真的 Python 執行，只是每顆 Tensor 都是 fake 的，所以幾千個 op 的模型也能在編譯期便宜地「跑」完，Functionalization 的 metadata 收集、partitioner 算保存成本用的 `numel`，吃的全是同一套 fake metadata。一路到 Inductor 拿到的圖，每個 node 身上的 shape 標註也還是這批 FakeTensor 留下的。
+到了 AOTAutograd，同一批 FakeTensor 直接接手。Day 12 說它「拿 FakeTensor 把 forward 重新執行一遍，讓 autograd 引擎在上面展開 backward」，現在可以讀懂這句話的全部了。joint graph 的 trace 是一次真的 Python 執行，只是每顆 Tensor 都是 fake 的，所以幾千個 op 的模型也能在編譯期便宜地「跑」完，Functionalization 的 metadata 收集、partitioner 算保存成本用的元素個數，吃的全是同一套 fake metadata。一路到 Inductor 拿到的圖，每個 node 身上的 shape 標註也還是這批 FakeTensor 留下的。
 
-順帶一提 Day 11 的 Symbolic Shapes，它和 FakeTensor 是同一枚硬幣的兩面。FakeTensor 的 shape 欄位不一定是具體的 int，`FakeTensorMode` 身上掛著一個 `ShapeEnv`，某個維度被判定為 dynamic 時，`wrap_to_fake` 給它填的就是 `s0` 這種 SymInt。之後 meta kernel 推 shape 時是拿符號在做算術，輸出的 shape 是 `(s0, 4)`，Day 11 看到的那些符號運算，發生的舞台正是 FakeTensor 的 metadata 欄位。
+順帶一提 Day 11 的 Symbolic Shapes，它和 FakeTensor 是同一枚硬幣的兩面。FakeTensor 的 shape 欄位不一定是具體的 int，`FakeTensorMode` 身上掛著一套管理符號 shape 的機制，某個維度被判定為 dynamic 時，填進 shape 欄位的就是 `s0` 這種 SymInt。之後 meta kernel 推 shape 時是拿符號在做算術，輸出的 shape 是 `(s0, 4)`，Day 11 看到的那些符號運算，發生的舞台正是 FakeTensor 的 metadata 欄位。
 
 ## 假數值算不出來的事
 

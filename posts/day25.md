@@ -67,9 +67,9 @@ replay vs eager    9.90x
 
 ## reduce-overhead 背後的 cudagraph trees
 
-把 mode="reduce-overhead" 翻開，[`torch/_inductor/__init__.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/__init__.py) 的 `list_mode_options` 裡它只做一件事，把 `triton.cudagraphs` 設成 True，讓 Inductor 在編好的 wrapper 外面套上這台錄影機。真正的實作在 [`torch/_inductor/cudagraph_trees.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/cudagraph_trees.py)，名字裡的 trees 是重點。手動的 CUDAGraph 一次只顧一張圖，但真實模型會被 graph break 切成好幾段，forward 和 backward 又是分開的兩張，如果每張各開一個 memory pool，中間結果得在 pool 之間複製，記憶體也是各算各的。cudagraph trees 讓所有 graph 共用同一個 pool，並把「先跑 A 再跑 B」和「先跑 A 再跑 B'」這些不同的執行路徑錄成一棵樹，走到哪條路徑就重播哪條，記憶體照樹上的最大路徑算而不是全部加總。
+把 mode="reduce-overhead" 翻開，這個模式其實只做一件事，把 Inductor 的 cudagraphs 開關打開，讓 Inductor 在編好的 wrapper 外面套上這台錄影機。真正的實作在 [`torch/_inductor/cudagraph_trees.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/cudagraph_trees.py)，名字裡的 trees 是重點。手動的 CUDAGraph 一次只顧一張圖，但真實模型會被 graph break 切成好幾段，forward 和 backward 又是分開的兩張，如果每張各開一個 memory pool，中間結果得在 pool 之間複製，記憶體也是各算各的。cudagraph trees 讓所有 graph 共用同一個 pool，並把「先跑 A 再跑 B」和「先跑 A 再跑 B'」這些不同的執行路徑錄成一棵樹，走到哪條路徑就重播哪條，記憶體照樹上的最大路徑算而不是全部加總。
 
-管家是檔案裡的 `CUDAGraphTreeManager`。每個函式先用真發射跑過 warmup，位址和記憶體都穩定了才開錄，之後進入 replay 狀態。它同時追蹤輸出的存活，graph B 開錄前會確認不會踩到 graph A 還活著的輸出，真的踩到就換個位置重錄一份。重錄也有保險絲，同一個函式重錄超過 `cudagraph_unexpected_rerecord_limit` 次（預設 128）就放棄錄影，退回逐顆發射。這也解釋了為什麼 reduce-overhead 的前幾次呼叫特別慢，那不只是編譯，還有錄影機在架設。原始碼註解裡有個細節，warmup 這幾輪本身就跑在 graph 的 memory pool 裡，這樣錄影時不必為了留住輸入再多拷一份記憶體，warmup 結束、正式錄完之後，接下來的每次呼叫才真正進入一次 replay 的世界。
+這個檔案裡還住著一位管家。每個函式先用真發射跑過 warmup，位址和記憶體都穩定了才開錄，之後進入 replay 狀態。它同時追蹤輸出的存活，graph B 開錄前會確認不會踩到 graph A 還活著的輸出，真的踩到就換個位置重錄一份。重錄也有保險絲，同一個函式重錄超過上限（預設 128 次）就放棄錄影，退回逐顆發射。這也解釋了為什麼 reduce-overhead 的前幾次呼叫特別慢，那不只是編譯，還有錄影機在架設。原始碼註解裡有個細節，warmup 這幾輪本身就跑在 graph 的 memory pool 裡，這樣錄影時不必為了留住輸入再多拷一份記憶體，warmup 結束、正式錄完之後，接下來的每次呼叫才真正進入一次 replay 的世界。
 
 ## 這筆交易的代價
 
@@ -87,7 +87,7 @@ hold output alive, call again: ptr 22480592830464 -> 22480592830464, same: True
     x.add_(1)
 ```
 
-同一個檢查也擋 CPU tensor 混在圖裡的情況。第三類是 dynamic shape，錄影錄的是固定位址加固定大小，Day 11 那種一張圖吃所有 batch size 的彈性到這裡失效，每個新 shape 都要重錄一張 graph，shape 太多時記憶體和重錄時間一起爆炸，超過 `cudagraph_dynamic_shape_warn_limit` 還會被警告。最後是記憶體本身，pool 會把 workspace 一直留著換速度，這在 `torch.compile` 的文件裡寫得很直白，overhead 的減少是拿記憶體換的。順帶一提，除錯體驗也會變差，replay 中的 kernel 不會經過 Python，print 插不進去，出錯的堆疊也不會指向你的程式碼，開發階段先用預設模式把模型跑對，再換 reduce-overhead 收 overhead，是比較省事的順序。
+同一個檢查也擋 CPU tensor 混在圖裡的情況。第三類是 dynamic shape，錄影錄的是固定位址加固定大小，Day 11 那種一張圖吃所有 batch size 的彈性到這裡失效，每個新 shape 都要重錄一張 graph，shape 太多時記憶體和重錄時間一起爆炸，重錄太多張還會被警告。最後是記憶體本身，pool 會把 workspace 一直留著換速度，這在 `torch.compile` 的文件裡寫得很直白，overhead 的減少是拿記憶體換的。順帶一提，除錯體驗也會變差，replay 中的 kernel 不會經過 Python，print 插不進去，出錯的堆疊也不會指向你的程式碼，開發階段先用預設模式把模型跑對，再換 reduce-overhead 收 overhead，是比較省事的順序。
 
 ## 什麼場景賺，什麼場景不賺
 

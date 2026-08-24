@@ -10,9 +10,9 @@
 
 拿 matmul 當主角。Day 20 說過 matmul 是 extern kernel，Inductor 調用 cuBLAS 這種現成的程式庫，這是第一種做法，幾十年的手工最佳化，穩。但 Inductor 也有能力用 Triton template 自己生一顆 matmul kernel，模板裡挖好了洞，BLOCK_M、BLOCK_N、BLOCK_K 這些 tile 大小和 num_warps、num_stages 這些執行參數填進去，就是一顆完整的 kernel，填不同的數字就是不同的候選。
 
-哪一種快沒有公式。tile 切大了裝不進 shared memory，切小了吃不滿算力，num_stages 疊深了能藏住記憶體延遲，但暫存器和 shared memory 的開銷也跟著漲，每個參數都是這樣的兩難，而平衡點落在哪裡，跟 shape、dtype 和那張 GPU 的硬體規格全部糾纏在一起，換一個條件就換一個結局。所以 v2.8.0 的 [`kernel/mm.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/kernel/mm.py) 在 lowering `aten.mm` 時走的是 `tuned_mm`，它不直接生 kernel，而是開一張候選名單，先把 cuBLAS 包成 `aten_mm` 這個 `ExternKernelChoice` 放進去，再從 [`template_heuristics.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/template_heuristics.py) 預先寫好的 config 清單逐一往 `mm_template` 填參數，一個 config 一個候選，基本清單實測有 19 條，還會依 m、n、k 篩掉對這個 shape 沒意義的組合。名單上有哪些門派則由 `config.max_autotune_gemm_backends` 決定，預設是 ATEN 加 TRITON 加 CPP，CUTLASS 這種更重的後端也能加進來。名單開好，交給 [`select_algorithm.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/select_algorithm.py) 的 `AlgorithmSelectorCache` 裁決。
+哪一種快沒有公式。tile 切大了裝不進 shared memory，切小了吃不滿算力，num_stages 疊深了能藏住記憶體延遲，但暫存器和 shared memory 的開銷也跟著漲，每個參數都是這樣的兩難，而平衡點落在哪裡，跟 shape、dtype 和那張 GPU 的硬體規格全部糾纏在一起，換一個條件就換一個結局。所以 v2.8.0 的 [`kernel/mm.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/kernel/mm.py) 在 lowering `aten.mm` 時走的是 `tuned_mm`，它不直接生 kernel，而是開一張候選名單，先把 cuBLAS 包成 extern 候選放進去，再從一份預先寫好的 config 清單逐一往 matmul 模板填參數，一個 config 一個候選，基本清單實測有 19 條，還會依 m、n、k 篩掉對這個 shape 沒意義的組合。名單上有哪些門派則由 config 決定，預設是 ATEN 加 TRITON 加 CPP，CUTLASS 這種更重的後端也能加進來。名單開好，交給 [`select_algorithm.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/select_algorithm.py) 的 `AlgorithmSelectorCache` 裁決。
 
-不過預設模式下這場比賽根本不會開打。`use_triton_template` 的條件寫得很清楚，`config.max_autotune` 沒開就回 False，Triton 候選全體缺席，名單上只剩 `aten_mm` 一個人。`AlgorithmSelectorCache.__call__` 看到 `len(choices) == 1` 直接回傳，計時都省了。實驗在 Modal 的 L40S 上跑（torch 2.8.0，完整程式在 `code/day23/`），拿 2048x2048x2048 的 fp16 matmul 編一次，預設模式的產物很乾脆。
+不過預設模式下這場比賽根本不會開打。原始碼裡的條件寫得很清楚，`max_autotune` 這個開關沒開，模板就不進場，Triton 候選全體缺席，名單上只剩 cuBLAS 一個人。`AlgorithmSelectorCache` 看到名單上只有一個候選就直接回傳，計時都省了。實驗在 Modal 的 L40S 上跑（torch 2.8.0，完整程式在 `code/day23/`），拿 2048x2048x2048 的 fp16 matmul 編一次，預設模式的產物很乾脆。
 
 ```
 [default] compile time: 1.0 s
@@ -42,7 +42,7 @@ dtypes: torch.float16, torch.float16
 SingleProcess AUTOTUNE benchmarking takes 0.7160 seconds and 2.7616 seconds precompiling for 20 choices
 ```
 
-每一列是一個候選，後面是實測出來的毫秒數和相對冠軍的百分比。做法就是字面上的意思，`AlgorithmSelectorCache` 先把 20 個候選各自編譯成真的 kernel，這一步佔掉 2.76 秒，然後照著 input node 的 metadata 生出一批一樣 shape、一樣 stride 的隨機 tensor，逐一跑過計時，`min(timings)` 定案。表頭把 strides 和 dtypes 印出來不是裝飾，這場比賽的答案只對這一組條件成立。表上還看得到每個 Triton 候選的完整參數，同樣的模板只是 BLOCK 大小和 num_warps 不同，成績就能差出三成。
+每一列是一個候選，後面是實測出來的毫秒數和相對冠軍的百分比。做法就是字面上的意思，`AlgorithmSelectorCache` 先把 20 個候選各自編譯成真的 kernel，這一步佔掉 2.76 秒，然後照著 input node 的 metadata 生出一批一樣 shape、一樣 stride 的隨機 tensor，逐一跑過計時，取最快的一筆定案。表頭把 strides 和 dtypes 印出來不是裝飾，這場比賽的答案只對這一組條件成立。表上還看得到每個 Triton 候選的完整參數，同樣的模板只是 BLOCK 大小和 num_warps 不同，成績就能差出三成。
 
 比賽中還有人當場出局。log 裡出現了三次這樣的訊息。
 
@@ -65,7 +65,7 @@ max-autotune    0.0700 ms
 
 ![一顆 mm node 分身成多個候選 kernel，同場計時，最快的留下並蓋上 cached](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day23/autotune.gif)
 
-*圖一：autotune 的一生。lowering 碰到 aten.mm 先開出候選名單，extern 的 cuBLAS 加上不同 BLOCK 配置的 Triton template，AlgorithmSelectorCache 拿真的 tensor 同場計時，min(timings) 挑出冠軍，代價是編譯時間從 1.0 秒漲到 3.8 秒，答案蓋上 cached 收進快取。*
+*圖一：autotune 的一生。lowering 碰到 aten.mm 先開出候選名單，extern 的 cuBLAS 加上不同 BLOCK 配置的 Triton template，AlgorithmSelectorCache 拿真的 tensor 同場計時挑出冠軍，代價是編譯時間從 1.0 秒漲到 3.8 秒，答案蓋上 cached 收進快取。*
 
 ## 換個 shape，劇本翻盤
 
@@ -78,7 +78,7 @@ AUTOTUNE mm(16x4096, 4096x4096)
   mm 0.0676 ms 97.0% 
 ```
 
-這次 cuBLAS 掉到第三，冠軍是 `BLOCK_M=16` 的 Triton 候選，tile 高度剛好貼著 16 列的輸入，一格都不浪費。名單也跟著 shape 變了，`tuned_mm` 依 m、n、k 篩出合適的 config，這一題全員都是 `BLOCK_M=16` 的瘦版模板。生成的程式碼第一次出現了 Triton 版的 matmul，benchmark 的差距也是真金白銀。
+這次 cuBLAS 掉到第三，冠軍是 `BLOCK_M=16` 的 Triton 候選，tile 高度剛好貼著 16 列的輸入，一格都不浪費。名單也跟著 shape 變了，依 m、n、k 篩出來的 config，這一題全員都是 `BLOCK_M=16` 的瘦版模板。生成的程式碼第一次出現了 Triton 版的 matmul，benchmark 的差距也是真金白銀。
 
 ```
 [max-autotune] compile time: 1.6 s
@@ -107,7 +107,7 @@ max-autotune 之下，matmul 由模板生成，`relu` 作為 epilogue 直接縫�
     triton_tem_fused_mm_relu_0.run(...)
 ```
 
-名字 `triton_tem_fused_mm_relu_0` 說明了一切，`tem` 是 template，`mm` 和 `relu` 同居一顆 kernel。原理回到 Day 20 的判準，牆的成因是 extern kernel 手上沒有 loop 可縫，而模板生成的 matmul 是 Inductor 自己的 loop，scheduler 那幾個 `is_template` 分支就是專門放行這種融合的，pointwise 掛上模板尾端，中間那份 2048x2048 的結果不用再落地一次。不過 benchmark 潑了盆冷水，default 0.0716 ms，max-autotune 0.0731 ms，牆拆了，時間卻只是打平。這一題 matmul 本身 cuBLAS 較快，融合省下的那趟 relu 讀寫剛好抵掉模板輸的部分，兩邊誰勝出全看這筆帳算下來的正負，而這筆帳，一樣是 autotune 實測出來的。
+名字 `triton_tem_fused_mm_relu_0` 說明了一切，`tem` 是 template，`mm` 和 `relu` 同居一顆 kernel。原理回到 Day 20 的判準，牆的成因是 extern kernel 手上沒有 loop 可縫，而模板生成的 matmul 是 Inductor 自己的 loop，scheduler 裡有專門放行這種融合的分支，pointwise 掛上模板尾端，中間那份 2048x2048 的結果不用再落地一次。不過 benchmark 潑了盆冷水，default 0.0716 ms，max-autotune 0.0731 ms，牆拆了，時間卻只是打平。這一題 matmul 本身 cuBLAS 較快，融合省下的那趟 relu 讀寫剛好抵掉模板輸的部分，兩邊誰勝出全看這筆帳算下來的正負，而這筆帳，一樣是 autotune 實測出來的。
 
 ## pointwise 也有自己的碼表
 
@@ -126,9 +126,9 @@ XBLOCK 往 16 和 4 各試一步，R0_BLOCK、num_warps 也各自上下探過，
 
 ## 代價，以及為什麼需要快取
 
-把三場實驗的編譯時間排在一起，2048 方陣從 1.0 秒漲到 3.8 秒，瘦長條從 0.1 秒漲到 1.6 秒，mm 加 relu 從 0.3 秒漲到 1.5 秒。一顆 matmul 就要精編二十個候選再逐一計時，真實模型裡幾十顆 shape 各異的 matmul，這筆帳會乘上去，max-autotune 的編譯時間拉長到幾分鐘並不稀奇。這是一筆用編譯時間換執行時間的交易，模型定型之後要跑成千上萬次 inference 或訓練 step，攤下來穩賺，改兩行就重編一次的開發階段則未必划算。另外這組開關不是只有 mode 字串一個入口，設環境變數 `TORCHINDUCTOR_MAX_AUTOTUNE=1` 也能打開，想只對 GEMM 開、或把搜尋空間放大到 EXHAUSTIVE，`config.py` 裡都有對應的細粒度選項。
+把三場實驗的編譯時間排在一起，2048 方陣從 1.0 秒漲到 3.8 秒，瘦長條從 0.1 秒漲到 1.6 秒，mm 加 relu 從 0.3 秒漲到 1.5 秒。一顆 matmul 就要精編二十個候選再逐一計時，真實模型裡幾十顆 shape 各異的 matmul，這筆帳會乘上去，max-autotune 的編譯時間拉長到幾分鐘並不稀奇。這是一筆用編譯時間換執行時間的交易，模型定型之後要跑成千上萬次 inference 或訓練 step，攤下來穩賺，改兩行就重編一次的開發階段則未必划算。另外這組開關不是只有 mode 字串一個入口，設環境變數 `TORCHINDUCTOR_MAX_AUTOTUNE=1` 也能打開，想只對 GEMM 開、或把搜尋空間放大到窮舉所有組合，config 裡都有對應的細粒度選項。
 
-好消息是這筆錢不用重複付。`AlgorithmSelectorCache` 這個名字的後半段今天一直沒展開，它繼承自 `PersistentCache`，每一場比賽的計時結果都以輸入的 shape、dtype 為鍵寫進快取，同樣的比賽第二次直接翻答案，連 coordinate descent 的腳印都有自己的 CACHED 紀錄。事實上這整個系列做過的每個實驗背後，都有一套快取體系在默默接住所有編譯產物，從生成的 kernel 原始碼、編好的整張圖到今天的計時表。它怎麼分層、存在哪裡、什麼時候會失效，明天就來把它攤開。
+好消息是這筆錢不用重複付。`AlgorithmSelectorCache` 這個名字的後半段今天一直沒展開，它背後接著一層持久化的快取，每一場比賽的計時結果都以輸入的 shape、dtype 為鍵寫進去，同樣的比賽第二次直接翻答案，連 coordinate descent 的腳印都有自己的 CACHED 紀錄。事實上這整個系列做過的每個實驗背後，都有一套快取體系在默默接住所有編譯產物，從生成的 kernel 原始碼、編好的整張圖到今天的計時表。它怎麼分層、存在哪裡、什麼時候會失效，明天就來把它攤開。
 
 ## 結語
 

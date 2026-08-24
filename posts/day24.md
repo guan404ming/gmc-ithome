@@ -39,7 +39,7 @@ def f(x, y):
   fxgraph_cache_miss=0 fxgraph_cache_hit=1
 ```
 
-3.75 秒變 0.79 秒，這就是磁碟上的 FXGraphCache 在接手。它接手的位置在 Inductor 的正門口，`compile_fx` 拿到一張 ATen 圖後先不急著編，把圖和輸入的 metadata 拼成一把鑰匙，去磁碟上找有沒有現成的貨。找到了就把 pickle 過的成品反序列化、把編好的 `.so` 掛上，整段 lowering 到 codegen 的路直接跳過。找不到才乖乖走完全程，走完把成品用這把鑰匙存進去，留給下一個 process。
+3.75 秒變 0.79 秒，這就是磁碟上的 FXGraphCache 在接手。它接手的位置在 Inductor 的正門口，拿到一張 ATen 圖後先不急著編，把圖和輸入的 metadata 拼成一把鑰匙，去磁碟上找有沒有現成的貨。找到了就把 pickle 過的成品反序列化、把編好的 `.so` 掛上，整段 lowering 到 codegen 的路直接跳過。找不到才乖乖走完全程，走完把成品用這把鑰匙存進去，留給下一個 process。
 
 `fxgraph_cache_hit=1` 這行來自 `torch._dynamo.utils.counters`，是確認快取有沒有吃到最直接的辦法。要看更細的過程可以開 `TORCH_LOGS="+torch._inductor.codecache"`，log 會直接把鑰匙印給你。
 
@@ -61,13 +61,13 @@ fx graph cache hit for key fih5y2v32k3xkqrqilffnjrj36iym4ih5wnqc46hpvqv4bwj3hgr
   fxgraph/ih/fih5y2v32k3xkqrqilffnjrj36iym4ih5wnqc46hpvqv4bwj3hgr/3wllna56mmhxckjexy2lg7vlpok73hgbfrkepzzttbtcfkf4mzv  (47 KB)
 ```
 
-一格一格認過去。`fxgraph/` 是 FXGraphCache 的本體，pickle 過的整份編譯成品，第一層目錄名就是那把 `fih5...` 開頭的鑰匙。`aotautograd/` 是 AOTAutogradCache，把 AOTAutograd 的展開結果也存了下來，hit 的時候連 joint graph 的 trace 和 partition 都不用重跑，原始碼在 [`autograd_cache.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_functorch/_aot_autograd/autograd_cache.py)。那個 `.py` 是 PyCodeCache 存的 output code，就是 Day 17 印出來的那份 wrapper 加 kernel。兩個 `.so` 屬於 CppCodeCache，g++ 編好的動態庫，檔名就是 C++ 原始碼內容的 hash。locks 目錄則是給多個 process 同時編譯時上的鎖，免得兩邊搶著寫同一格櫃子。
+一格一格認過去。`fxgraph/` 是 FXGraphCache 的本體，pickle 過的整份編譯成品，第一層目錄名就是那把 `fih5...` 開頭的鑰匙。`aotautograd/` 是 AOTAutogradCache，把 AOTAutograd 的展開結果也存了下來，hit 的時候連 joint graph 的 trace 和 partition 都不用重跑，原始碼在 [`autograd_cache.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_functorch/_aot_autograd/autograd_cache.py)。那個 `.py` 存的是 output code，就是 Day 17 印出來的那份 wrapper 加 kernel。兩個 `.so` 屬於 CppCodeCache，g++ 編好的動態庫，檔名就是 C++ 原始碼內容的 hash。locks 目錄則是給多個 process 同時編譯時上的鎖，免得兩邊搶著寫同一格櫃子。
 
-GPU 上還會多一種住戶。autotune 海選出的 best config 會以一個小檔案的形式存在 kernel 旁邊，下一次遇到同一顆 kernel，直接讀答案，不再重新 benchmark，管這件事的是 [`autotune_cache.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/runtime/autotune_cache.py) 的 `AutotuneCache`。昨天燒掉的那些海選時間，就是靠這格櫃子只付一次。順帶一提，這整個目錄可以放心刪掉，它是純粹的快取，沒有任何狀態非它不可，最壞的結果就是下次啟動回到冷編譯的價錢。
+GPU 上還會多一種住戶。autotune 海選出的 best config 會以一個小檔案的形式存在 kernel 旁邊，下一次遇到同一顆 kernel，直接讀答案，不再重新 benchmark，管這件事的原始碼在 [`autotune_cache.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/runtime/autotune_cache.py)。昨天燒掉的那些海選時間，就是靠這格櫃子只付一次。順帶一提，這整個目錄可以放心刪掉，它是純粹的快取，沒有任何狀態非它不可，最壞的結果就是下次啟動回到冷編譯的價錢。
 
 ## 鑰匙是怎麼打出來的
 
-一把能跨 process 使用的鑰匙，必須保證「鑰匙相同就代表編譯結果一定相同」，所以拼進去的材料比直覺想的多。`codecache.py` 裡的 `FxGraphHashDetails` 列得清清楚楚，圖本身、example inputs 的 metadata、編譯參數 `fx_kwargs`、整份 inductor config、deterministic 相關的全域設定，再加上 `torch_key()`，也就是 torch 版本號連同整份 Inductor 原始碼算出的 hash。全部序列化之後做 sha256，得到的就是那串 `f` 開頭的 key。
+一把能跨 process 使用的鑰匙，必須保證「鑰匙相同就代表編譯結果一定相同」，所以拼進去的材料比直覺想的多。`codecache.py` 裡把鑰匙的材料列得清清楚楚，圖本身、example inputs 的 metadata、編譯參數、整份 inductor config、deterministic 相關的全域設定，再加上 torch 版本號連同整份 Inductor 原始碼算出的 hash。全部序列化之後做 sha256，得到的就是那串 `f` 開頭的 key。
 
 幾個細節值得停一下。輸入進鑰匙的不是張量本身而是 shape、dtype、stride 這些 metadata，畢竟編譯結果只依賴形狀不依賴數值，Day 16 的 FakeTensor 讓「只留形狀」這件事有現成的表示法。config 必須整份進鑰匙，因為同一張圖在不同開關下生成的程式碼真的不同，待會就有實驗作證。連 torch 原始碼都要 hash 進去，是因為 Inductor 自己改版之後，同一張圖可能生出不同的 kernel，快取的底線是寧可白編，不可錯拿。材料裡任何一項變了，鑰匙齒形就變了，打開的會是另一格空櫃子。
 
@@ -95,7 +95,7 @@ GPU 上還會多一種住戶。autotune 海選出的 best config 會以一個小
   fxgraph_cache_miss=1 fxgraph_cache_hit=0
 ```
 
-函式沒動、shape 沒動，只是 config 變了，一樣 miss，因為 config 改變真的會改變生成的程式碼，鑰匙必須誠實。同理，升級 PyTorch 版本會讓 `torch_key()` 整個換掉，一櫃子存貨瞬間全數作廢，這是部署時最常見的「怎麼今天啟動特別慢」的原因。實務上懷疑快取沒吃到的時候，排查的順序也就出來了，先看 counters 是 hit 還是 miss，是 miss 就開 codecache 的 log 把兩次的鑰匙印出來對，齒形哪裡不一樣，log 的 hash details 會一項一項告訴你，是 shape 變了、config 變了，還是有人偷偷升了版本。另外 miss 不是錯誤，miss 之後的新成品會用新鑰匙再存一格，舊的那格也還留著，同一張圖的 512 版和 768 版可以並存，各自等各自的下一次 hit，代價只是櫃子越住越滿。
+函式沒動、shape 沒動，只是 config 變了，一樣 miss，因為 config 改變真的會改變生成的程式碼，鑰匙必須誠實。同理，升級 PyTorch 版本會讓 torch 版本這塊碎片整個換掉，一櫃子存貨瞬間全數作廢，這是部署時最常見的「怎麼今天啟動特別慢」的原因。實務上懷疑快取沒吃到的時候，排查的順序也就出來了，先看 counters 是 hit 還是 miss，是 miss 就開 codecache 的 log 把兩次的鑰匙印出來對，齒形哪裡不一樣，log 的 hash details 會一項一項告訴你，是 shape 變了、config 變了，還是有人偷偷升了版本。另外 miss 不是錯誤，miss 之後的新成品會用新鑰匙再存一格，舊的那格也還留著，同一張圖的 512 版和 768 版可以並存，各自等各自的下一次 hit，代價只是櫃子越住越滿。
 
 ## 把這層關掉會發生什麼
 

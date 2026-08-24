@@ -18,9 +18,9 @@
 
 ## 先包成 SchedulerNode，再把依賴接起來
 
-`Scheduler` 收到的是 lowering 完的一串 `ir.Operation`。它做的第一件事是把每個 operation 包成 `SchedulerNode`，這是排程與融合的基本單位。不能融合的另外包，像 matmul 這種呼叫外部 kernel 的包成 `ExternKernelSchedulerNode`，不做事的包成 `NopKernelSchedulerNode`。
+`Scheduler` 收到的是 lowering 完的一串 IR node。它做的第一件事是把每個 node 包成 `SchedulerNode`，這是排程與融合的基本單位。不能融合的另外包，像 matmul 這種呼叫外部 kernel 的、以及什麼都不做的空節點，各自有專門的殼。
 
-第二件事是 `compute_dependencies`，把 node 之間的邊接出來。規則只有一條，你寫的 buffer 我讀，我就依賴你。注意這裡的依賴不是 FX Graph 上那種「值的流向」，而是重新用 buffer 的讀寫算出來的，因為經過 lowering 的 inline 之後，誰真的碰了哪塊記憶體，只有 loop-level IR 自己知道。每條依賴記成一個 `MemoryDep`，裡面除了 buffer 名字，還記著「用什麼 index 式、讀多大範圍」，這個細節等一下會決定融合的生死。有了邊，`topological_sort_schedule` 排出一個合法的執行順序，`compute_ancestors` 幫每個 node 算出祖先集合，之後判斷「A 融 B 會不會把依賴圖繞成 cycle」靠的就是這份祖先名單。一切就緒，`fuse_nodes` 開始配對。
+第二件事是把 node 之間的依賴邊接出來。規則只有一條，你寫的 buffer 我讀，我就依賴你。注意這裡的依賴不是 FX Graph 上那種「值的流向」，而是重新用 buffer 的讀寫算出來的，因為經過 lowering 的 inline 之後，誰真的碰了哪塊記憶體，只有 loop-level IR 自己知道。每條依賴記成一個 `MemoryDep`，裡面除了 buffer 名字，還記著「用什麼 index 式、讀多大範圍」，這個細節等一下會決定融合的生死。有了邊，就能排出一個合法的拓撲順序，再幫每個 node 算出祖先集合，之後判斷「A 融 B 會不會把依賴圖繞成 cycle」靠的就是這份祖先名單。一切就緒，`fuse_nodes` 開始配對。
 
 ## 拿四個小函式實測
 
@@ -70,7 +70,7 @@ fusing op0 with op1
 completed fusion round (1/10): fused 2 nodes into 1 nodes
 ```
 
-那個 4096 就是打分的核心，1024 格 float32 恰好 4096 bytes，是 `score_fusion_memory` 算出來的「融合能省下的流量」。它的算法就是把兩個 node 的讀寫集合取交集，把每條共同的 `MemoryDep` 大小加起來，`buf0` 一個寫一個讀，正好對上。融合成立，兩個 node 變一個，最後生成的 kernel 也只有一個 `cpp_fused_add_mul_relu_sin_sum_0`，外層迴圈每算完一列的 sum，順手把 `relu` 和乘法做掉，`buf0` 的那趟往返省下來了。
+那個 4096 就是打分的核心，1024 格 float32 恰好 4096 bytes，也就是「融合能省下的流量」。算法是把兩個 node 的讀寫集合取交集，把每條共同的 `MemoryDep` 大小加起來，`buf0` 一個寫一個讀，正好對上。融合成立，兩個 node 變一個，最後生成的 kernel 也只有一個 `cpp_fused_add_mul_relu_sin_sum_0`，外層迴圈每算完一列的 sum，順手把 `relu` 和乘法做掉，`buf0` 的那趟往返省下來了。
 
 整個流程用動畫走一遍。
 
@@ -120,11 +120,11 @@ cannot fuse op0 with op1: no shared data
 
 ## 配對、打分、十個回合
 
-把上面看到的行為對回原始碼，`fuse_nodes` 的主迴圈最多跑十輪，每輪叫一次 `fuse_nodes_once`，融到再也沒有變化為止，前一輪融出來的 `FusedSchedulerNode` 下一輪繼續當候選人，所以鏈狀的融合會一輪一輪長大。
+把上面看到的行為對回原始碼，`fuse_nodes` 的主迴圈最多跑十輪，融到再也沒有變化為止，前一輪融出來的合體 node 下一輪繼續當候選人，所以鏈狀的融合會一輪一輪長大。
 
-每一輪裡的分工是這樣的。`get_possible_fusions` 先把 node 按「用到同一個 buffer」分組，只在組內兩兩配對，避免全圖 O(n²) 亂配，畢竟沒碰過同一塊記憶體的兩個 node，融了也省不到東西。每一對過 `can_fuse` 的合法性檢查，extern 和 nop 不融、device 要相同、融了不能在依賴圖上繞出 cycle。這裡還分成兩種局面，一對 node 有 producer 和 consumer 關係的叫垂直融合，要再過一關 `can_fuse_vertical`，consumer 的每條 unmet dependency 都要能對上 producer 的 write，對不上的就是剛剛那兩種下場。彼此沒有依賴、只是讀同一批 input 的叫水平融合，門檻反而更高，因為沒有中間 buffer 可省，賺頭只剩共用的讀取。
+每一輪裡的分工是這樣的。先把 node 按「用到同一個 buffer」分組，只在組內兩兩配對，避免全圖 O(n²) 亂配，畢竟沒碰過同一塊記憶體的兩個 node，融了也省不到東西。每一對過 `can_fuse` 的合法性檢查，extern 和 nop 不融、device 要相同、融了不能在依賴圖上繞出 cycle。這裡還分成兩種局面，一對 node 有 producer 和 consumer 關係的叫垂直融合，要再過一關垂直方向的檢查，consumer 的每條 unmet dependency 都要能對上 producer 的 write，對不上的就是剛剛那兩種下場。彼此沒有依賴、只是讀同一批 input 的叫水平融合，門檻反而更高，因為沒有中間 buffer 可省，賺頭只剩共用的讀取。
 
-活下來的配對交給 `score_fusion` 排序，這個分數是一個 tuple，省下的記憶體流量是主要項，兩個 node 在原圖中的距離當次要項，位置近的優先，因為隔太遠的融合容易把別的 buffer 的生命週期拉長，反而墊高峰值記憶體。分數高的先融，融完把 `name_to_fused_node` 更新掉，這一輪繼續消化下一對。
+活下來的配對交給 `score_fusion` 排序，這個分數是一個 tuple，省下的記憶體流量是主要項，兩個 node 在原圖中的距離當次要項，位置近的優先，因為隔太遠的融合容易把別的 buffer 的生命週期拉長，反而墊高峰值記憶體。分數高的先融，融完更新候選名單，這一輪繼續消化下一對。
 
 值得注意的是這套機制裡沒有任何一條「sin 跟 add 可以融、softmax 跟 matmul 不行」的規則，Scheduler 不認識 op，它只看讀寫。所有判準最後都繞回同一個問題，這次融合值不值一趟記憶體往返。
 
