@@ -169,7 +169,7 @@ AOT:     mm = torch.ops.aten.mm.default(primals_1, primals_2)   （ATen 層）
 
 AOTAutograd 是 pipeline 第二站，也是 Torch Compiler 的軍師。拿 Dynamo 交出的 torch 層 forward 圖，在 FakeTensor 上重演一遍、讓 autograd 引擎把撤退路線也畫出來，收成一張 joint graph，再一刀切成 ATen 層的 forward 和 backward 兩張圖。forward 多輸出一批要保存的中間值，backward 拿著它們和上游梯度算出對輸入的梯度，兩張各自交給 Inductor，最後包進一個 `autograd.Function` 掛回 eager 的 tape 上。微分不是它自己算的，是引擎跑一遍、它錄下來的。圖也不是它編的，是切好之後轉交的。它的本事全在「推演」和「切分」這兩件事上。
 
-明天拆推演過程中的第一層轉換，也就是 Functionalization。`x.add_(1)`、view 這些會就地改記憶體的操作，是怎麼被改寫成純函數式、又保證語意不變的。那我們明天見！
+明天拆推演過程中的第一層轉換，也就是 Functionalization。`x.add_(1)`、view 這些會 in-place 改記憶體的操作，是怎麼被改寫成純函數式、又保證語意不變的。那我們明天見！
 
 ## 參考資料
 

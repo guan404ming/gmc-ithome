@@ -133,7 +133,7 @@ class Functionalization(Scene):
         self.play(FadeIn(src), FadeIn(chip_x), FadeIn(chip_v0), run_time=0.4)
         lk = trunk_link([chip_x[0].get_left(), [cor_x, chip_x[0].get_left()[1], 0], [cor_x, chip_v0[0].get_left()[1], 0], chip_v0[0].get_left()], MUTED)
         self.play(Create(lk), run_time=0.4)
-        self.wait(2.5)
+        self.wait(3.5)
 
         gx = aot_card[1].get_corner(DL) + DOWN * 0.45
         glines = []
@@ -166,9 +166,9 @@ class Functionalization(Scene):
         self.play(Create(lk2), run_time=0.4)
         emit("view = view(arg0_1, [2,8])")
         self.play(src[0].animate.set_color(TXT), run_time=0.2)
-        self.wait(2.5)
+        self.wait(3.5)
 
-        switch("STEP 2", "y.add_(1)", "就地改被攔下：換成 out-of-place 的 add，view 重放把新值搬回 base")
+        switch("STEP 2", "y.add_(1)", "in-place 改被攔下：換成 out-of-place 的 add，view replay 把新值搬回 base")
         self.play(src[1].animate.set_color(ACCENT), run_time=0.25)
         emit("add = add(view, 1)", color=ACCENT)
         emit("view_1 = view(add, [4,4])", color=MUTED, note="寫回 base")
@@ -180,9 +180,9 @@ class Functionalization(Scene):
         lk3 = link(ACCENT)
         self.play(Create(lk3), run_time=0.4)
         strike(1, "-> add")
-        self.wait(3.5)
+        self.wait(4.5)
 
-        switch("STEP 3", "y.relu_()", "同一套規則再來一次：relu_ 變 relu，重放後 base 的最新值是 view_3")
+        switch("STEP 3", "y.relu_()", "同一套規則再來一次：relu_ 變 relu，replay 後 base 的最新值是 view_3")
         self.play(src[2].animate.set_color(ACCENT), run_time=0.25)
         emit("relu = relu(view_2)", color=ACCENT)
         emit("view_3 = view(relu, [4,4])", color=MUTED, note="寫回 base")
@@ -190,20 +190,20 @@ class Functionalization(Scene):
         self.play(Indicate(lk3, color=ACCENT, scale_factor=1.02), run_time=0.4)
         self.play(Transform(chip_v0, chip_v2), run_time=0.4)
         strike(2, "-> relu")
-        self.wait(2.5)
+        self.wait(3.5)
 
         switch("STEP 4", "return x * 2", "讀 x 拿到的是帳本上的最新值：mul 吃 view_3，不是原始的 arg0_1")
         self.play(src[3].animate.set_color(ACCENT), run_time=0.25)
         emit("mul = mul(view_3, 2)")
         self.play(src[3].animate.set_color(TXT), run_time=0.2)
-        self.wait(3.5)
+        self.wait(4.5)
 
         switch("EPILOGUE", "邊界結清", "呼叫者手上的 x 也要看到修改：圖尾端補一條 copy_，一次寫回輸入")
         cp = emit("copy_(arg0_1, view_3)", color=ACCENT)
         emit("return (mul,)")
         chip_x2 = chip("x  ·  arg0_1", "copy_ 寫回，呼叫者看得到", cw, main_color=TXT, edge=ACCENT, fill=ACTIVE_FILL).move_to(chip_x).align_to(chip_x, LEFT)
         self.play(Transform(chip_x, chip_x2), Indicate(cp, color=ACCENT, scale_factor=1.05), run_time=0.6)
-        self.wait(3.5)
+        self.wait(4.5)
 
-        switch("RULE", "圖內純函數，邊界一條 copy_", "add_ 變 add、view 用重放維持一致；後端從此可以自由重排融合")
-        self.wait(5.5)
+        switch("RULE", "圖內純函數，邊界一條 copy_", "add_ 變 add、view 用 replay 維持一致；後端從此可以自由重排融合")
+        self.wait(6.5)
