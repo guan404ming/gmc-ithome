@@ -1,18 +1,24 @@
-# Day 12 | torch.compile 的沙盤推演師：AOTAutograd
+# Day 12 | torch.compile 的軍師：AOTAutograd
 
 ## 前言
 
 Dynamo 的故事在昨天正式收尾，今天進入 pipeline 的第二站。先把問題攤開來。Dynamo 交出來的 FX Graph 只有 forward，而訓練的每一步都要 backward。Eager 模式下這不是問題，autograd 引擎在執行時動態建 tape、動態回放。但我們現在要的是編譯，backward 也得變成一張可以最佳化的圖，而且要在真正執行之前就拿到。這就是 AOTAutograd 名字裡 Ahead-of-Time 的意思。
 
-如果要幫它取一個系列裡的角色，我會說它是一位沙盤推演師。軍隊真的開拔之前，先在沙盤上把整場仗完整推演一遍，進攻的路線（forward）畫出來，撤退的路線（backward）也一併畫好，沿途哪些補給要先囤在哪個據點（要保存哪些中間值）全部標記清楚。而且沙盤上用的是模型不是真兵，AOTAutograd 用的也不是真資料，是只有 shape、dtype、device 的 FakeTensor。推演完，兩張地圖各自交給 Inductor 去修路。
+它就像是一位軍師，在軍隊真的開拔之前，先在沙盤上把整場仗完整推演一遍，進攻的路線（forward）畫出來，撤退的路線（backward）也一併畫好，沿途哪些補給要先囤在哪個據點（要保存哪些中間值）全部標記清楚。而且沙盤上用的是棋子不是真兵，AOTAutograd 用的也不是真資料，是只有 shape、dtype、device 的 FakeTensor。推演完，兩張地圖各自交給軍隊 Inductor 去修路。
 
-它住在 [`torch/_functorch/aot_autograd.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_functorch/aot_autograd.py)，是 Dynamo 和 Inductor 之間的中間層。今天先看清楚它的輸入輸出長什麼樣、中間那場推演是怎麼跑的，細節的三層轉換（Functionalization、Decomposition、Partitioner）留給後面幾天各自拆開。
+它住在 [`torch/_functorch/aot_autograd.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_functorch/aot_autograd.py)，是 Dynamo 和 Inductor 之間的中間層。今天先來看清楚它的輸入輸出長什麼樣、中間那場推演是怎麼跑的，細節的三層轉換（Functionalization、Decomposition、Partitioner）留給後面幾天各自拆開。
 
 正文開始！
 
+## 先補課，導數與 tape
+
+怕有人對 backward 有點生疏，先花一分鐘把兩個名詞接上。訓練靠梯度更新權重，而梯度就是 loss 對每個參數的導數，告訴你把這個參數往哪個方向調、調多少，loss 會降最快。網路是一長串函式的複合，導數靠 chain rule 一層一層往回乘，所以算梯度天生就是一趟「從輸出走回輸入」的反向旅程。
+
+eager 模式的 autograd 引擎是這樣做的。forward 真的執行時，每個運算順手被記上一筆，記下誰算出了誰、用的是哪個 op，這份執行紀錄慣稱 tape。呼叫 `backward()` 時引擎沿著 tape 反向回放，每站套上該 op 的導數規則，把梯度一路乘回每個參數。關鍵在於 tape 是跑一次記一次的，每步執行都動態長出來，而導數規則常常需要 forward 的中間值當材料，例如 relu 的導數要知道當時誰大於零。記住這兩件事，今天的問題就清楚了，編譯世界裡沒有「跑一次」這回事，tape 得在執行前就生出來。
+
 ## Dynamo 交給 AOTAutograd 什麼
 
-整個系列的實驗一樣跑在 Modal 的 L40S、PyTorch 2.8.0 上，拿一個最小的訓練形狀。
+整個系列的實驗一樣跑在 Modal 的 L40S、PyTorch 2.8.0 的 GPU 上，拿一個最小的訓練 shape。
 
 ```python
 def f(x, w):
@@ -42,7 +48,7 @@ class GraphModule(torch.nn.Module):
 
 ## 實際跑一步訓練
 
-把 `aot_graphs` 打開。
+那我們現在把 `aot_graphs` 打開來看看：
 
 ```python
 torch._logging.set_logs(aot_graphs=True)
@@ -137,7 +143,7 @@ AOT:     mm = torch.ops.aten.mm.default(primals_1, primals_2)   （ATen 層）
 
 這個轉換是第一步推演的副產品。FakeTensor 重跑 forward 時，每個 op 都經過 dispatcher，落到 ATen 層的正式名字。`@` 這個 Python 運算子分發下去就是 `aten.mm`，`.relu()` 就是 `aten.relu`，變數名也從帶著來源資訊的 `l_x_` 變成編號的 `primals_1`。torch 層是給人看的，ATen 層是給編譯器看的，後端只要理解 ATen 這一套詞彙就夠了。
 
-這場推演還連帶做了兩件事，各佔一天。in-place 和 view 被改寫成純函數式（Functionalization，明天），高階 op 被拆成更小的基本運算（Decomposition，後天）。所以 Inductor 拿到的圖，跟你寫的 Python 已經隔了好幾層轉換，但每一層都留著 log 可以對照，這也是這個系列一路 dump 中間產物的底氣。
+這場推演還連帶做了兩件事：in-place 和 view 被改寫成純函數式（Functionalization，明天），高階 op 被拆成更小的基本運算（Decomposition，後天）。所以 Inductor 拿到的圖，跟你寫的 Python 已經隔了好幾層轉換，不過每一層都留著 log 可以對照。
 
 ## 圖編好了，backward 誰來呼叫？
 
@@ -149,7 +155,7 @@ AOT:     mm = torch.ops.aten.mm.default(primals_1, primals_2)   （ATen 層）
 
 ## 為什麼非得 ahead-of-time？
 
-最後把「為什麼要這麼大費周章」講清楚。Eager 的 autograd 是 define-by-run，forward 跑到哪、tape 記到哪，backward 按 tape 回放。好處是彈性，代價是 backward 永遠是一連串分開的 kernel，沒有全局可看、沒有 fusion 可做。AOT 展開之後就不一樣了。
+那為什麼要這麼大費周章把東西都 ahead-of-time 的做呢。主要就是因為 Eager 的 autograd 是 define-by-run，forward 跑到哪、tape 記到哪，backward 按 tape 回放。好處是彈性，代價是 backward 永遠是一連串分開的 kernel，沒有全局可看、沒有 fusion 可做。AOT 展開之後就不一樣了。
 
 - backward 是一張完整的圖，Inductor 能融合它。訓練的計算量大約一半在 backward，這一半在 eager 時代是完全編譯不到的。
 - forward 和 backward 之間「存什麼」從 autograd 引擎的預設行為（存所有需要的中間值），變成一個可以全局規劃的決策。上面那個「存 b8 的 mask 而不是 f32 的輸出」就是最小的例子，省記憶體的 activation checkpointing，在這個框架下也變成 partitioner 的一個策略而已。
@@ -157,7 +163,7 @@ AOT:     mm = torch.ops.aten.mm.default(primals_1, primals_2)   （ATen 層）
 
 ## 結語
 
-AOTAutograd 是 pipeline 第二站的沙盤推演師。拿 Dynamo 交出的 torch 層 forward 圖，在 FakeTensor 上重演一遍、讓 autograd 引擎把撤退路線也畫出來，收成一張 joint graph，再一刀切成 ATen 層的 forward 和 backward 兩張圖。forward 多輸出一批要保存的中間值，backward 拿著它們和上游梯度算出對輸入的梯度，兩張各自交給 Inductor，最後包進一個 `autograd.Function` 掛回 eager 的 tape 上。微分不是它自己算的，是引擎跑一遍、它錄下來的。圖也不是它編的，是切好之後轉交的。它的本事全在「推演」和「切分」這兩件事上。
+AOTAutograd 是 pipeline 第二站，也是 Torch Compiler 的軍師。拿 Dynamo 交出的 torch 層 forward 圖，在 FakeTensor 上重演一遍、讓 autograd 引擎把撤退路線也畫出來，收成一張 joint graph，再一刀切成 ATen 層的 forward 和 backward 兩張圖。forward 多輸出一批要保存的中間值，backward 拿著它們和上游梯度算出對輸入的梯度，兩張各自交給 Inductor，最後包進一個 `autograd.Function` 掛回 eager 的 tape 上。微分不是它自己算的，是引擎跑一遍、它錄下來的。圖也不是它編的，是切好之後轉交的。它的本事全在「推演」和「切分」這兩件事上。
 
 明天拆推演過程中的第一層轉換，也就是 Functionalization。`x.add_(1)`、view 這些會就地改記憶體的操作，是怎麼被改寫成純函數式、又保證語意不變的。那我們明天見！
 
@@ -168,3 +174,4 @@ AOTAutograd 是 pipeline 第二站的沙盤推演師。拿 Dynamo 交出的 torc
 - [torch/_functorch/partitioners.py（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_functorch/partitioners.py)
 - [functorch 的 aot_autograd 文件](https://pytorch.org/functorch/stable/aot_autograd.html)
 - Ansel et al., [*PyTorch 2*](https://pytorch.org/assets/pytorch2-2.pdf), ASPLOS 2024（第 4 節）
+
