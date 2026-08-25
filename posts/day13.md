@@ -117,27 +117,17 @@ outputs equal: True | inputs equal after mutation: True
 
 輸出相等，連輸入被 in-place 改掉的結果也相等。呼叫者完全感覺不到中間發生過一場大改寫。
 
-回頭一看，這跟 SideEffects 的結構一模一樣。SideEffects 把 Python 層的修改記帳、圖跑完用 bytecode replay。Functionalization 把 Tensor 層的修改謄寫、圖尾端一條 `copy_` 寫回。兩層各管一段，語意都靠「最後一刻結算」保住。
-
-## 原始碼裡它在哪
-
-對照 v2.8.0 的原始碼，這套機制分兩層。
-
-Python 這層的入口是 [`torch/_subclasses/functional_tensor.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_subclasses/functional_tensor.py)。`FunctionalTensor` 是一個 Tensor subclass，把真正的 Tensor 包在裡面。`FunctionalTensorMode` 掛在 dispatch 路徑上，AOTAutograd 追蹤時每一個 ATen op 都會先經過它。真正的帳本則在 C++，[`aten/src/ATen/FunctionalTensorWrapper.cpp`](https://github.com/pytorch/pytorch/blob/v2.8.0/aten/src/ATen/FunctionalTensorWrapper.cpp) 裡的 wrapper 存著一個 `value_`，指向「這個名字目前的最新值」。碰到 in-place op，dispatcher 透過 `Functionalize` 這個 dispatch key 把它導到對應的 out-of-place kernel，算出新 Tensor 之後呼叫 `replace_()` 把 `value_` 換過去，這就是動畫裡「帳本的最新值換一格」的那一步。
-
-View 的部分更講究一點。每做一次 view，wrapper 會記下一筆 `ViewMeta`，裡面有一對正向和反向的轉換（從 base 長出 view、把 view 的修改折回 base）。透過 view 寫入時，就靠這對轉換把修改傳回 base、再把所有 alias 重新生成，這就是圖裡那些成對 view 的來源，PyTorch 把它叫 view replay。
-
-AOTAutograd 這一側，追蹤前會先跑一遍 [`collect_metadata_analysis.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_functorch/_aot_autograd/collect_metadata_analysis.py) 裡的 `run_functionalized_fw_and_collect_metadata`，把函式在 functionalization 底下用 FakeTensor 跑一次，收集出上面看到的 `ViewAndMutationMeta`。哪個輸入被改過、哪個輸出其實是輸入的 alias，全部先問清楚，再決定圖要長什麼樣、wrapper 要在圖外補做哪些事。
+回頭一看，這其實跟 SideEffects 的結構有異曲同工之妙。SideEffects 把 Python 層的修改記入帳本、圖跑完用 bytecode replay。Functionalization 把 Tensor 層的修改謄寫、圖尾端一條 `copy_` 寫回。兩層各管一段，語意都靠「最後一刻結算」保住。
 
 ## 為什麼不留給後端自己處理
 
 理論上 Inductor 也可以自己分析 aliasing，但代價是每個後端都要重新實作一遍這套非常難寫對的分析，像是 view of view、跨 view 的寫入順序、輸入輸出互為 alias，每一項都是坑。在 AOTAutograd 集中做一次，後端拿到的圖保證純函數式，這就是「正規化」的意義，把千奇百怪的合法寫法收斂成一種標準形狀，後面的每一層都只需要處理標準形狀。這跟 Day 12 講的「順便換成 ATen 語言」是同一個哲學，正規化做得越徹底，後端越好寫。
 
-代價也有，view replay 讓圖變長，上面 `f` 那張圖用四條 view 換掉了兩條 in-place。不過這些 view 是免費的 metadata 操作，不碰資料本體，Inductor 大多能在 lowering 時吸收掉。有趣的是，Inductor 在確認安全之後，甚至會在生成程式碼時把一些 buffer 原地重用，等於把 functionalization 拆掉的 in-place 又賺回來，只是這次是編譯器自己決定的、保證正確的 in-place，而不是使用者手寫的那種沒人敢動的 in-place。
+當然做正規化是一定會有代價的：view replay 讓圖變長，上面 `f` 那張圖用四條 view 換掉了兩條 in-place。不過這些 view 是免費的 metadata 操作，不碰資料本體，Inductor 大多能在 lowering 時吸收掉。有趣的是，Inductor 在確認安全之後，甚至會在生成程式碼時把一些 buffer 原地重用，等於把 functionalization 拆掉的 in-place 又賺回來，只是這次是編譯器自己決定的、保證正確的 in-place，而不是使用者手寫的那種沒人敢動的 in-place。
 
 ## 結語
 
-Functionalization 是 AOTAutograd 的潔癖書記官。in-place 換成 out-of-place、名字 rebind 到最新值，view 用 replay 維持 alias 的一致性，圖內部變成純函數式。對輸入的修改集中成圖尾端的 `copy_`，語意在邊界上一次結清。帳本記在 `FunctionalTensorWrapper` 的 `value_` 和 `ViewMeta` 裡，該不該留 `copy_` 由 `ViewAndMutationMeta` 說了算。後端從此不用懂 aliasing。
+Functionalization 是 AOTAutograd 的一個有潔癖的書記官。in-place 換成 out-of-place、名字 rebind 到最新值，view 用 replay 維持 alias 的一致性，讓圖內部變成純函數式。對輸入的修改集中成圖尾端的 `copy_`，語意在邊界上一次結清。帳本記在 `FunctionalTensorWrapper` 的 `value_` 和 `ViewMeta` 裡，該不該留 `copy_` 由 `ViewAndMutationMeta` 說了算。有了這樣的轉換以及正規化之後，後端就不用懂 aliasing 也可以任何的做想要的優化。
 
 圖現在是純的了，但還是「大」的，LayerNorm、GELU 這些高階 op 一個頂十幾個基本運算。明天拆第二層轉換 Decomposition，看兩千多個 ATen op 怎麼收斂到後端只需要面對的幾百個。那我們明天見！
 

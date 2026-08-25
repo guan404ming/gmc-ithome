@@ -1,10 +1,10 @@
-# Day 14 | AOTAutograd 的樂高拆解師：Decomposition
+# Day 14 | AOTAutograd 的樂高大師：Decomposition
 
 ## 前言
 
-昨天 Functionalization 把圖洗成了純函數式，但圖還是「大」的。一個 LayerNorm 節點背後頂著十幾個基本運算，一個 GELU 藏著一條完整的數學式。而這背後其實還有一個更根本的問題。PyTorch 有超過兩千個 operator（光 `torch.ops.aten` 就登記了八百多個 op 家族），如果每個後端都要為每一個 op 寫一份 codegen，那任何新後端都不用做了，光把 op 清單看完就先陣亡。
+昨天 Functionalization 把圖變成了純函數式，但圖還是很大一塊的。一個 LayerNorm 節點背後頂著十幾個基本運算，一個 GELU 藏著一條完整的數學式。而這背後其實還有一個更根本的問題。PyTorch 有超過兩千個 operator（光 `torch.ops.aten` 就登記了八百多個 op 家族），如果每個後端都要為每一個 op 寫一份 codegen，那任何新後端都不用做了，光把 op 清單看完就先陣亡。
 
-Decomposition 的思路很像玩樂高。大多數看起來很複雜的 op，其實都是少數基本積木的組合。把組合拆開，後端只需要面對基本積木，而且拆完之後，後端還可以用自己的方式把積木拼回去，拼出來的東西常常比原本更快。今天會實際看一次拆解、翻開拆解表看它長什麼樣、看規則是怎麼註冊的、講清楚為什麼拆了不會變慢，最後看哪些 op 說什麼都不拆。
+而 Torch 在這邊則是透過一個獨立的模組去處理這件事，Decomposition 的思路很像玩樂高。大多數看起來很複雜的 op，其實都是少數基本積木的組合。把組合拆開，後端只需要面對基本積木，而且拆完之後，後端還可以用自己的方式把積木拼回去，拼出來的東西常常比原本更快。今天會實際看一次拆解、翻開拆解表看它長什麼樣、看規則是怎麼註冊的、講清楚為什麼拆了不會變慢，最後看哪些 op 不能拆。
 
 正文開始！
 
@@ -12,12 +12,14 @@ Decomposition 的思路很像玩樂高。大多數看起來很複雜的 op，其
 
 在拆之前，先把「op 有幾層」這件事講清楚，因為 decomposition 拆的方向就是沿著這個階層往下走，整理成一張表。
 
-| 層級 | 例子 | 規模 | 誰在用 |
-|----|----|----|----|
-| torch API | `F.gelu`、`nn.LayerNorm` | 2000+ | 使用者 |
-| ATen | `aten.gelu`、`aten.native_layer_norm` | 827 個家族（實測） | dispatcher、autograd |
-| Core ATen | `aten.add`、`aten.rsqrt`、`aten.var_mean` | 約 180 個 | 後端的共同詞彙表 |
-| Prims | `prims.add`、`prims.convert_element_type` | 約 250 個 | 拆到底的極簡詞彙表 |
+
+| 層級        | 例子                                       | 規模          | 誰在用                 |
+| --------- | ---------------------------------------- | ----------- | ------------------- |
+| torch API | `F.gelu`、`nn.LayerNorm`                  | 2000+       | 使用者                 |
+| ATen      | `aten.gelu`、`aten.native_layer_norm`     | 827 個家族（實測） | dispatcher、autograd |
+| Core ATen | `aten.add`、`aten.rsqrt`、`aten.var_mean`  | 約 180 個     | 後端的共同詞彙表            |
+| Prims     | `prims.add`、`prims.convert_element_type` | 約 250 個     | 拆到底的極簡詞彙表           |
+
 
 最上層是使用者寫的 torch API。往下一層是 ATen，也就是 Day 12 開始一直看到的 `torch.ops.aten.*`，dispatcher 和 autograd 都工作在這一層。再往下是 [Core ATen IR](https://pytorch.org/docs/stable/torch.compiler_ir.html)，官方從 ATen 裡挑出約 180 個 op 當作「後端至少要支援的最小集合」。最底層是 PrimTorch 專案定義的 [prims](https://github.com/pytorch/pytorch/tree/v2.8.0/torch/_prims)，約 250 個語意最單純的基本運算，連 type promotion、broadcast 都被拆成顯式的 op，是「拆到底」的目標詞彙表。
 
@@ -151,10 +153,11 @@ Decomposition 把兩千多個 op 收斂成少數基本運算。規則是普通�
 
 ## 參考資料
 
-- [torch/_decomp/__init__.py（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_decomp/__init__.py)
+- [torch/_decomp/**init**.py（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_decomp/__init__.py)
 - [torch/_decomp/decompositions.py（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_decomp/decompositions.py)
-- [torch/_refs/nn/functional/__init__.py 裡的 GELU 拆解規則（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_refs/nn/functional/__init__.py)
+- [torch/_refs/nn/functional/**init**.py 裡的 GELU 拆解規則（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_refs/nn/functional/__init__.py)
 - [torch/_inductor/decomposition.py（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/decomposition.py)
 - [torch/_prims（PrimTorch，v2.8.0）](https://github.com/pytorch/pytorch/tree/v2.8.0/torch/_prims)
 - [Core ATen IR 與 Prims IR（PyTorch 官方文件的 IRs 頁）](https://pytorch.org/docs/stable/torch.compiler_ir.html)
 - [PyTorch 2.0 發布公告的 PrimTorch 一節](https://pytorch.org/get-started/pytorch-2.0/)
+
