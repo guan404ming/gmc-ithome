@@ -1,0 +1,44 @@
+[exported program]
+ExportedProgram:
+    class GraphModule(torch.nn.Module):
+        def forward(self, p_fc_weight: "f32[8, 16]", p_fc_bias: "f32[8]", x: "f32[s77, 16]"):
+             # File: /Users/wchiu/Documents/GitHub/gmc-ithome/.venv/lib/python3.12/site-packages/torch/nn/modules/linear.py:125 in forward, code: return F.linear(input, self.weight, self.bias)
+            linear: "f32[s77, 8]" = torch.ops.aten.linear.default(x, p_fc_weight, p_fc_bias);  x = p_fc_weight = p_fc_bias = None
+            
+             # File: /Users/wchiu/Documents/GitHub/gmc-ithome/code/day29/export_aoti.py:14 in forward, code: return torch.relu(self.fc(x)) + 1
+            relu: "f32[s77, 8]" = torch.ops.aten.relu.default(linear);  linear = None
+            add: "f32[s77, 8]" = torch.ops.aten.add.Tensor(relu, 1);  relu = None
+            return (add,)
+            
+Graph signature: 
+    # inputs
+    p_fc_weight: PARAMETER target='fc.weight'
+    p_fc_bias: PARAMETER target='fc.bias'
+    x: USER_INPUT
+    
+    # outputs
+    add: USER_OUTPUT
+    
+Range constraints: {s77: VR[1, 1024]}
+
+[torch.compile on data-dependent branch]
+  graph_count=2 graph_break_count=1
+  break reason: generic_jump TensorVariable()
+[torch.export on the same module]
+  GuardOnDataDependentSymNode: Could not guard on data-dependent expression Eq(u0, 1) (unhinted: Eq(u0, 1)). (Size-like symbols: none) Caused by: (_export/non_strict_utils.py:1051 in __torch_function__) For more information, run with TORCH_LOGS="dynam
+[pt2 package contents]
+  tiny/data/aotinductor/model/cq5wuv454krsolah7rcae76pgdsnriveltbeyf4wsndgpgt76clw.wrapper.cpp  (27 KB)
+  tiny/data/aotinductor/model/cocidwwsfww37pg7yy5b7f3fo4oy2lgne33ab6he52mejkbfc74o.kernel.cpp  (8 KB)
+  tiny/data/aotinductor/model/cq5wuv454krsolah7rcae76pgdsnriveltbeyf4wsndgpgt76clw.wrapper_metadata.json  (0 KB)
+  tiny/data/aotinductor/model/cocidwwsfww37pg7yy5b7f3fo4oy2lgne33ab6he52mejkbfc74o.kernel_metadata.json  (0 KB)
+  tiny/data/aotinductor/model/cq5wuv454krsolah7rcae76pgdsnriveltbeyf4wsndgpgt76clw.wrapper.so  (229 KB)
+  tiny/archive_format  (0 KB)
+  tiny/archive_version  (0 KB)
+  tiny/.data/version  (0 KB)
+  tiny/byteorder  (0 KB)
+  tiny/.data/serialization_id  (0 KB)
+[load and run]
+  allclose(aoti, eager) = True
+  batch=512 output shape = (512, 8)
+  dynamo frames traced while running .pt2 = 0
+  dynamo frames traced after one torch.compile call = 2

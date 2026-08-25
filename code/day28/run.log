@@ -1,0 +1,45 @@
+== part 1: observer ==
+[observer] call #1
+graph():
+    %l_x_ : torch.Tensor [num_users=1] = placeholder[target=L_x_]
+    %y : [num_users=1] = call_function[target=torch.relu](args = (%l_x_,), kwargs = {})
+    %add : [num_users=1] = call_function[target=operator.add](args = (%y, 1), kwargs = {})
+    return (add,)
+  input[0]: shape=(4, 8) dtype=torch.float32
+matches eager: True
+-- second call, same shape --
+observer calls so far: 1
+-- third call, new shape (4, 8) -> (6, 8) --
+[observer] call #2
+graph():
+    %s77 : torch.SymInt [num_users=0] = placeholder[target=s77]
+    %l_x_ : torch.Tensor [num_users=1] = placeholder[target=L_x_]
+    %y : [num_users=1] = call_function[target=torch.relu](args = (%l_x_,), kwargs = {})
+    %add : [num_users=1] = call_function[target=operator.add](args = (%y, 1), kwargs = {})
+    return (add,)
+  input[0]: SymInt = s77
+  input[1]: shape=(6, 8) dtype=torch.float32
+observer calls so far: 2
+== part 2: rewriter ==
+eager    f(t): tensor([1., 1., 3.])
+[rewriter] replaced 1 node(s): relu -> sigmoid
+compiled f(t): tensor([1.1192, 1.5000, 1.8808])
+sigmoid(t)+1 : tensor([1.1192, 1.5000, 1.8808])
+== part 3: aten wrapper ==
+[wrapper] fw_compiler got:
+graph():
+    %arg0_1 : [num_users=1] = placeholder[target=arg0_1]
+    %relu : [num_users=1] = call_function[target=torch.ops.aten.relu.default](args = (%arg0_1,), kwargs = {})
+    %add : [num_users=1] = call_function[target=torch.ops.aten.add.Tensor](args = (%relu, 1), kwargs = {})
+    return (add,)
+== part 4: registry ==
+list_backends(): ['cudagraphs', 'inductor', 'onnxrt', 'openxla', 'tvm']
+registered: True
+[observer] call #1
+graph():
+    %l_x_ : torch.Tensor [num_users=1] = placeholder[target=L_x_]
+    %y : [num_users=1] = call_function[target=torch.relu](args = (%l_x_,), kwargs = {})
+    %add : [num_users=1] = call_function[target=operator.add](args = (%y, 1), kwargs = {})
+    return (add,)
+  input[0]: shape=(2, 2) dtype=torch.float32
+observer calls via registry: 1

@@ -1,0 +1,287 @@
+[tool 1: TORCH_LOGS=graph_breaks]
+  Graph break in user code at /Users/wchiu/Documents/GitHub/gmc-ithome/code/day27/debug_toolbox.py:21
+  Graph Break Reason: Data-dependent branching
+  Explanation: Detected data-dependent branching (e.g. `if my_tensor.sum() > 0:`). Dynamo does not support tracing dynamic control flow.
+  Hint: This graph break is fundamental - it is unlikely that Dynamo will ever be able to trace through your code. Consider finding a workaround.
+  Hint: Use `torch.cond` to express dynamic control flow.
+  
+  Developer debug context: attempted to jump with TensorVariable()
+  
+  User code traceback:
+  File "/Users/wchiu/Documents/GitHub/gmc-ithome/code/day27/debug_toolbox.py", line 148, in <module>
+  modes[sys.argv[1]]()
+  File "/Users/wchiu/Documents/GitHub/gmc-ithome/code/day27/debug_toolbox.py", line 43, in child_compile
+  cf(torch.randn(32, 32), 10)
+  File "/Users/wchiu/Documents/GitHub/gmc-ithome/code/day27/debug_toolbox.py", line 21, in f
+  if y.sum() > 0:
+  
+[tool 2: TORCH_LOGS=recompiles]
+  Recompiling function f in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day27/debug_toolbox.py:19
+  triggered by the following guard failure(s):
+  - 0/0: tensor 'x' size mismatch at index 0. expected 32, actual 48
+  Recompiling function torch_dynamo_resume_in_f_at_21 in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day27/debug_toolbox.py:21
+  triggered by the following guard failure(s):
+  - 1/0: tensor 'y' size mismatch at index 0. expected 32, actual 48
+[tool 3: TORCH_LOGS=output_code]
+  cpp_fused_add_gt_sin_sum_0 = async_compile.cpp_pybinding(['const float*', 'float*', 'float*', 'bool*'], '''
+  cpp_fused_add_gt_sin_sum_0(arg0_1, buf0, buf1, buf2)
+  Output code written to: /tmp/torchinductor_day27/az/cazeciyh4zabf6wptfnqxwr5taumzppx4ksurrzbmo7wl6ivevph.py
+  cpp_fused_mul_relu_0 = async_compile.cpp_pybinding(['const float*', 'float*'], '''
+  cpp_fused_mul_relu_0(arg0_1, buf0)
+  Output code written to: /tmp/torchinductor_day27/c5/cc5whbo7fduoh4jvrq5dsve47xysjz5zycoukvicxpd7ga64bo7z.py
+[tool 4: torch._dynamo.explain]
+Graph Count: 2
+Graph Break Count: 1
+Op Count: 6
+Break Reasons:
+  Break Reason 1:
+    Reason: generic_jump TensorVariable()
+    User Stack:
+      <FrameSummary file /Users/wchiu/Documents/GitHub/gmc-ithome/code/day27/debug_toolbox.py, line 21 in f>
+Ops per Graph:
+  Ops 1:
+    <built-in method sin of type object at 0x108f20ae8>
+    <built-in function add>
+    <built-in function gt>
+  Ops 2:
+    <built-in function mul>
+    <built-in method relu of type object at 0x108f20ae8>
+    <built-in function mul>
+Out Guards:
+  Guard 1:
+    Name: "G['torch']"
+    Source: global
+    Create Function: FUNCTION_MATCH
+    Guard Types: ['ID_MATCH']
+    Code List: ["___check_obj_id(G['torch'], 4312582000)"]
+    Object Weakref: <weakref at 0x10de218f0; to 'module' at 0x1010cc770>
+    Guarded Class Weakref: <weakref at 0x10047b010; to 'type' at 0x102266c18 (module)>
+  Guard 2:
+    Name: "G['torch'].sin"
+    Source: global
+    Create Function: FUNCTION_MATCH
+    Guard Types: ['ID_MATCH']
+    Code List: ["___check_obj_id(G['torch'].sin, 4316081632)"]
+    Object Weakref: <weakref at 0x10dd6c590; to 'builtin_function_or_method' at 0x101422de0>
+    Guarded Class Weakref: <weakref at 0x1004484a0; to 'type' at 0x102266918 (builtin_function_or_method)>
+  Guard 3:
+    Name: ''
+    Source: global
+    Create Function: DETERMINISTIC_ALGORITHMS
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 4:
+    Name: ''
+    Source: global
+    Create Function: TORCH_FUNCTION_STATE
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 5:
+    Name: ''
+    Source: global
+    Create Function: AUTOGRAD_SAVED_TENSORS_HOOKS
+    Guard Types: ['AUTOGRAD_SAVED_TENSORS_HOOKS']
+    Code List: ['torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None']
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 6:
+    Name: "L['x']"
+    Source: local
+    Create Function: TENSOR_MATCH
+    Guard Types: ['TENSOR_MATCH']
+    Code List: ["hasattr(L['x'], '_dynamo_dynamic_indices') == False"]
+    Object Weakref: <weakref at 0x10dd6c810; dead>
+    Guarded Class Weakref: <weakref at 0x1070394e0; to 'torch._C._TensorMeta' at 0x841d81010 (Tensor)>
+  Guard 7:
+    Name: ''
+    Source: global
+    Create Function: DEFAULT_DEVICE
+    Guard Types: ['DEFAULT_DEVICE']
+    Code List: ['utils_device.CURRENT_DEVICE == None']
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 8:
+    Name: ''
+    Source: shape_env
+    Create Function: SHAPE_ENV
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 9:
+    Name: ''
+    Source: global
+    Create Function: GRAD_MODE
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 10:
+    Name: "G['torch']"
+    Source: global
+    Create Function: FUNCTION_MATCH
+    Guard Types: ['ID_MATCH']
+    Code List: ["___check_obj_id(G['torch'], 4312582000)"]
+    Object Weakref: <weakref at 0x10de218f0; to 'module' at 0x1010cc770>
+    Guarded Class Weakref: <weakref at 0x10047b010; to 'type' at 0x102266c18 (module)>
+  Guard 11:
+    Name: ''
+    Source: global
+    Create Function: DETERMINISTIC_ALGORITHMS
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 12:
+    Name: "L['n']"
+    Source: local
+    Create Function: CONSTANT_MATCH
+    Guard Types: ['EQUALS_MATCH']
+    Code List: ["L['n'] == 10"]
+    Object Weakref: None
+    Guarded Class Weakref: <weakref at 0x100479c10; to 'type' at 0x102263278 (int)>
+  Guard 13:
+    Name: "L['y']"
+    Source: local
+    Create Function: TENSOR_MATCH
+    Guard Types: ['TENSOR_MATCH']
+    Code List: ["hasattr(L['y'], '_dynamo_dynamic_indices') == False"]
+    Object Weakref: <weakref at 0x10de12660; dead>
+    Guarded Class Weakref: <weakref at 0x1070394e0; to 'torch._C._TensorMeta' at 0x841d81010 (Tensor)>
+  Guard 14:
+    Name: ''
+    Source: global
+    Create Function: TORCH_FUNCTION_STATE
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 15:
+    Name: ''
+    Source: global
+    Create Function: AUTOGRAD_SAVED_TENSORS_HOOKS
+    Guard Types: ['AUTOGRAD_SAVED_TENSORS_HOOKS']
+    Code List: ['torch._functorch.aot_autograd.utils.top_saved_tensors_hooks ids == None']
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 16:
+    Name: "G['torch'].relu"
+    Source: global
+    Create Function: FUNCTION_MATCH
+    Guard Types: ['ID_MATCH']
+    Code List: ["___check_obj_id(G['torch'].relu, 4316080992)"]
+    Object Weakref: <weakref at 0x10de12c00; to 'builtin_function_or_method' at 0x101422b60>
+    Guarded Class Weakref: <weakref at 0x1004484a0; to 'type' at 0x102266918 (builtin_function_or_method)>
+  Guard 17:
+    Name: ''
+    Source: global
+    Create Function: DEFAULT_DEVICE
+    Guard Types: ['DEFAULT_DEVICE']
+    Code List: ['utils_device.CURRENT_DEVICE == None']
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 18:
+    Name: ''
+    Source: shape_env
+    Create Function: SHAPE_ENV
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+  Guard 19:
+    Name: ''
+    Source: global
+    Create Function: GRAD_MODE
+    Guard Types: None
+    Code List: None
+    Object Weakref: None
+    Guarded Class Weakref: None
+Compile Times: TorchDynamo compilation metrics:
+Function, Runtimes (s)
+_compile.compile_inner, 0.0270, 0.0091
+compile_attempt_0, 0.0202, 0.0057
+bytecode_tracing, 0.0129, 0.0033
+OutputGraph.call_user_compiler, 0.0001, 0.0001
+build_guards, 0.0058, 0.0029
+gc, 0.0002, 0.0002
+
+[tool 5: depyf.prepare_debug]
+[depyf dump dir: /tmp/day27_depyf]
+  __compiled_fn_1.BEFORE_PRE_GRAD.0.py
+  __compiled_fn_1.Forward_graph.0.py
+  __compiled_fn_1.__compiled_fn_1_89e14957_0209_4616_b549_7f48ffb1c65c.0.py
+  __compiled_fn_1.kernel_0.py
+  __compiled_fn_1.pre_insert_deferred_runtime_asserts___compiled_fn_1_89e14957_0209_4616_b549_7f48ffb1c65c.0.py
+  __compiled_fn_1.tensorify_python_scalars.0.py
+  __compiled_fn_5.BEFORE_PRE_GRAD.0.py
+  __compiled_fn_5.Forward_graph.0.py
+  __compiled_fn_5.__compiled_fn_5_2a4a181c_209c_44df_b191_4aca4755093c.0.py
+  __compiled_fn_5.kernel_0.py
+  __compiled_fn_5.pre_insert_deferred_runtime_asserts___compiled_fn_5_2a4a181c_209c_44df_b191_4aca4755093c.0.py
+  __compiled_fn_5.tensorify_python_scalars.0.py
+  __transformed_code_0_for_f.py
+  __transformed_code_0_for_torch_dynamo_resume_in_f_at_21.py
+  full_code_for_f_0.py
+[__transformed_code_0_for_f.py]
+def __transformed_code_0_for_f(x, n):
+    tmp_1 = __import_torch_dot__dynamo_dot_utils.record_pregraph_bytecode_enter
+    tmp_2 = __import_torch_dot__dynamo_dot_utils.record_pregraph_bytecode_enter()
+    tmp_3 = __import_torch_dot__dynamo_dot_utils.record_pregraph_bytecode_exit
+    __import_torch_dot__dynamo_dot_utils.record_pregraph_bytecode_exit(tmp_2)
+    graph_out_0 = __compiled_fn_1_89e14957_0209_4616_b549_7f48ffb1c65c(x)
+    y = graph_out_0[1]
+    if graph_out_0[0]:
+        return __resume_at_88_2_e7cec4f6_aeac_4bf8_9722_71df3ad0abfe(n, y)
+    return __resume_at_98_3_3fa5dcb9_e634_4fa3_85dd_70ae18cd87d5(n, y)
+
+[__transformed_code_0_for_torch_dynamo_resume_in_f_at_21.py]
+def __transformed_code_0_for_torch_dynamo_resume_in_f_at_21(n, y):
+    x = None # this line helps Python to generate bytecode with at least the same number of local variables as the original function
+
+    tmp_1 = __import_torch_dot__dynamo_dot_utils.record_pregraph_bytecode_enter
+    tmp_2 = __import_torch_dot__dynamo_dot_utils.record_pregraph_bytecode_enter()
+    tmp_3 = __import_torch_dot__dynamo_dot_utils.record_pregraph_bytecode_exit
+    __import_torch_dot__dynamo_dot_utils.record_pregraph_bytecode_exit(tmp_2)
+    graph_out_0 = __compiled_fn_5_2a4a181c_209c_44df_b191_4aca4755093c(y)
+    return graph_out_0[0]
+
+[tool 6: TORCH_COMPILE_DEBUG=1]
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchdynamo/debug.log  (0 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/aot_model___0_debug.log  (0 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/aot_model___1_debug.log  (0 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__0_inference_0.0/fx_graph_readable.py  (1 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__0_inference_0.0/fx_graph_runnable.py  (2 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__0_inference_0.0/fx_graph_transformed.py  (1 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__0_inference_0.0/inductor_generated_kernel_to_post_grad_nodes.json  (0 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__0_inference_0.0/inductor_provenance_tracking_node_mappings.json  (0 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__0_inference_0.0/ir_post_fusion.txt  (4 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__0_inference_0.0/ir_pre_fusion.txt  (3 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__0_inference_0.0/output_code.py  (4 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__1_inference_1.1/fx_graph_readable.py  (1 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__1_inference_1.1/fx_graph_runnable.py  (2 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__1_inference_1.1/fx_graph_transformed.py  (1 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__1_inference_1.1/inductor_generated_kernel_to_post_grad_nodes.json  (0 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__1_inference_1.1/inductor_provenance_tracking_node_mappings.json  (1 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__1_inference_1.1/ir_post_fusion.txt  (1 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__1_inference_1.1/ir_pre_fusion.txt  (1 KB)
+  torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__1_inference_1.1/output_code.py  (3 KB)
+[tool 7a: TORCHDYNAMO_REPRO_AFTER=dynamo]
+  BackendCompilerFailed: day27_bad backend cannot handle relu
+  minifier_launcher.py written: True
+[tool 7b: run minifier_launcher]
+  SUCCESS: Went from 7 to 6 nodes
+  SUCCESS: Went from 6 to 5 nodes
+  SUCCESS: Went from 5 to 4 nodes
+  SUCCESS: Went from 4 to 3 nodes
+  Wrote minimal repro out to repro.py
+[minified repro.py forward]
+class Repro(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+    def forward(self, y):
+        z = torch.relu(y);  y = None
+        return (z,)

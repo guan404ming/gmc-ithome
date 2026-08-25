@@ -1,0 +1,140 @@
+
+[case 1: global constant changes every call]
+V0825 23:17:55.139000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles] Recompiling function poly in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:9
+V0825 23:17:55.139000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:17:55.139000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     - 0/0: G['step'] == 0                                              
+V0825 23:17:55.971000 20627 torch/_dynamo/guards.py:3508] [0/2] [__recompiles] Recompiling function poly in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:9
+V0825 23:17:55.971000 20627 torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:17:55.971000 20627 torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     - 0/1: G['step'] == 1                                              
+V0825 23:17:55.971000 20627 torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     - 0/0: G['step'] == 0                                              
+V0825 23:17:56.780000 20627 torch/_dynamo/guards.py:3508] [0/3] [__recompiles] Recompiling function poly in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:9
+V0825 23:17:56.780000 20627 torch/_dynamo/guards.py:3508] [0/3] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:17:56.780000 20627 torch/_dynamo/guards.py:3508] [0/3] [__recompiles]     - 0/2: G['step'] == 2                                              
+V0825 23:17:56.780000 20627 torch/_dynamo/guards.py:3508] [0/3] [__recompiles]     - 0/1: G['step'] == 1                                              
+V0825 23:17:56.780000 20627 torch/_dynamo/guards.py:3508] [0/3] [__recompiles]     - 0/0: G['step'] == 0                                              
+V0825 23:17:57.592000 20627 torch/_dynamo/guards.py:3508] [0/4] [__recompiles] Recompiling function poly in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:9
+V0825 23:17:57.592000 20627 torch/_dynamo/guards.py:3508] [0/4] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:17:57.592000 20627 torch/_dynamo/guards.py:3508] [0/4] [__recompiles]     - 0/3: G['step'] == 3                                              
+V0825 23:17:57.592000 20627 torch/_dynamo/guards.py:3508] [0/4] [__recompiles]     - 0/2: G['step'] == 2                                              
+V0825 23:17:57.592000 20627 torch/_dynamo/guards.py:3508] [0/4] [__recompiles]     - 0/1: G['step'] == 1                                              
+V0825 23:17:57.592000 20627 torch/_dynamo/guards.py:3508] [0/4] [__recompiles]     - 0/0: G['step'] == 0                                              
+V0825 23:17:58.386000 20627 torch/_dynamo/guards.py:3508] [0/5] [__recompiles] Recompiling function poly in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:9
+V0825 23:17:58.386000 20627 torch/_dynamo/guards.py:3508] [0/5] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:17:58.386000 20627 torch/_dynamo/guards.py:3508] [0/5] [__recompiles]     - 0/4: G['step'] == 4                                              
+V0825 23:17:58.386000 20627 torch/_dynamo/guards.py:3508] [0/5] [__recompiles]     - 0/3: G['step'] == 3                                              
+V0825 23:17:58.386000 20627 torch/_dynamo/guards.py:3508] [0/5] [__recompiles]     - 0/2: G['step'] == 2                                              
+V0825 23:17:58.386000 20627 torch/_dynamo/guards.py:3508] [0/5] [__recompiles]     - 0/1: G['step'] == 1                                              
+V0825 23:17:58.386000 20627 torch/_dynamo/guards.py:3508] [0/5] [__recompiles]     - 0/0: G['step'] == 0                                              
+V0825 23:17:59.164000 20627 torch/_dynamo/guards.py:3508] [0/6] [__recompiles] Recompiling function poly in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:9
+V0825 23:17:59.164000 20627 torch/_dynamo/guards.py:3508] [0/6] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:17:59.164000 20627 torch/_dynamo/guards.py:3508] [0/6] [__recompiles]     - 0/5: G['step'] == 5                                              
+V0825 23:17:59.164000 20627 torch/_dynamo/guards.py:3508] [0/6] [__recompiles]     - 0/4: G['step'] == 4                                              
+V0825 23:17:59.164000 20627 torch/_dynamo/guards.py:3508] [0/6] [__recompiles]     - 0/3: G['step'] == 3                                              
+V0825 23:17:59.164000 20627 torch/_dynamo/guards.py:3508] [0/6] [__recompiles]     - 0/2: G['step'] == 2                                              
+V0825 23:17:59.164000 20627 torch/_dynamo/guards.py:3508] [0/6] [__recompiles]     - 0/1: G['step'] == 1                                              
+V0825 23:17:59.164000 20627 torch/_dynamo/guards.py:3508] [0/6] [__recompiles]     - 0/0: G['step'] == 0                                              
+V0825 23:17:59.977000 20627 torch/_dynamo/guards.py:3508] [0/7] [__recompiles] Recompiling function poly in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:9
+V0825 23:17:59.977000 20627 torch/_dynamo/guards.py:3508] [0/7] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:17:59.977000 20627 torch/_dynamo/guards.py:3508] [0/7] [__recompiles]     - 0/6: G['step'] == 6                                              
+V0825 23:17:59.977000 20627 torch/_dynamo/guards.py:3508] [0/7] [__recompiles]     - 0/5: G['step'] == 5                                              
+V0825 23:17:59.977000 20627 torch/_dynamo/guards.py:3508] [0/7] [__recompiles]     - 0/4: G['step'] == 4                                              
+V0825 23:17:59.977000 20627 torch/_dynamo/guards.py:3508] [0/7] [__recompiles]     - 0/3: G['step'] == 3                                              
+V0825 23:17:59.977000 20627 torch/_dynamo/guards.py:3508] [0/7] [__recompiles]     - 0/2: G['step'] == 2                                              
+V0825 23:17:59.977000 20627 torch/_dynamo/guards.py:3508] [0/7] [__recompiles]     - 0/1: G['step'] == 1                                              
+V0825 23:17:59.977000 20627 torch/_dynamo/guards.py:3508] [0/7] [__recompiles]     - 0/0: G['step'] == 0                                              
+V0825 23:18:00.815000 20627 torch/_dynamo/guards.py:3508] [0/8] [__recompiles] Recompiling function poly in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:9
+V0825 23:18:00.815000 20627 torch/_dynamo/guards.py:3508] [0/8] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:18:00.815000 20627 torch/_dynamo/guards.py:3508] [0/8] [__recompiles]     - 0/7: G['step'] == 7                                              
+V0825 23:18:00.815000 20627 torch/_dynamo/guards.py:3508] [0/8] [__recompiles]     - 0/6: G['step'] == 6                                              
+V0825 23:18:00.815000 20627 torch/_dynamo/guards.py:3508] [0/8] [__recompiles]     - 0/5: G['step'] == 5                                              
+V0825 23:18:00.815000 20627 torch/_dynamo/guards.py:3508] [0/8] [__recompiles]     - 0/4: G['step'] == 4                                              
+V0825 23:18:00.815000 20627 torch/_dynamo/guards.py:3508] [0/8] [__recompiles]     - 0/3: G['step'] == 3                                              
+V0825 23:18:00.815000 20627 torch/_dynamo/guards.py:3508] [0/8] [__recompiles]     - 0/2: G['step'] == 2                                              
+V0825 23:18:00.815000 20627 torch/_dynamo/guards.py:3508] [0/8] [__recompiles]     - 0/1: G['step'] == 1                                              
+V0825 23:18:00.815000 20627 torch/_dynamo/guards.py:3508] [0/8] [__recompiles]     - 0/0: G['step'] == 0                                              
+W0825 23:18:00.816000 20627 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+W0825 23:18:00.816000 20627 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'poly' (/Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:9)
+W0825 23:18:00.816000 20627 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: G['step'] == 7                                              
+W0825 23:18:00.816000 20627 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+W0825 23:18:00.816000 20627 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+  call 0 (step=0):   4.514 s
+  call 1 (step=1):   0.831 s
+  call 2 (step=2):   0.809 s
+  call 3 (step=3):   0.811 s
+  call 4 (step=4):   0.795 s
+  call 5 (step=5):   0.778 s
+  call 6 (step=6):   0.813 s
+  call 7 (step=7):   0.838 s
+  call 8 (step=8):   0.004 s
+  call 9 (step=9):   0.000 s
+  first 8 calls total: 10.19 s
+  graphs compiled this section: 8
+  step=999 after limit: 0.17 ms, matches eager: True
+
+[case 2: same constant passed as argument]
+V0825 23:18:01.645000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles] Recompiling function scale in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:17
+V0825 23:18:01.645000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:18:01.645000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     - 0/0: s == 0.0                                               
+  graphs compiled this section: 2
+
+[case 3a: batch size jumps]
+V0825 23:18:03.298000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles] Recompiling function net in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:21
+V0825 23:18:03.298000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:18:03.298000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     - 0/0: tensor 'x' size mismatch at index 0. expected 8, actual 16
+  graphs compiled this section: 2
+
+[case 3b: rank jumps]
+V0825 23:18:05.010000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles] Recompiling function poly_t in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:13
+V0825 23:18:05.010000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:18:05.010000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     - 0/0: tensor 'x' rank mismatch. expected 1, actual 2
+V0825 23:18:05.871000 20627 torch/_dynamo/guards.py:3508] [0/2] [__recompiles] Recompiling function poly_t in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:13
+V0825 23:18:05.871000 20627 torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:18:05.871000 20627 torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     - 0/1: tensor 'x' rank mismatch. expected 2, actual 3
+V0825 23:18:05.871000 20627 torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     - 0/0: tensor 'x' rank mismatch. expected 1, actual 3
+V0825 23:18:06.766000 20627 torch/_dynamo/guards.py:3508] [0/3] [__recompiles] Recompiling function poly_t in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:13
+V0825 23:18:06.766000 20627 torch/_dynamo/guards.py:3508] [0/3] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:18:06.766000 20627 torch/_dynamo/guards.py:3508] [0/3] [__recompiles]     - 0/2: tensor 'x' rank mismatch. expected 3, actual 4
+V0825 23:18:06.766000 20627 torch/_dynamo/guards.py:3508] [0/3] [__recompiles]     - 0/1: tensor 'x' rank mismatch. expected 2, actual 4
+V0825 23:18:06.766000 20627 torch/_dynamo/guards.py:3508] [0/3] [__recompiles]     - 0/0: tensor 'x' rank mismatch. expected 1, actual 4
+  graphs compiled this section: 4
+
+[case 3c: batch size 1 in the mix]
+V0825 23:18:07.723000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles] Recompiling function net in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:21
+V0825 23:18:07.723000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:18:07.723000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     - 0/0: tensor 'x' size mismatch at index 0. expected 8, actual 16
+V0825 23:18:07.752000 20627 torch/_dynamo/guards.py:3508] [0/2] [__recompiles] Recompiling function net in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:21
+V0825 23:18:07.752000 20627 torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:18:07.752000 20627 torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     - 0/1: 2 <= x.size()[0]  # return (x @ x.T).relu().sum()  # code/day26/recompile.py:22 in net (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.mark_unbacked(tensor, dim))
+V0825 23:18:07.752000 20627 torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     - 0/0: tensor 'x' size mismatch at index 0. expected 8, actual 1
+  graphs compiled this section: 3
+
+[case 4: grad mode flips]
+V0825 23:18:09.409000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles] Recompiling function scale in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:17
+V0825 23:18:09.409000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:18:09.409000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     - 0/0: GLOBAL_STATE changed: grad_mode 
+  graphs compiled this section: 2
+
+[case 5: a different function object every call]
+V0825 23:18:10.291000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles] Recompiling function apply_fn in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:25
+V0825 23:18:10.291000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:18:10.291000 20627 torch/_dynamo/guards.py:3508] [0/1] [__recompiles]     - 0/0: ___check_obj_id(fn.__code__, 4310573648)               
+V0825 23:18:11.060000 20627 torch/_dynamo/guards.py:3508] [0/2] [__recompiles] Recompiling function apply_fn in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:25
+V0825 23:18:11.060000 20627 torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:18:11.060000 20627 torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     - 0/1: ___check_obj_id(fn.__code__, 4310573024)               
+V0825 23:18:11.060000 20627 torch/_dynamo/guards.py:3508] [0/2] [__recompiles]     - 0/0: ___check_obj_id(fn.__code__, 4310573648)               
+V0825 23:18:11.884000 20627 torch/_dynamo/guards.py:3508] [0/3] [__recompiles] Recompiling function apply_fn in /Users/wchiu/Documents/GitHub/gmc-ithome/code/day26/recompile.py:25
+V0825 23:18:11.884000 20627 torch/_dynamo/guards.py:3508] [0/3] [__recompiles]     triggered by the following guard failure(s):
+V0825 23:18:11.884000 20627 torch/_dynamo/guards.py:3508] [0/3] [__recompiles]     - 0/2: ___check_obj_id(fn.__code__, 4309455600)               
+V0825 23:18:11.884000 20627 torch/_dynamo/guards.py:3508] [0/3] [__recompiles]     - 0/1: ___check_obj_id(fn.__code__, 4310573024)               
+V0825 23:18:11.884000 20627 torch/_dynamo/guards.py:3508] [0/3] [__recompiles]     - 0/0: ___check_obj_id(fn.__code__, 4310573648)               
+  graphs compiled this section: 4
+
+[fix 1: move the constant into a tensor]
+  call 0: 0.817 s, calls 1-9 max: 0.08 ms
+  graphs compiled this section: 1
+
+[fix 2: mark_dynamic on the batch dim]
+  graphs compiled this section: 1
+
+[fix 3: dynamic=True]
+  graphs compiled this section: 1
