@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import manimpango
@@ -47,10 +48,11 @@ def titled(w, h, name, sub, fill=CARD, edge=EDGE, sw=1.5):
 
 
 def pill(name, zh):
-    zh_font = CJK if any("一" <= ch <= "鿿" for ch in zh) else MONO
     nm = T(name, font=SANS, font_size=17, weight=BOLD, color=BG)
     sep = T("·", font=MONO, font_size=17, color="#666")
-    zt = T(zh, font=zh_font, font_size=17, color=BG)
+    runs = re.findall(r"[一-鿿，、。]+|[^一-鿿，、。 ]+", zh)
+    zs = [T(r, font=CJK if re.search(r"[一-鿿]", r) else MONO, font_size=17, color=BG) for r in runs]
+    zt = VGroup(*zs).arrange(RIGHT, buff=0.1)
     t = VGroup(Dot(radius=0.06, color=ACCENT), nm, sep, zt).arrange(RIGHT, buff=0.18)
     bg = RoundedRectangle(corner_radius=0.26, width=t.width + 0.6, height=0.52, stroke_width=0, fill_color="#eceae6", fill_opacity=1)
     return VGroup(bg, t.move_to(bg))
