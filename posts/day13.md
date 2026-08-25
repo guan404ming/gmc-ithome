@@ -1,10 +1,10 @@
-# Day 13 | 讓 in-place 消失的潔癖抄寫員 Functionalization
+# Day 13 | 讓 in-place 消失的潔癖書記官 Functionalization
 
 ## 前言
 
 昨天說 AOTAutograd 拿 FakeTensor 重跑 forward、讓 autograd 引擎展開 backward 的路上，還順手做了兩層轉換。今天就來拆第一層的 Functionalization。
 
-先講一下今天的比喻。想像一個有潔癖的抄寫員。你交給他一份手稿，上面滿是「把第三行塗掉改成這樣」「這一段直接畫線刪掉」的就地修改指示。他從頭到尾不在你的原稿上動一筆，每個修改都謄到一張新的紙上，帳本記著「目前最新的版本是哪一張」。等整份文件定稿，他才一次性把最終版謄回你的原稿。原稿的主人看到的結果跟自己動手改一模一樣，但抄寫的過程中沒有任何一張紙被塗改過。
+先講一下今天的比喻。想像一個有潔癖的書記官。你交給他一份手稿，上面滿是「把第三行塗掉改成這樣」「這一段直接畫線刪掉」的就地修改指示。他從頭到尾不在你的原稿上動一筆，每個修改都謄到一張新的紙上，帳本記著「目前最新的版本是哪一張」。等整份文件定稿，他才一次性把最終版謄回你的原稿。原稿的主人看到的結果跟自己動手改一模一樣，但抄寫的過程中沒有任何一張紙被塗改過。
 
 Functionalization 做的就是這件事，只是手稿換成了 Tensor。`x.add_(1)` 就地改記憶體、`y = x.view(2, 8)` 讓兩個名字共享同一塊儲存，改 `y` 等於改 `x`。這些 mutation 和 aliasing 對後端是毒藥，而 Functionalization 把它們全部謄寫成純函數式的版本，語意留到邊界一次結清。
 
@@ -77,17 +77,17 @@ def forward(self, arg0_1: "f32[4, 4][4, 1]cuda:0"):
 
 - `y.add_(1)` 變成了三行。`add` 是規則一，out-of-place 算出新值。`view_1`、`view_2` 是規則二，把 2x8 形狀的新值 view 回 4x4 的 base，再從 base 重新長出 2x8 的 view。修改在 base 和 view 兩種形狀之間搬運了一趟，兩個名字看到的內容從此一致。
 - `y.relu_()` 同樣是 `relu` 加一條 `view_3` 寫回 base。
-- 最關鍵的是 `mul` 那行。`x * 2` 用的是 `view_3`，不是原始輸入 `arg0_1`。抄寫員的帳本記著「`x` 的最新值是 `view_3`」，所以讀 `x` 的地方自動改讀新值。這就是「重新綁定」，舊名字不再出現，所有引用都指向最新的那份。
+- 最關鍵的是 `mul` 那行。`x * 2` 用的是 `view_3`，不是原始輸入 `arg0_1`。書記官的帳本記著「`x` 的最新值是 `view_3`」，所以讀 `x` 的地方自動改讀新值。這就是「重新綁定」，舊名字不再出現，所有引用都指向最新的那份。
 
 整張圖除了最後那條 `copy_`，內部完全純函數式，後端可以放心亂序。整個過程用動畫走一遍。
 
 ![in-place instruction 逐條被改寫成純函數，修改集中到圖尾端的 copy_](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day13/functionalization.gif)
 
-*圖一：抄寫員的工作流程。左邊是使用者寫的 in-place 程式，被處理到的 instruction 逐條劃掉、標上改寫後的名字。中間是 FunctionalTensor 的帳本，`x` 和 `y` 兩個名字接在同一條 storage 線上，每次就地改都讓帳本的最新值換一格。右邊是 functionalized 的圖一行一行長出來，`add_` 變成 `add` 加兩條 view 重放，結尾補上寫回輸入的 `copy_`。*
+*圖一：書記官的工作流程。左邊是使用者寫的 in-place 程式，被處理到的 instruction 逐條劃掉、標上改寫後的名字。中間是 FunctionalTensor 的帳本，`x` 和 `y` 兩個名字接在同一條 storage 線上，每次就地改都讓帳本的最新值換一格。右邊是 functionalized 的圖一行一行長出來，`add_` 變成 `add` 加兩條 view 重放，結尾補上寫回輸入的 `copy_`。*
 
 ## 邊界上那條 copy_
 
-最後那條 `copy_` 是唯一的例外，也是抄寫員「把定稿謄回原稿」的那一步。`x` 是從外面傳進來的，呼叫者手上還握著它，函式跑完後呼叫者期待 `x` 已經被改過，這是 PyTorch 的語意，不能丟。所以 Functionalization 把「對輸入的修改」集中成圖尾端的一條 `copy_`，圖內部照純函數算，最後一步把最終結果一次寫回輸入的記憶體。
+最後那條 `copy_` 是唯一的例外，也是書記官「把定稿謄回原稿」的那一步。`x` 是從外面傳進來的，呼叫者手上還握著它，函式跑完後呼叫者期待 `x` 已經被改過，這是 PyTorch 的語意，不能丟。所以 Functionalization 把「對輸入的修改」集中成圖尾端的一條 `copy_`，圖內部照純函數算，最後一步把最終結果一次寫回輸入的記憶體。
 
 一個更小的例子看得更清楚。`g` 直接就地改參數。
 
@@ -135,7 +135,7 @@ AOTAutograd 這一側，追蹤前會先跑一遍 [`collect_metadata_analysis.py`
 
 ## 結語
 
-Functionalization 是 AOTAutograd 的潔癖抄寫員。in-place 換成 out-of-place、名字重新綁定到最新值，view 用重放維持 alias 的一致性，圖內部變成純函數式。對輸入的修改集中成圖尾端的 `copy_`，語意在邊界上一次結清。帳本記在 `FunctionalTensorWrapper` 的 `value_` 和 `ViewMeta` 裡，該不該留 `copy_` 由 `ViewAndMutationMeta` 說了算。後端從此不用懂 aliasing。
+Functionalization 是 AOTAutograd 的潔癖書記官。in-place 換成 out-of-place、名字重新綁定到最新值，view 用重放維持 alias 的一致性，圖內部變成純函數式。對輸入的修改集中成圖尾端的 `copy_`，語意在邊界上一次結清。帳本記在 `FunctionalTensorWrapper` 的 `value_` 和 `ViewMeta` 裡，該不該留 `copy_` 由 `ViewAndMutationMeta` 說了算。後端從此不用懂 aliasing。
 
 圖現在是純的了，但還是「大」的，LayerNorm、GELU 這些高階 op 一個頂十幾個基本運算。明天拆第二層轉換 Decomposition，看兩千多個 ATen op 怎麼收斂到後端只需要面對的幾百個。那我們明天見！
 

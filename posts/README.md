@@ -20,7 +20,7 @@
 ## Part 2：AOTAutograd
 
 - Day 12 | torch.compile 的沙盤推演師：AOTAutograd
-- Day 13 | 讓 in-place 消失的潔癖抄寫員 Functionalization
+- Day 13 | 讓 in-place 消失的潔癖書記官 Functionalization
 - Day 14 | AOTAutograd 的樂高拆解師：Decomposition
 - Day 15 | backward 該存誰、該重算誰？min-cut 分家公證人
 - Day 16 | 沒有數值要怎麼 trace？編譯管線的空殼替身 FakeTensor
