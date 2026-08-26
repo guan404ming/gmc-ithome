@@ -2,7 +2,7 @@
 
 ## 前言
 
-昨天 min-cut partitioner 把 joint graph 一刀切成 forward 和 backward，AOTAutograd 這一站算是圓滿落幕，照理說今天該進 Inductor 了。不過在換站之前，想先把一位跑了整個系列龍套的配角請到台前。Day 12 說 AOTAutograd「拿 FakeTensor 重跑 forward」、Day 13 的 metadata 收集「用 FakeTensor 跑一次」、Day 11 的 Symbolic Shapes 也是在它身上長出來的。它每次都被一句話帶過，但其實 Dynamo 追蹤的每一步、AOTAutograd 展開的每一張圖，背後全是它在跑。
+昨天 min-cut partitioner 把 joint graph 一刀切成 forward 和 backward，AOTAutograd 這一站算是圓滿落幕，照理說今天該進 Inductor 了。不過在換站之前，想先把一位跑了整個系列龍套的配角請到台前。介紹 AOTAutograd 時說它「拿 FakeTensor 重跑 forward」、Functionalization 收 metadata 要「用 FakeTensor 跑一次」、automatic dynamic 的 Symbolic Shapes 也是在它身上長出來的。它每次都被一句話帶過，但其實 Dynamo 追蹤的每一步、AOTAutograd 展開的每一張圖，背後全是它在跑。
 
 它就是 `FakeTensor`，一顆被抽乾數值、只剩 shape、dtype、stride 和 device 的空殼 Tensor。今天來把它講清楚，為什麼編譯期不能用真值算、meta device 是什麼、FakeTensor 又是怎麼在 meta 之上補了一層謊，以及這個空殼的極限在哪。另外先說一聲，前幾天的實驗都跑在 Modal 的 GPU 上，今天的主角恰好證明了沒有卡也能編譯，所以實驗全部在本機 CPU 上跑，`torch 2.8.0`。
 
@@ -12,7 +12,7 @@
 
 回想一下 Dynamo 追蹤時在做的事。它逐條翻譯 bytecode，碰到 Tensor 運算就往圖裡加 node，但下一條指令可能馬上要問「這個結果的 shape 是多少」，例如 `y.view(-1)` 要知道元素個數、`x @ w` 要檢查兩邊維度對不對得上。要回答這些問題，最直接的辦法就是真的把運算執行一遍。
 
-但真的執行有三個問題。第一是貴，編譯期每個 op 都真算一次，等於整個 forward 多跑一遍，模型一大這筆帳受不了。第二是根本不一定算得了，`torch.compile` 常見的用法是在沒有 GPU 的機器上先編譯、匯出，或是模型大到一顆 device 放不下，數值運算無從發生。第三是危險，Day 7 講過真的執行會把 side effect 提前洩漏出去。
+但真的執行有三個問題。第一是貴，編譯期每個 op 都真算一次，等於整個 forward 多跑一遍，模型一大這筆帳受不了。第二是根本不一定算得了，`torch.compile` 常見的用法是在沒有 GPU 的機器上先編譯、匯出，或是模型大到一顆 device 放不下，數值運算無從發生。第三是危險，真的執行會把 side effect 提前洩漏出去。
 
 其實用真值跑一遍來抓圖是有前例的，第一代的 `torch.jit.trace` 走的就是這條路，把範例輸入真的餵進函式執行，錄下沿途發生的每個 op。上面三個問題它全中，追蹤一次就是完整跑一次 forward，而且執行過程中的 print、檔案寫入這些 side effect 都會真的發生。`torch.compile` 這一代顯然不想重蹈覆轍。
 
@@ -75,7 +75,7 @@ with mode:
 
 ## 它在管線裡的位置
 
-有了這個替身，回頭看整條管線就會發現它無所不在。先看 Dynamo。Day 5 說 Tensor 被包成 `TensorVariable`，其實每個 `TensorVariable` 的 FX node 上都掛著一個 `example_value`，記錄「這個 node 的輸出長什麼樣」，而它正是一顆 FakeTensor。寫一個什麼都不編譯的 backend，把收到的圖上每個 node 的 `example_value` 印出來就能驗證。
+有了這個替身，回頭看整條管線就會發現它無所不在。先看 Dynamo。Tensor 在追蹤時會被包成 `TensorVariable`，而每個 `TensorVariable` 的 FX node 上都掛著一個 `example_value`，記錄「這個 node 的輸出長什麼樣」，而它正是一顆 FakeTensor。寫一個什麼都不編譯的 backend，把收到的圖上每個 node 的 `example_value` 印出來就能驗證。
 
 ```python
 def peek(gm, example_inputs):
@@ -96,14 +96,14 @@ torch.compile(f, backend=peek)(torch.randn(8, 16), torch.randn(16, 4))
     call_function matmul example_value = FakeTensor(8, 4)
     call_function tanh   example_value = FakeTensor(8, 4)
 
-從輸入到中間結果，全是 FakeTensor。流程上，輸入的 Tensor 在被包成 `TensorVariable` 的那一刻（就是 Day 5 講的包裝流程裡）就被轉成 fake，之後圖上每長一個 node，[`torch/_dynamo/utils.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/utils.py) 的 `get_fake_value` 就拿著輸入 node 們的 fake 值，在 `FakeTensorMode` 下把這個 op 乾跑一次，得到的輸出掛回 node 當 `example_value`。追蹤到 `y.view(-1)` 時 Dynamo 能回答 shape 問題、Day 12 圖上那些 `"f32[8, 4]"` 標註，靠的都是這一套。用 `TORCH_LOGS="+dynamo"` 也能看到 Dynamo 建圖輸入時的自白（節錄）。
+從輸入到中間結果，全是 FakeTensor。流程上，輸入的 Tensor 在被包成 `TensorVariable` 的那一刻就被轉成 fake，之後圖上每長一個 node，[`torch/_dynamo/utils.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/utils.py) 的 `get_fake_value` 就拿著輸入 node 們的 fake 值，在 `FakeTensorMode` 下把這個 op 乾跑一次，得到的輸出掛回 node 當 `example_value`。追蹤到 `y.view(-1)` 時 Dynamo 能回答 shape 問題、AOTAutograd 產出的圖上那些 `"f32[8, 4]"` 標註，靠的都是這一套。用 `TORCH_LOGS="+dynamo"` 也能看到 Dynamo 建圖輸入時的自白（節錄）。
 
     create_graph_input L_x_ L['x'] FakeTensor(..., size=(8, 16)) at debug_level 0 before=False
     create_graph_input L_w_ L['w'] FakeTensor(..., size=(16, 4)) at debug_level 0 before=False
 
-到了 AOTAutograd，同一批 FakeTensor 直接接手。Day 12 說它「拿 FakeTensor 把 forward 重新執行一遍，讓 autograd 引擎在上面展開 backward」，現在可以讀懂這句話的全部了。joint graph 的 trace 是一次真的 Python 執行，只是每顆 Tensor 都是 fake 的，所以幾千個 op 的模型也能在編譯期便宜地「跑」完，Functionalization 的 metadata 收集、partitioner 算保存成本用的元素個數，吃的全是同一套 fake metadata。一路到 Inductor 拿到的圖，每個 node 身上的 shape 標註也還是這批 FakeTensor 留下的。
+到了 AOTAutograd，同一批 FakeTensor 直接接手。介紹它時說的「拿 FakeTensor 把 forward 重新執行一遍，讓 autograd 引擎在上面展開 backward」，現在可以讀懂這句話的全部了。joint graph 的 trace 是一次真的 Python 執行，只是每顆 Tensor 都是 fake 的，所以幾千個 op 的模型也能在編譯期便宜地「跑」完，Functionalization 的 metadata 收集、partitioner 算保存成本用的元素個數，吃的全是同一套 fake metadata。一路到 Inductor 拿到的圖，每個 node 身上的 shape 標註也還是這批 FakeTensor 留下的。
 
-順帶一提 Day 11 的 Symbolic Shapes，它和 FakeTensor 是同一枚硬幣的兩面。FakeTensor 的 shape 欄位不一定是具體的 int，`FakeTensorMode` 身上掛著一套管理符號 shape 的機制，某個維度被判定為 dynamic 時，填進 shape 欄位的就是 `s0` 這種 SymInt。之後 meta kernel 推 shape 時是拿符號在做算術，輸出的 shape 是 `(s0, 4)`，Day 11 看到的那些符號運算，發生的舞台正是 FakeTensor 的 metadata 欄位。
+順帶一提 Symbolic Shapes，它和 FakeTensor 是同一枚硬幣的兩面。FakeTensor 的 shape 欄位不一定是具體的 int，`FakeTensorMode` 身上掛著一套管理符號 shape 的機制，某個維度被判定為 dynamic 時，填進 shape 欄位的就是 `s0` 這種 SymInt。之後 meta kernel 推 shape 時是拿符號在做算術，輸出的 shape 是 `(s0, 4)`，automatic dynamic 那些符號運算，發生的舞台正是 FakeTensor 的 metadata 欄位。
 
 ## 假數值算不出來的事
 
