@@ -1,16 +1,16 @@
-# Day 15 | backward 該存誰、該重算誰？min-cut 分家公證人
+# Day 15 | 小孩到底應該歸誰？Torch AOTAutograd min-cut 分家公證人
 
 ## 前言
 
-還記得 Day 12 留下的懸案嗎？那時候我們看到 forward 圖除了 loss 之外，還多輸出了 `le` 和 `permute` 這兩個中間值給 backward 用。當時只說「存哪些、存多少，是一個真正的取捨」，然後就把問題晾在那裡了。今天就來把這個洞補起來。
+還記得前面留下的小小懸案嗎？那時候我們看到 forward 圖除了 loss 之外，還多輸出了 `le` 和 `permute` 這兩個中間值給 backward 用。當時只說「存哪些、存多少，是一個真正的取捨」，然後就把問題放在那裡了。今天就來把這個問題補起來。
 
-答案的形狀其實蠻有趣。AOTAutograd 並不是先做好 forward 圖、再想辦法配一張 backward 圖，而是一開始就把兩者 trace 成**同一張圖**，叫做 joint graph，像一份夫妻共同財產的清冊，中間值就是共同持有的家當。而 Partitioner 就是那位精打細算的分家公證人，決定哪些節點歸 forward、哪些歸 backward，被切在分界線上的家當，就是 forward 結束時必須保存、留給 backward 用的 activation。
+答案其實蠻有趣的，AOTAutograd 並不是先做好 forward 圖、再想辦法配一張 backward 圖，而是一開始就把兩者 trace 成**同一張圖**，叫做 joint graph，像一份夫妻共同財產的清冊，中間值就是共同持有的家當。而 Partitioner 就是那位精打細算的分家公證人，決定哪些節點歸 forward、哪些歸 backward，被切在分界線上的家當，就是 forward 結束時必須保存、留給 backward 用的 activation。
 
 這一刀落在哪，直接決定了訓練時 GPU 記憶體的大頭要花在哪裡，也是速度與記憶體之間最重要的一顆旋鈕。正文開始！
 
 ## 先看那張沒切開的圖
 
-`TORCH_LOGS="aot_joint_graph"` 可以看到切割前的原貌。拿一個最小的訓練形狀 `f(x, w) = tanh(x @ w).sum()` 實跑。
+`TORCH_LOGS="aot_joint_graph"` 可以看到切割前的原貌。拿一個最小的訓練程式碼 `f(x, w) = tanh(x @ w).sum()` 實際跑跑看。
 
 ```python
 def f(x, w):
@@ -24,7 +24,7 @@ out = torch.compile(f)(x, w)
 out.backward()
 ```
 
-印出來的 joint graph 長成下面這樣（為了版面，省略了幾個 `alias` 簿記節點）。
+印出來的 joint graph 長成下面這樣（為了版面，省略了幾個 `alias` 節點）。
 
 ```python
  ===== Joint graph 0 =====
@@ -58,7 +58,7 @@ def joint(primals, tangents):
 
 ## 存，還是重算？
 
-在看切割結果之前，得先弄清楚這場分家在爭什麼。訓練時 GPU 記憶體的大頭通常不是權重，而是 activation，也就是每一層 forward 算出來的中間值，都得一路留到 backward 用完才能釋放。模型越深、batch 越大、序列越長，這筆帳就越可觀。
+在看切割結果之前，得先弄清楚這場分家在爭到底是什麼。訓練時 GPU 記憶體的大頭通常不是權重，而是 activation，也就是每一層 forward 算出來的中間值，都得一路留到 backward 用完才能釋放。模型越深、batch 越大、序列越長，這筆帳就越可觀。
 
 但「存」從來不是唯一的選項。任何一個中間值，backward 要用的時候其實有兩條路。
 
@@ -69,7 +69,7 @@ def joint(primals, tangents):
 
 ## 實際看 partitioner 怎麼切
 
-同一份 log 往下捲，`aot_graphs` 印出切完的兩張圖。
+同一份 log 往下看，`aot_graphs` 在這邊會印出切完的兩張圖。
 
 ```python
  ===== Forward graph 0 =====
@@ -91,7 +91,7 @@ def forward(self, mm, permute, tangents_1):
     return (None, mm_1)
 ```
 
-切完的兩張圖藏著幾個玄機，逐條對下去。
+切完的兩張圖藏著幾個玄機，逐條看下去。
 
 **第一，backward 開頭多了一行 joint graph 裡沒有的 `tanh = tanh(mm)`。** joint graph 裡 backward 直接引用 forward 算好的 `tanh`，但切完之後保存的是 `mm`，backward 拿到 `mm` 自己又算了一次 `tanh`。這就是重算（rematerialization），公證人判定這個值「讓 backward 自己做一份」比「存著帶過去」划算。
 
@@ -103,20 +103,22 @@ def forward(self, mm, permute, tangents_1):
 
 ## 切在哪裡是一道 min-cut 問題
 
-那「跨線傳輸的量最小」這件事是怎麼算的？這就是 min-cut 這個名字的來源。`min_cut_rematerialization_partition` 把問題建模成經典的最大流最小割。
+那「跨線傳輸的量最小」這件事是怎麼算的？這就是 min-cut 這個名字的來源。`min_cut_rematerialization_partition` 把問題建模成經典的 Max-flow Min-cut。
 
-- 把 joint graph 攤開成一張流網路，源點那一側接著 forward 的輸入，匯點那一側接著 backward 真正要消耗的節點。
+- 把 joint graph 攤開成一張 Flow Network，源點那一側接著 forward 的輸入，匯點那一側接著 backward 真正要消耗的節點。
 - 每個節點拆成 in、out 兩半，中間那條邊的容量就是「保存這個值要花的記憶體」，用 `_size_of()` 按 `numel * dtype 大小` 算出 bytes。
-- 不可重算的節點，容量設成無限大，逼切線繞開它們。哪些不可重算？`mm`、`conv` 這類計算密集的 op（重算太貴）、隨機 op（重算一次結果就不一樣了）都在名單上，view 類的 metadata 操作則幾乎零成本。除此之外還有一批啟發式，例如重算鏈拉得太長、或是被重算的值離 backward 太遠時也會被禁止，避免「省記憶體」反過來變成新的計算瓶頸。
-- 對這張網路跑一次最大流（實作直接呼叫 networkx 的 `minimum_cut`），得到的最小割就是答案，割開的那些邊，對應的值就是要保存的 activation。
+- 不可重算的節點，容量設成無限大，逼切線繞開它們。哪些不可重算？`mm`、`conv` 這類計算密集的 op（重算太貴）、隨機 op（重算一次結果就不一樣了）都在名單上，view 類的 metadata 操作則幾乎零成本。除此之外還有一批 heuristic 的，例如重算鏈拉得太長、或是被重算的值離 backward 太遠時也會被禁止，避免「省記憶體」反過來變成新的計算瓶頸。
+- 對這張網路跑一次 Max-flow（實作直接呼叫 networkx 的 `minimum_cut`），得到的 Min-cut 就是答案，割開的那些邊，對應的值就是要保存的 activation。
 
-所以「forward 圖該輸出什麼」這個看起來很工程的問題，最後是用一條 1956 年的 max-flow min-cut 定理解掉的，個人覺得相當浪漫。整個流程視覺化出來就是下面這樣。
+所以「forward 圖該輸出什麼」這個看起來很工程的問題，最後是用一條 1956 年的 max-flow min-cut 定理解掉的，個人覺得是蠻浪漫的哈哈。整個流程視覺化出來就是下面這樣。
 
 ![一把光刀在 tanh(x @ w).sum() 的 joint graph 上先切在 tanh 右側再滑到 mm 之後，tanh 複製一份歸隊 backward，節點各自歸隊成兩張圖後跨線的邊變成 SAVED 箭頭，最後旋鈕轉到 0 變成 checkpoint、backward 開頭整段重播](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day15/min_cut.gif)
 
 *圖一：分家公證人的完整流程。`tanh(x @ w).sum()` 的 joint graph 裡 forward 與 backward 只靠資料流相連，先標出 backward 需要的兩條邊與保存價格（各 16 KB，`mm` 禁止重算、`permute` 免費）。光刀先落在 `tanh` 右側試切（存 tanh），但 pointwise 重算免費，於是刀往輸入方向滑到 `mm` 之後、`tanh` 複製一份歸隊 backward。接著節點各自歸隊成 FORWARD 與 BACKWARD 兩張圖，跨線的邊 morph 成 SAVED 箭頭（`mm` 16 KB、`permute` 0 B）。最後旋鈕轉到 0，checkpoint 只存 `primals`，backward 開頭把 `mm`、`tanh` 整段 replay。*
 
 ## 轉到底就是 activation checkpointing
+
+> **activation checkpointing 是什麼？** forward 的中間值不存了，只留少數檢查點，backward 要用到材料時從檢查點當場重算。多花一點計算，省下一大塊 activation 記憶體。
 
 min-cut 是自動找的折衷點，但這顆旋鈕也可以手動轉到底。把同一個函式包進 `torch.utils.checkpoint`。
 
@@ -155,7 +157,7 @@ def forward(self, primals_1, primals_2, tangents_1):
 
 Forward 一個中間值都不存，只把原始輸入原封不動傳過去。backward 開頭把 `mm`、`tanh` 整段重算，連本來禁止重算的 `mm` 都重算了，因為這是使用者明確要求的。記憶體從「存 activation」變成「存輸入」，代價是 backward 多付一次 forward 的計算量。
 
-大模型訓練裡人人都在用的 activation checkpointing，在編譯棧裡就是這麼做出來的。它不是什麼獨立的魔法機制，只是 partitioner 收到指示，把切線推到最極端的位置而已。
+大模型訓練裡人人都在用的 activation checkpointing，在 compile stack 裡就是這麼做出來的。它不是什麼獨立的魔法機制，只是 partitioner 收到指示，把切線推到最極端的位置而已。
 
 其實兩個極端之間還有一段可以微調的空間。`torch._functorch.config.activation_memory_budget` 是一個 0 到 1 之間的旋鈕，1 是預設的 min-cut 行為，0 等於整段 checkpoint，中間值則會讓 partitioner 在給定的記憶體預算內，用背包問題的解法挑出最划算的一組重算對象。旋鈕這個比喻不是修辭，它真的是一顆連續的旋鈕。
 
@@ -163,7 +165,7 @@ Forward 一個中間值都不存，只把原始輸入原封不動傳過去。bac
 
 最後把鏡頭拉遠一點。這一刀之所以是編譯式訓練的關鍵設計，第一層原因是前面說的記憶體，同樣一張卡，切得好就能塞下更大的 batch 或更長的序列。
 
-第二層更隱微。**重算在編譯世界裡比在 eager 世界裡便宜得多**。eager 下做 activation checkpointing，重算就是實打實地再跑一遍那些 kernel，每個都要 launch、都要讀寫記憶體。但在這裡，backward 也是 Inductor 要編譯的一張完整的圖，重算出來的 pointwise op 往往直接融進 backward 本來就要跑的 kernel 裡，多算一個 `tanh` 只是暫存器裡多一條 instruction，記憶體流量一點都沒多。Day 2 算過 elementwise 的瓶頸是記憶體頻寬不是計算，所以這種重算的邊際成本趨近於零。這讓 min-cut partitioner 敢於激進地選擇重算，也是 `torch.compile` 訓練加速裡一塊很實在的來源。
+第二層更深一點。因為**重算在編譯世界裡比在 eager 世界裡便宜得多**。eager 下做 activation checkpointing，重算就是實打實地再跑一遍那些 kernel，每個都要 launch、都要讀寫記憶體。但在這裡，backward 也是 Inductor 要編譯的一張完整的圖，重算出來的 pointwise op 往往直接融進 backward 本來就要跑的 kernel 裡，多算一個 `tanh` 只是暫存器裡多一條 instruction，記憶體流量一點都沒多。Day 2 算過 elementwise 的瓶頸是記憶體頻寬不是計算，所以這種重算的邊際成本趨近於零。這讓 min-cut partitioner 敢於激進地選擇重算，也是 `torch.compile` 訓練加速裡一塊很實在的來源。
 
 ## 結語
 
@@ -178,3 +180,4 @@ Forward 一個中間值都不存，只把原始輸入原封不動傳過去。bac
 - [Min-cut optimal recomputation with AOTAutograd（PyTorch dev-discuss）](https://dev-discuss.pytorch.org/t/min-cut-optimal-recomputation-i-e-activation-checkpointing-with-aotautograd/467)
 - [torch.utils.checkpoint 文件](https://pytorch.org/docs/stable/checkpoint.html)
 - Ansel et al., [*PyTorch 2*](https://pytorch.org/assets/pytorch2-2.pdf), ASPLOS 2024（第 4 節）
+
