@@ -18,7 +18,7 @@ export 加 AOTInductor 是 AOT，把同一條流水線搬到部署之前執行�
 
 ## 全圖承諾，沒有退路
 
-兩條路最本質的差別在對 graph break 的態度。torch.compile 把 graph break 當日常，Day 10 看過它怎麼把函式切成幾段照樣跑。但 export 的產物要在沒有直譯器的地方執行，斷掉的部分沒有人接手，所以它承諾交出的是一張完整的圖，做不到就直接報錯。拿一個資料相依的分支實測，以下實驗都在本機 CPU 上跑（torch 2.8.0），完整程式在 `code/day29/`。
+兩條路最本質的差別在對 graph break 的態度。torch.compile 把 graph break 當日常，講 graph break 時看過它怎麼把函式切成幾段照樣跑。但 export 的產物要在沒有直譯器的地方執行，斷掉的部分沒有人接手，所以它承諾交出的是一張完整的圖，做不到就直接報錯。拿一個資料相依的分支實測，以下實驗都在本機 CPU 上跑（torch 2.8.0），完整程式在 `code/day29/`。
 
 ```python
 class Branchy(torch.nn.Module):
@@ -45,7 +45,7 @@ torch.compile 的處理方式是斷開容忍。
 
 分支條件取決於張量的值，圖沒辦法在編譯期決定要走哪一邊，compile 選擇切兩段，export 選擇把問題丟回給你，要嘛改寫成 torch.where 這類圖內表達，要嘛用官方提供的控制流 op 把兩個分支都收進圖裡。動態的部分也一樣要先講好，compile 可以先當靜態編、變了再重編，export 沒有重編的機會，所以哪個維度會變、範圍多大，得在匯出時用 Dim 宣告清楚。
 
-這份宣告是一紙雙向的合約。編譯器拿到範圍，就能放心把這個維度當符號處理，生成一份通吃整段範圍的程式碼，不必為每種 batch 各編一份。使用者這邊則是自我約束，執行期要是餵進超出範圍的輸入，載入的成品會直接拒絕，而不是默默算錯。Day 11 看過的動態 shape 是跑了兩次之後的事後升格，這裡的 Dim 是事前簽字的條款，同一套 symbolic shape 機制，態度從寬鬆變成了嚴格。
+這份宣告是一紙雙向的合約。編譯器拿到範圍，就能放心把這個維度當符號處理，生成一份通吃整段範圍的程式碼，不必為每種 batch 各編一份。使用者這邊則是自我約束，執行期要是餵進超出範圍的輸入，載入的成品會直接拒絕，而不是默默算錯。automatic dynamic 的動態 shape 是跑了兩次之後的事後升格，這裡的 Dim 是事前簽字的條款，同一套 symbolic shape 機制，態度從寬鬆變成了嚴格。
 
 ## 打開 ExportedProgram
 
@@ -79,9 +79,9 @@ Graph signature:
 Range constraints: {s77: VR[1, 1024]}
 ```
 
-三個部分各有各的角色。第一部分是圖本身，op 全部落在 ATen 層，跟 Day 12 AOTAutograd 展開出來的圖是同一族，而且模型的參數不再藏在 module 屬性裡，`fc.weight` 和 `fc.bias` 被抬升成圖的輸入，整張圖是一個沒有隱藏狀態的純函數。第二部分是 graph signature，記著每個輸入輸出的身分，哪些是參數、哪些是使用者輸入，沒有這份對照表，載入的人根本不知道哪個洞該塞權重、哪個洞該塞資料。第三部分是 range constraints，剛剛宣告的動態 batch 在圖裡以符號 s77 現身，範圍 1 到 1024 白紙黑字寫死，Day 11 講過的 symbolic shape 在這裡變成了對外的合約。這三件東西合在一起，就是一張不需要原始 Python 程式碼也能被理解、驗證、編譯的圖。
+三個部分各有各的角色。第一部分是圖本身，op 全部落在 ATen 層，跟 AOTAutograd 展開出來的圖是同一族，而且模型的參數不再藏在 module 屬性裡，`fc.weight` 和 `fc.bias` 被抬升成圖的輸入，整張圖是一個沒有隱藏狀態的純函數。第二部分是 graph signature，記著每個輸入輸出的身分，哪些是參數、哪些是使用者輸入，沒有這份對照表，載入的人根本不知道哪個洞該塞權重、哪個洞該塞資料。第三部分是 range constraints，剛剛宣告的動態 batch 在圖裡以符號 s77 現身，範圍 1 到 1024 白紙黑字寫死，symbolic shape 在這裡變成了對外的合約。這三件東西合在一起，就是一張不需要原始 Python 程式碼也能被理解、驗證、編譯的圖。
 
-還有兩個性質值得記下。這張圖是 functionalize 過的，Day 13 那套把 in-place 改寫成純函數的機制在這裡同樣生效，圖裡沒有突變也沒有 alias 陷阱，後面接手的編譯器和驗證工具都好做事。另外 ExportedProgram 本身可以序列化存檔，在另一個 process 甚至另一台機器讀回來再編，匯出和編譯可以拆成出貨流程裡的兩站，不必擠在同一個環境完成。
+還有兩個性質值得記下。這張圖是 functionalize 過的，那套把 in-place 改寫成純函數的機制在這裡同樣生效，圖裡沒有突變也沒有 alias 陷阱，後面接手的編譯器和驗證工具都好做事。另外 ExportedProgram 本身可以序列化存檔，在另一個 process 甚至另一台機器讀回來再編，匯出和編譯可以拆成出貨流程裡的兩站，不必擠在同一個環境完成。
 
 ![同一個模型分兩條軌道，上軌 JIT 常駐 Python，下軌 export 收成一張圖再鑄成 .pt2](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day29/export_aoti.gif)
 
@@ -105,7 +105,7 @@ torch._inductor.aoti_compile_and_package(ep, package_path="tiny.pt2")
   tiny/archive_format  (0 KB)
 ```
 
-主角是那顆編好的 .so，旁邊躺著它的原始碼。kernel.cpp 是 Inductor codegen 生出來的運算 kernel，跟 Day 22 看過的 C++ kernel 是同一個產線的貨，檔名裡那串雜湊跟 Day 24 的快取是同一套命名邏輯，都是拿內容算出來的指紋。wrapper.cpp 最值得停一下，Day 17 看過 Inductor 平常生成的 wrapper 是一段 Python 程式碼，負責配 buffer、按順序呼叫 kernel，而 AOTInductor 把這一層也翻成了 C++，權重打包進檔案，動態 shape 的推導和範圍檢查也編進了機器碼。原本 runtime 裡屬於 Python 的最後一份工作，就這樣被編譯期整個吃掉了。
+主角是那顆編好的 .so，旁邊躺著它的原始碼。kernel.cpp 是 Inductor codegen 生出來的運算 kernel，跟講 C++ codegen 時看過的 kernel 是同一個產線的貨，檔名裡那串雜湊跟 cache 是同一套命名邏輯，都是拿內容算出來的指紋。wrapper.cpp 最值得停一下，Inductor 平常生成的 wrapper 是一段 Python 程式碼，負責配 buffer、按順序呼叫 kernel，而 AOTInductor 把這一層也翻成了 C++，權重打包進檔案，動態 shape 的推導和範圍檢查也編進了機器碼。原本 runtime 裡屬於 Python 的最後一份工作，就這樣被編譯期整個吃掉了。
 
 載回來驗收。
 
@@ -121,7 +121,7 @@ torch._inductor.aoti_compile_and_package(ep, package_path="tiny.pt2")
 
 ## 現場有沒有廚房
 
-選哪條路，看的是執行現場。服務跑在有 Python 的 server 上、輸入形狀多變、模型還在快速迭代，torch.compile 是自然的選擇，寫法幾乎不用改，看不懂的地方自動 fallback，Day 24 的快取還能把重啟的成本壓下來。反過來，目標是 C++ runtime、行動裝置這類沒有 Python 的環境，或者你要的是啟動即滿速、行為完全可預期的部署，那就走 export 加 AOTInductor，把不確定性全部留在出貨之前。折衷的場景也存在，有 Python 的推論服務為了消滅冷啟動，可以先把模型用 AOTInductor 編好，Python 端只負責載入呼叫，rolling update 換一批機器也不必再付 Day 24 那筆重編的帳，啟動即滿速。兩條路共用同一套編譯基礎設施，Dynamo 抓圖、AOTAutograd 攤平、Inductor 生碼，這個系列講過的每一站都沒有白學，變的只是圖從哪裡進來、成品往哪裡去。
+選哪條路，看的是執行現場。服務跑在有 Python 的 server 上、輸入形狀多變、模型還在快速迭代，torch.compile 是自然的選擇，寫法幾乎不用改，看不懂的地方自動 fallback，cache 還能把重啟的成本壓下來。反過來，目標是 C++ runtime、行動裝置這類沒有 Python 的環境，或者你要的是啟動即滿速、行為完全可預期的部署，那就走 export 加 AOTInductor，把不確定性全部留在出貨之前。折衷的場景也存在，有 Python 的推論服務為了消滅冷啟動，可以先把模型用 AOTInductor 編好，Python 端只負責載入呼叫，rolling update 換一批機器也不必再付那筆重編的帳，啟動即滿速。兩條路共用同一套編譯基礎設施，Dynamo 抓圖、AOTAutograd 攤平、Inductor 生碼，這個系列講過的每一站都沒有白學，變的只是圖從哪裡進來、成品往哪裡去。
 
 ## 結語
 

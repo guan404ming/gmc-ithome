@@ -100,7 +100,7 @@ found 0 possible fusions
 
 這對候選人明明共享 4194308 bytes 的資料，比剛才的 4096 大了三個數量級，卻融不成。原因在 `group.iteration`，`op0` 要先走完 1048576 步 reduction 才吐出一個值，`op1` 的 1048576 步裡每一步都要用那個值，兩個迴圈的形狀對不上，這是語意上的不可能，分數再高也沒用。最後的產物是兩個前後接續的 loop nest（log 裡 `loops: 2`），中間隔著一次完整的等待，這就是 kernel 邊界。在 GPU 上這道牆更具體，它就是兩次 kernel launch，中間隔著一次全域同步，所有 thread 都得等 reduction 的最後一個值落地。
 
-這個實驗還藏了一個彩蛋。`sin` 同時出現在 `op0` 和 `op1` 兩邊的 `origins` 裡，而 allocs 清單裡只有一個 scalar 的 `buf0` 和輸出 `buf1`。`y` 被兩邊用到，Inductor 卻沒有把它存成 4MB 的 buffer，而是選擇在兩個 loop 裡各算一次 `sin`。重算一次比多搬 8MB 便宜，這跟 Day 15 的 min-cut Partitioner 是同一個世界觀，計算便宜，記憶體貴。
+這個實驗還藏了一個彩蛋。`sin` 同時出現在 `op0` 和 `op1` 兩邊的 `origins` 裡，而 allocs 清單裡只有一個 scalar 的 `buf0` 和輸出 `buf1`。`y` 被兩邊用到，Inductor 卻沒有把它存成 4MB 的 buffer，而是選擇在兩個 loop 裡各算一次 `sin`。重算一次比多搬 8MB 便宜，這跟 min-cut Partitioner 是同一個世界觀，計算便宜，記憶體貴。
 
 還有一種更隱晦的融合失敗，兩個 node 讀同一個 input，但一個順著讀、一個轉置著讀。
 
@@ -132,7 +132,7 @@ cannot fuse op0 with op1: no shared data
 
 Scheduler 把 lowering 完的 IR node 包成 SchedulerNode，靠 buffer 的讀寫關係建出依賴邊，排出拓撲順序，然後用十輪配對把值得的融合一個個敲定。fusion 的本質是省 memory bandwidth，score 用省下的 byte 數計價，省不到流量的融合沒有意義，迴圈形狀對不上的融合不合法，這三句話就是今天實驗的全部。
 
-不過「誰跟誰能融」其實還有一整張規則表沒攤開，垂直與水平融合的差別在哪、兩個 reduction 什麼條件下能融、pointwise 怎麼搭上 matmul 的便車。明天 Day 20 就來把 fusion 的邊界一條一條畫清楚。那我們明天見！
+不過「誰跟誰能融」其實還有一整張規則表沒攤開，垂直與水平融合的差別在哪、兩個 reduction 什麼條件下能融、pointwise 怎麼搭上 matmul 的便車。明天就來把 fusion 的邊界一條一條畫清楚。那我們明天見！
 
 ## 參考資料
 

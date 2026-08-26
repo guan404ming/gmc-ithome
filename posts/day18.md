@@ -10,7 +10,7 @@
 
 ## 入口是一張表
 
-Inductor 拿到的圖，經過 Day 13 和 Day 14 的整頓，只剩下純函數式的 ATen node。接手的類別叫 `GraphLowering`，定義在 [`graph.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/graph.py)，它本質上是一個 FX interpreter，把圖按拓撲序走一遍，每碰到一個 call_function node 就去查一個全域的 dict。這個 dict 名字就叫 `lowerings`，住在 [`lowering.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/lowering.py) 開頭。查到了，就呼叫查到的函式，把 node 換成 IR。查不到，就走 fallback，把原本的 eager kernel 包起來原樣呼叫。
+Inductor 拿到的圖，經過 Functionalization 和 Decomposition 的整頓，只剩下純函數式的 ATen node。接手的類別叫 `GraphLowering`，定義在 [`graph.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/graph.py)，它本質上是一個 FX interpreter，把圖按拓撲序走一遍，每碰到一個 call_function node 就去查一個全域的 dict。這個 dict 名字就叫 `lowerings`，住在 [`lowering.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/lowering.py) 開頭。查到了，就呼叫查到的函式，把 node 換成 IR。查不到，就走 fallback，把原本的 eager kernel 包起來原樣呼叫。
 
 今天的實驗都跑在 CPU 上（torch 2.8.0），先看看這張表的規模，還有幾個代表性的 op 在不在裡面。
 
@@ -26,7 +26,7 @@ lowerings[aten.relu.default] -> torch._inductor.lowering.make_pointwise.<locals>
 lowerings[aten.sum.default] -> torch._inductor.lowering.sum_
 ```
 
-1713 條 entry（以 overload 計）。每一條的 value 都是普通的 Python 函式，relu 對到的是 `make_pointwise` 做出來的函式，sum 對到的是一個叫 `sum_` 的函式。註冊方式跟 Day 14 的 decomposition table 如出一轍，就是 decorator。
+1713 條 entry（以 overload 計）。每一條的 value 都是普通的 Python 函式，relu 對到的是 `make_pointwise` 做出來的函式，sum 對到的是一個叫 `sum_` 的函式。註冊方式跟 decomposition table 如出一轍，就是 decorator。
 
 ```python
 relu = register_pointwise(aten.relu)
@@ -38,7 +38,7 @@ def sum_(x, axis=None, keepdims=False, *, dtype=None):
     return fn(x, axis, keepdims, dtype=dtype)
 ```
 
-`register_lowering` 還會順手處理 broadcast 和 type promotion，所以每條規則只要專心描述計算本身。表裡也藏著幾種不同的命運。`aten.mm` 和 `aten.convolution` 在表裡，但它們的 lowering 不長迴圈，而是走 matmul template 那條路，交給預先寫好的高效模板去 autotune，Day 14 說的「戰略 op 不拆」就是在這裡接關的。`aten._cdist_forward` 也在表裡，但同時被登記在 fallbacks 名單，它的 value 是一層 wrapper，執行時直接呼叫 eager kernel，對 Inductor 來說是一個不透明的節點，融合的手伸不進去，但至少語意保住了。
+`register_lowering` 還會順手處理 broadcast 和 type promotion，所以每條規則只要專心描述計算本身。表裡也藏著幾種不同的命運。`aten.mm` 和 `aten.convolution` 在表裡，但它們的 lowering 不長迴圈，而是走 matmul template 那條路，交給預先寫好的高效模板去 autotune，講 Decomposition 時說的「戰略 op 不拆」就是在這裡接關的。`aten._cdist_forward` 也在表裡，但同時被登記在 fallbacks 名單，它的 value 是一層 wrapper，執行時直接呼叫 eager kernel，對 Inductor 來說是一個不透明的節點，融合的手伸不進去，但至少語意保住了。
 
 ## 查表換到的是一條函式
 
@@ -164,9 +164,9 @@ class Pointwise(Loops):
 
 ## 跟 Decomposition 的分工
 
-Day 14 的 decomposition 和今天的 lowering 都在翻譯 op，分工其實劃得很乾淨。decomposition 是 ATen 語言內部的改寫，gelu 拆成 mul、erf、add，拆完還是 ATen node，發生在 AOTAutograd 那一層。lowering 是換語言，把 ATen node 換成 loop-level IR，發生在圖進到 Inductor 之後。先拆再 lower，lowering table 只需要覆蓋拆剩的基本詞彙。
+decomposition 和今天的 lowering 都在翻譯 op，分工其實劃得很乾淨。decomposition 是 ATen 語言內部的改寫，gelu 拆成 mul、erf、add，拆完還是 ATen node，發生在 AOTAutograd 那一層。lowering 是換語言，把 ATen node 換成 loop-level IR，發生在圖進到 Inductor 之後。先拆再 lower，lowering table 只需要覆蓋拆剩的基本詞彙。
 
-這也解釋了 Day 14 留下的一個小謎。Inductor 的 decomposition 表特地把 `aten.sum` 排除掉，旁邊註明 inductor lowers this directly。現在答案揭曉，sum 在 lowering 這層有自己的 `make_reduction` 路線，直接長成 Reduction node，比先拆成別的 op 再翻譯來得乾淨。兩張表是協調過的，decomposition 拆到 lowering table 接得住的粒度就收手。
+這也解釋了講 Decomposition 時留下的一個小謎。Inductor 的 decomposition 表特地把 `aten.sum` 排除掉，旁邊註明 inductor lowers this directly。現在答案揭曉，sum 在 lowering 這層有自己的 `make_reduction` 路線，直接長成 Reduction node，比先拆成別的 op 再翻譯來得乾淨。兩張表是協調過的，decomposition 拆到 lowering table 接得住的粒度就收手。
 
 而這 1713 條 entry 也分成三種待遇，正好對應三種 op 的性格。走 loop IR 的（add、relu、sum）可以被融合，走 template 的（mm、convolution）去做 autotune，fallback 的原樣執行。一張表，就是這個後端能力範圍的完整清單。哪天你要幫 Inductor 加一個 op 的支援，第一件事就是往這張表裡塞一條規則。
 

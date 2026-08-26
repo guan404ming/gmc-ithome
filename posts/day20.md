@@ -79,7 +79,7 @@ def wall(x):
 
 *圖一：七個 op 的資料流。前段 pointwise 鏈像磁鐵一樣一路吸進 `mean` 的 reduction loop，牆後的 `sub`、`relu` 等不到全域統計量出爐，只能另起一顆 kernel，最後收在 7 ops、2 kernels。*
 
-動畫裡那個函式也真的跑了一遍，就是 log 裡的 case H。開場只有兩個 node，`sin`、`mul`、`relu`、`add` 這條鏈在 lowering 時就被吸進了 `mean` 的 `Reduction`，牆後的 `Pointwise` 自成一國，`found 0 possible fusions`。裡面還藏了一個彩蛋，牆後那個 node 的 `origins` 又出現了一整條 `sin, mul, relu, add`。`y` 被兩邊用到，Inductor 沒有把它留成 buffer，而是選擇在第二顆 kernel 裡重算一次，用一點計算換掉一整輪 1024x1024 的讀寫，這個取捨跟 Day 15 recompute 的邏輯一脈相承。
+動畫裡那個函式也真的跑了一遍，就是 log 裡的 case H。開場只有兩個 node，`sin`、`mul`、`relu`、`add` 這條鏈在 lowering 時就被吸進了 `mean` 的 `Reduction`，牆後的 `Pointwise` 自成一國，`found 0 possible fusions`。裡面還藏了一個彩蛋，牆後那個 node 的 `origins` 又出現了一整條 `sin, mul, relu, add`。`y` 被兩邊用到，Inductor 沒有把它留成 buffer，而是選擇在第二顆 kernel 裡重算一次，用一點計算換掉一整輪 1024x1024 的讀寫，這個取捨跟 recompute 的邏輯一脈相承。
 
 ## 牆的其他幾種長相
 

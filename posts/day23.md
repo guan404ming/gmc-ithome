@@ -8,7 +8,7 @@
 
 ## 同一個 mm，不只一種做法
 
-拿 matmul 當主角。Day 20 說過 matmul 是 extern kernel，Inductor 調用 cuBLAS 這種現成的程式庫，這是第一種做法，幾十年的手工最佳化，穩。但 Inductor 也有能力用 Triton template 自己生一顆 matmul kernel，模板裡挖好了洞，BLOCK_M、BLOCK_N、BLOCK_K 這些 tile 大小和 num_warps、num_stages 這些執行參數填進去，就是一顆完整的 kernel，填不同的數字就是不同的候選。
+拿 matmul 當主角。講 fusion 時說過 matmul 是 extern kernel，Inductor 調用 cuBLAS 這種現成的程式庫，這是第一種做法，幾十年的手工最佳化，穩。但 Inductor 也有能力用 Triton template 自己生一顆 matmul kernel，模板裡挖好了洞，BLOCK_M、BLOCK_N、BLOCK_K 這些 tile 大小和 num_warps、num_stages 這些執行參數填進去，就是一顆完整的 kernel，填不同的數字就是不同的候選。
 
 哪一種快沒有公式。tile 切大了裝不進 shared memory，切小了吃不滿算力，num_stages 疊深了能藏住記憶體延遲，但暫存器和 shared memory 的開銷也跟著漲，每個參數都是這樣的兩難，而平衡點落在哪裡，跟 shape、dtype 和那張 GPU 的硬體規格全部糾纏在一起，換一個條件就換一個結局。所以 v2.8.0 的 [`kernel/mm.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/kernel/mm.py) 在 lowering `aten.mm` 時走的是 `tuned_mm`，它不直接生 kernel，而是開一張候選名單，先把 cuBLAS 包成 extern 候選放進去，再從一份預先寫好的 config 清單逐一往 matmul 模板填參數，一個 config 一個候選，基本清單實測有 19 條，還會依 m、n、k 篩掉對這個 shape 沒意義的組合。名單上有哪些門派則由 config 決定，預設是 ATEN 加 TRITON 加 CPP，CUTLASS 這種更重的後端也能加進來。名單開好，交給 [`select_algorithm.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/select_algorithm.py) 的 `AlgorithmSelectorCache` 裁決。
 
@@ -92,7 +92,7 @@ max-autotune    0.0200 ms
 
 ## epilogue 跟著擠進 template
 
-Day 20 撞過一面牆，matmul 是 extern kernel，Inductor 手上沒有它的 loop，前後的 pointwise 融不進去，當時留了一句話，想拆牆得讓 Inductor 自己生 matmul。現在條件湊齊了。拿 `relu(x @ y)` 對照，預設模式是標準的牆內牆外。
+講 fusion 時撞過一面牆，matmul 是 extern kernel，Inductor 手上沒有它的 loop，前後的 pointwise 融不進去，當時留了一句話，想拆牆得讓 Inductor 自己生 matmul。現在條件湊齊了。拿 `relu(x @ y)` 對照，預設模式是標準的牆內牆外。
 
 ```
 [default] compile time: 0.3 s
@@ -107,11 +107,11 @@ max-autotune 之下，matmul 由模板生成，`relu` 作為 epilogue 直接縫�
     triton_tem_fused_mm_relu_0.run(...)
 ```
 
-名字 `triton_tem_fused_mm_relu_0` 說明了一切，`tem` 是 template，`mm` 和 `relu` 同居一顆 kernel。原理回到 Day 20 的判準，牆的成因是 extern kernel 手上沒有 loop 可縫，而模板生成的 matmul 是 Inductor 自己的 loop，scheduler 裡有專門放行這種融合的分支，pointwise 掛上模板尾端，中間那份 2048x2048 的結果不用再落地一次。不過 benchmark 潑了盆冷水，default 0.0716 ms，max-autotune 0.0731 ms，牆拆了，時間卻只是打平。這一題 matmul 本身 cuBLAS 較快，融合省下的那趟 relu 讀寫剛好抵掉模板輸的部分，兩邊誰勝出全看這筆帳算下來的正負，而這筆帳，一樣是 autotune 實測出來的。
+名字 `triton_tem_fused_mm_relu_0` 說明了一切，`tem` 是 template，`mm` 和 `relu` 同居一顆 kernel。原理回到 fusion 的判準，牆的成因是 extern kernel 手上沒有 loop 可縫，而模板生成的 matmul 是 Inductor 自己的 loop，scheduler 裡有專門放行這種融合的分支，pointwise 掛上模板尾端，中間那份 2048x2048 的結果不用再落地一次。不過 benchmark 潑了盆冷水，default 0.0716 ms，max-autotune 0.0731 ms，牆拆了，時間卻只是打平。這一題 matmul 本身 cuBLAS 較快，融合省下的那趟 relu 讀寫剛好抵掉模板輸的部分，兩邊誰勝出全看這筆帳算下來的正負，而這筆帳，一樣是 autotune 實測出來的。
 
 ## pointwise 也有自己的碼表
 
-max-autotune 打開的第三個開關是 `coordinate_descent_tuning`，管的是 template 之外的日常 Triton kernel。Day 21 看過，pointwise 和 reduction 的 kernel 有 XBLOCK、R0_BLOCK、num_warps 這些 launch 參數，平常由啟發式一次定案。這裡沒有現成的候選名單，理論上的搜尋空間是所有參數組合的乘積，全部枚舉會爆炸。coordinate descent 這個名字就是解法，以啟發式的答案當起點，一次只動一個參數，往上調一格、往下調一格，量到有進步就搬過去，再從新位置繼續，直到四面八方都沒有更快為止，把指數級的枚舉壓成每個軸各走幾步，代價是可能停在局部最佳，實作在 [`coordinate_descent_tuner.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/runtime/coordinate_descent_tuner.py)。拿 softmax 實測，log 把爬山的腳印全印了出來（節錄）。
+max-autotune 打開的第三個開關是 `coordinate_descent_tuning`，管的是 template 之外的日常 Triton kernel。講 Triton codegen 時看過，pointwise 和 reduction 的 kernel 有 XBLOCK、R0_BLOCK、num_warps 這些 launch 參數，平常由啟發式一次定案。這裡沒有現成的候選名單，理論上的搜尋空間是所有參數組合的乘積，全部枚舉會爆炸。coordinate descent 這個名字就是解法，以啟發式的答案當起點，一次只動一個參數，往上調一格、往下調一格，量到有進步就搬過去，再從新位置繼續，直到四面八方都沒有更快為止，把指數級的枚舉壓成每個軸各走幾步，代價是可能停在局部最佳，實作在 [`coordinate_descent_tuner.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/runtime/coordinate_descent_tuner.py)。拿 softmax 實測，log 把爬山的腳印全印了出來（節錄）。
 
 ```
 = Do coordinate descent tuning for triton_red_fused__softmax_add_0 =
@@ -132,7 +132,7 @@ XBLOCK 往 16 和 4 各試一步，R0_BLOCK、num_warps 也各自上下探過，
 
 ## 結語
 
-收攏一下今天的機制。同一個 matmul 有 extern 的 cuBLAS 和填了不同 BLOCK 參數的 Triton template 這些候選，預設模式名單上只有 cuBLAS 一人，開了 max-autotune 才全員進場，由 `AlgorithmSelectorCache` 逐一實測計時挑出冠軍。方正的 shape 讓 cuBLAS 贏，瘦長的 shape 讓模板贏出 1.48 倍，帶 epilogue 的比賽則是把 Day 20 的 extern 牆拆掉再用碼表裁決。pointwise 這邊由 coordinate descent 一格一格爬。所有結論都來自實測，代價是編譯時間翻了幾倍，而結果會進快取。
+收攏一下今天的機制。同一個 matmul 有 extern 的 cuBLAS 和填了不同 BLOCK 參數的 Triton template 這些候選，預設模式名單上只有 cuBLAS 一人，開了 max-autotune 才全員進場，由 `AlgorithmSelectorCache` 逐一實測計時挑出冠軍。方正的 shape 讓 cuBLAS 贏，瘦長的 shape 讓模板贏出 1.48 倍，帶 epilogue 的比賽則是把 extern kernel 那面牆拆掉再用碼表裁決。pointwise 這邊由 coordinate descent 一格一格爬。所有結論都來自實測，代價是編譯時間翻了幾倍，而結果會進快取。
 
 明天來看接住這一切的快取體系，torch.compile 為什麼第二次跑這麼快。那我們明天見！
 

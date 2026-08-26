@@ -26,7 +26,7 @@ def f(x, y):
 
 第一次呼叫的 3.75 秒裡疊著整個系列講過的每一站，Dynamo 逐條 bytecode trace、AOTAutograd 展開成 ATen 圖、Inductor 做 lowering 加 scheduling 加 codegen，最後還要請 g++ 把生成的 C++ 真的編成 `.so`，GPU 上則再加上 Triton 編譯與 autotune。這還只是一個三行的玩具函式，真實模型有幾百張圖要走這條流水線，冷編譯輕鬆上到分鐘級，如果開了 max-autotune 還要再翻幾倍。而付錢的場合比想像中多，訓練 job 重啟一次付一次，推論服務 rolling update 換一批機器又付一次，每個新 process 都是一張新帳單。
 
-同一個 process 裡的第二次呼叫只要 1.03 ms，不過這不是今天的主角，這是 Day 6 的 Guard 那一層，編好的成品掛在 code object 上，guard 驗過就直接放行，連 trace 都不用重走。真正的問題是 process 一關，這一層就跟著蒸發。
+同一個 process 裡的第二次呼叫只要 1.03 ms，不過這不是今天的主角，這是 Guard 那一層，編好的成品掛在 code object 上，guard 驗過就直接放行，連 trace 都不用重走。真正的問題是 process 一關，這一層就跟著蒸發。
 
 ## 跨 process 的第二層
 
@@ -51,7 +51,7 @@ fx graph cache hit for key fih5y2v32k3xkqrqilffnjrj36iym4ih5wnqc46hpvqv4bwj3hgr
 
 ## 打開置物櫃看看
 
-快取目錄預設在 `/tmp/torchinductor_<user>`，可以用 `TORCHINDUCTOR_CACHE_DIR` 改位置。Day 17 的實驗其實就在 log 裡瞥見過它，今天把門打開，跑完兩輪之後裡面長這樣。
+快取目錄預設在 `/tmp/torchinductor_<user>`，可以用 `TORCHINDUCTOR_CACHE_DIR` 改位置。介紹 Inductor 時的實驗其實就在 log 裡瞥見過它，今天把門打開，跑完兩輪之後裡面長這樣。
 
 ```
   3b/c3b5dchwczelzcuy6vgbf56y5ycgcs5f5imcnyqztbduxgwcqnhj.py  (5 KB)
@@ -61,7 +61,7 @@ fx graph cache hit for key fih5y2v32k3xkqrqilffnjrj36iym4ih5wnqc46hpvqv4bwj3hgr
   fxgraph/ih/fih5y2v32k3xkqrqilffnjrj36iym4ih5wnqc46hpvqv4bwj3hgr/3wllna56mmhxckjexy2lg7vlpok73hgbfrkepzzttbtcfkf4mzv  (47 KB)
 ```
 
-一格一格認過去。`fxgraph/` 是 FXGraphCache 的本體，pickle 過的整份編譯成品，第一層目錄名就是那把 `fih5...` 開頭的鑰匙。`aotautograd/` 是 AOTAutogradCache，把 AOTAutograd 的展開結果也存了下來，hit 的時候連 joint graph 的 trace 和 partition 都不用重跑，原始碼在 [`autograd_cache.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_functorch/_aot_autograd/autograd_cache.py)。那個 `.py` 存的是 output code，就是 Day 17 印出來的那份 wrapper 加 kernel。兩個 `.so` 屬於 CppCodeCache，g++ 編好的動態庫，檔名就是 C++ 原始碼內容的 hash。locks 目錄則是給多個 process 同時編譯時上的鎖，免得兩邊搶著寫同一格櫃子。
+一格一格認過去。`fxgraph/` 是 FXGraphCache 的本體，pickle 過的整份編譯成品，第一層目錄名就是那把 `fih5...` 開頭的鑰匙。`aotautograd/` 是 AOTAutogradCache，把 AOTAutograd 的展開結果也存了下來，hit 的時候連 joint graph 的 trace 和 partition 都不用重跑，原始碼在 [`autograd_cache.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_functorch/_aot_autograd/autograd_cache.py)。那個 `.py` 存的是 output code，就是 TORCH_LOGS 印出來的那份 wrapper 加 kernel。兩個 `.so` 屬於 CppCodeCache，g++ 編好的動態庫，檔名就是 C++ 原始碼內容的 hash。locks 目錄則是給多個 process 同時編譯時上的鎖，免得兩邊搶著寫同一格櫃子。
 
 GPU 上還會多一種住戶。autotune 海選出的 best config 會以一個小檔案的形式存在 kernel 旁邊，下一次遇到同一顆 kernel，直接讀答案，不再重新 benchmark，管這件事的原始碼在 [`autotune_cache.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/runtime/autotune_cache.py)。昨天燒掉的那些海選時間，就是靠這格櫃子只付一次。順帶一提，這整個目錄可以放心刪掉，它是純粹的快取，沒有任何狀態非它不可，最壞的結果就是下次啟動回到冷編譯的價錢。
 
@@ -69,7 +69,7 @@ GPU 上還會多一種住戶。autotune 海選出的 best config 會以一個小
 
 一把能跨 process 使用的鑰匙，必須保證「鑰匙相同就代表編譯結果一定相同」，所以拼進去的材料比直覺想的多。`codecache.py` 裡把鑰匙的材料列得清清楚楚，圖本身、example inputs 的 metadata、編譯參數、整份 inductor config、deterministic 相關的全域設定，再加上 torch 版本號連同整份 Inductor 原始碼算出的 hash。全部序列化之後做 sha256，得到的就是那串 `f` 開頭的 key。
 
-幾個細節值得停一下。輸入進鑰匙的不是張量本身而是 shape、dtype、stride 這些 metadata，畢竟編譯結果只依賴形狀不依賴數值，Day 16 的 FakeTensor 讓「只留形狀」這件事有現成的表示法。config 必須整份進鑰匙，因為同一張圖在不同開關下生成的程式碼真的不同，待會就有實驗作證。連 torch 原始碼都要 hash 進去，是因為 Inductor 自己改版之後，同一張圖可能生出不同的 kernel，快取的底線是寧可白編，不可錯拿。材料裡任何一項變了，鑰匙齒形就變了，打開的會是另一格空櫃子。
+幾個細節值得停一下。輸入進鑰匙的不是張量本身而是 shape、dtype、stride 這些 metadata，畢竟編譯結果只依賴形狀不依賴數值，FakeTensor 讓「只留形狀」這件事有現成的表示法。config 必須整份進鑰匙，因為同一張圖在不同開關下生成的程式碼真的不同，待會就有實驗作證。連 torch 原始碼都要 hash 進去，是因為 Inductor 自己改版之後，同一張圖可能生出不同的 kernel，快取的底線是寧可白編，不可錯拿。材料裡任何一項變了，鑰匙齒形就變了，打開的會是另一格空櫃子。
 
 整個機制用動畫走一遍。
 
@@ -87,7 +87,7 @@ GPU 上還會多一種住戶。autotune 海選出的 best config 會以一個小
   fxgraph_cache_miss=1 fxgraph_cache_hit=0
 ```
 
-靜態圖的鑰匙裡嵌著具體的 shape，768 打出來的就是另一把，整段編譯重付。這也呼應 Day 11 的機制，如果圖本身已經被標成 dynamic，shape 就以符號的形式進鑰匙，這種 miss 自然就不會發生，dynamic 的成品存進櫃子時還會帶著自己的 shape 條件，取貨前要再驗一次才算數。第二種是改 config，開 `TORCHINDUCTOR_CPP_WRAPPER=1` 再跑一次原本的 512。
+靜態圖的鑰匙裡嵌著具體的 shape，768 打出來的就是另一把，整段編譯重付。這也呼應 automatic dynamic 的機制，如果圖本身已經被標成 dynamic，shape 就以符號的形式進鑰匙，這種 miss 自然就不會發生，dynamic 的成品存進櫃子時還會帶著自己的 shape 條件，取貨前要再驗一次才算數。第二種是改 config，開 `TORCHINDUCTOR_CPP_WRAPPER=1` 再跑一次原本的 512。
 
 ```
 [run 5: same cache dir, n=512, TORCHINDUCTOR_CPP_WRAPPER=1]

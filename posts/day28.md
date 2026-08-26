@@ -2,7 +2,7 @@
 
 ## 前言
 
-前幾天把診斷 torch.compile 的工具一件一件收進了工具箱，工具都在手上了，今天可以做一件更過癮的事，自己下場，把 pipeline 的第三站接管過來。Day 2 畫地圖的時候說過，前兩站交出來的是一張標準的 FX Graph，第三站是可以換掉的，任何吃 FX Graph 的東西都能接在這裡當後端，Inductor 只是 PyTorch 自帶、也最成熟的那一個。這句話今天要兌現。我們會由淺入深寫三個 backend，一個只旁觀，一個動手改圖，一個往下接到 ATen 層，把「後端」從一個參數變成一段自己寫的程式。對照的原始碼在 [`torch/_dynamo/backends/registry.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/backends/registry.py)。
+前幾天把診斷 torch.compile 的工具一件一件收進了工具箱，工具都在手上了，今天可以做一件更過癮的事，自己下場，把 pipeline 的第三站接管過來。畫 pipeline 地圖的時候說過，前兩站交出來的是一張標準的 FX Graph，第三站是可以換掉的，任何吃 FX Graph 的東西都能接在這裡當後端，Inductor 只是 PyTorch 自帶、也最成熟的那一個。這句話今天要兌現。我們會由淺入深寫三個 backend，一個只旁觀，一個動手改圖，一個往下接到 ATen 層，把「後端」從一個參數變成一段自己寫的程式。對照的原始碼在 [`torch/_dynamo/backends/registry.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/backends/registry.py)。
 
 正文開始！
 
@@ -12,7 +12,7 @@
 
 值得注意的是這份契約把時間切成了兩段。backend 本體在編譯期執行，一張圖一生只來一次，回傳的 callable 才是執行期的常客，之後每次呼叫都走它。所以再貴的分析、改寫、程式碼生成都可以放心塞進 backend 本體，那是一次性的成本，執行期的快慢完全取決於你交出去的那個 callable。義務也只有一條，回傳的 callable 吃的參數和吐的結果，要跟圖的輸入輸出對得上，語意等價是你自己的責任，Dynamo 不會幫你驗算。
 
-這代表最小的合法 backend 短得驚人，直接把 GraphModule 自己的 forward 回傳出去就行，圖照原樣用 eager 執行。Day 2 用來剝 pipeline 的 `backend="eager"`，在原始碼裡差不多就是這個長度，它存在的意義本來就只是「跑到我這裡為止」。而 Inductor 這位預設住戶，從 lowering 到 codegen 忙了整整一個 Part 3，最後交出來的也不過就是一個名叫 call 的 callable。兩者在契約面前完全平等，這就是介面設計得薄的好處。
+這代表最小的合法 backend 短得驚人，直接把 GraphModule 自己的 forward 回傳出去就行，圖照原樣用 eager 執行。用來剝 pipeline 的 `backend="eager"`，在原始碼裡差不多就是這個長度，它存在的意義本來就只是「跑到我這裡為止」。而 Inductor 這位預設住戶，從 lowering 到 codegen 忙了整整一個 Part 3，最後交出來的也不過就是一個名叫 call 的 callable。兩者在契約面前完全平等，這就是介面設計得薄的好處。
 
 ## 第一個後端只旁觀
 
@@ -62,7 +62,7 @@ graph():
   input[1]: shape=(6, 8) dtype=torch.float32
 ```
 
-shape 一變 Guard 失敗觸發重編，這是 Day 6 的劇本，而重編出來的第二張圖多了一個 SymInt 的 placeholder，example inputs 裡也混進了一個不是張量的符號，這是 Day 11 的 automatic dynamic 在自動把 shape 放寬。寫 backend 的人得知道輸入不保證都是張量，這一格符號就是提醒。
+shape 一變 Guard 失敗觸發重編，這是 Guard 的老劇本，而重編出來的第二張圖多了一個 SymInt 的 placeholder，example inputs 裡也混進了一個不是張量的符號，這是 automatic dynamic 在自動把 shape 放寬。寫 backend 的人得知道輸入不保證都是張量，這一格符號就是提醒。
 
 graph break 這位老朋友也照常上班。函式要是中途斷開，Dynamo 會切出好幾張子圖，每張子圖各自把 backend 叫起來編一次，一張圖一次，斷點之間的程式碼照舊回直譯器跑。換句話說，自訂 backend 接手的從來不是「整個函式」，而是 Dynamo 切好的每一段安全區，前面二十幾天看過的所有上游行為，在這裡全部原樣成立。
 
@@ -99,7 +99,7 @@ eager 版是 relu 的結果，編譯版和 sigmoid 加一逐位一致，這顆 o
 
 ## 第三個後端往下接到 ATen 層
 
-Dynamo 層的圖貼近使用者，但對編譯器來說太高階，in-place 和 view 還在，backward 也還沒展開，這些正是 Day 12 的 AOTAutograd 負責處理的髒活。好消息是這段不用自己重寫，用 `aot_autograd` 把自己的編譯函式包起來，就能站到跟 Inductor 一樣的位置。
+Dynamo 層的圖貼近使用者，但對編譯器來說太高階，in-place 和 view 還在，backward 也還沒展開，這些正是 AOTAutograd 負責處理的髒活。好消息是這段不用自己重寫，用 `aot_autograd` 把自己的編譯函式包起來，就能站到跟 Inductor 一樣的位置。
 
 ```python
 def fw(gm, example_inputs):
@@ -121,7 +121,7 @@ graph():
     return (add,)
 ```
 
-node 的目標從 `torch.relu` 變成了 `torch.ops.aten.relu.default`，這是一張走完展開、functionalization 和 decomposition 的 ATen 圖，純函數式、operator 集合小而穩定，正是接編譯器該吃的形狀。需要訓練的話再多傳一個 backward 用的編譯函式，AOTAutograd 會照 Day 15 的方式把 joint graph 切成前後兩半，各自送進對應的編譯函式。其實 Day 2 的 aot_eager 就是這個包法的現成品，兩個編譯函式都原樣返回，而 Inductor 的正職也是當 `aot_autograd` 手下的編譯函式，我們此刻站的就是它平常站的那格月台。兩層各有客群，做貼著使用者程式碼的分析工具就留在 Dynamo 層，接真正的 code generator 就包一層下到 ATen 層。
+node 的目標從 `torch.relu` 變成了 `torch.ops.aten.relu.default`，這是一張走完展開、functionalization 和 decomposition 的 ATen 圖，純函數式、operator 集合小而穩定，正是接編譯器該吃的形狀。需要訓練的話再多傳一個 backward 用的編譯函式，AOTAutograd 會把 joint graph 切成前後兩半，各自送進對應的編譯函式。其實 aot_eager 就是這個包法的現成品，兩個編譯函式都原樣返回，而 Inductor 的正職也是當 `aot_autograd` 手下的編譯函式，我們此刻站的就是它平常站的那格月台。兩層各有客群，做貼著使用者程式碼的分析工具就留在 Dynamo 層，接真正的 code generator 就包一層下到 ATen 層。
 
 ## 把名字掛進註冊表
 
@@ -141,7 +141,7 @@ observer calls via registry: 1
 
 ## 結語
 
-回頭看，今天其實沒有學新機制，而是把整個系列的知識換了一個站位再用一次。契約是收 GraphModule 和 example inputs、回一個 callable。上游的 Guard、快取、dynamic shape 對自訂 backend 一視同仁。三個 backend 逐步升級，旁觀證明拿得到圖，改圖證明圖是活的，包上 `aot_autograd` 證明我們可以站上跟 Inductor 同一格月台。Day 2 說第三站可以換，今天真的換給你看。
+回頭看，今天其實沒有學新機制，而是把整個系列的知識換了一個站位再用一次。契約是收 GraphModule 和 example inputs、回一個 callable。上游的 Guard、快取、dynamic shape 對自訂 backend 一視同仁。三個 backend 逐步升級，旁觀證明拿得到圖，改圖證明圖是活的，包上 `aot_autograd` 證明我們可以站上跟 Inductor 同一格月台。一開始畫地圖時說第三站可以換，今天真的換給你看。
 
 不過 torch.compile 再怎麼換後端，都還是一個 JIT，編譯發生在部署機的第一次呼叫，Python 直譯器也一直在場。如果想把編譯徹底搬到上線之前，甚至讓成品脫離 Python、在 C++ 環境裡直接執行，就需要另一條路了。明天來看 torch.export 和 AOTInductor 這對搭檔，把整條 pipeline 從即時編譯改成事先出貨。那我們明天見！
 

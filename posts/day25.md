@@ -12,7 +12,7 @@ GPU 不會自己動起來。每一顆 kernel 都要 CPU 透過 CUDA API 發射�
 
 平常感覺不到這件事，是因為 CUDA 的執行本來就是非同步的，CPU 把 kernel 丟進 stream 的佇列就繼續往前跑，只要 kernel 夠肥，CPU 發射的速度永遠追得上 GPU 消化的速度，佇列裡隨時有存貨。小 kernel 把這個緩衝打破了，GPU 幾 us 就清空一顆，CPU 這邊每顆卻要走完一整套 Python 呼叫、dispatcher、driver 的流程才發得出下一顆，存貨見底，換 GPU 排隊等 CPU。
 
-值得強調的是這筆 overhead 不歸編譯管。Day 20 的 fusion 能把 pointwise 融進別人的 loop，但 matmul 這種 extern kernel 融不動，32 層的 MLP 編完還是幾十顆 kernel，每一步照樣幾十次 launch。編譯把每顆 kernel 變快了，發射它們的次數並沒有變。
+值得強調的是這筆 overhead 不歸編譯管。fusion 能把 pointwise 融進別人的 loop，但 matmul 這種 extern kernel 融不動，32 層的 MLP 編完還是幾十顆 kernel，每一步照樣幾十次 launch。編譯把每顆 kernel 變快了，發射它們的次數並沒有變。
 
 ## 先量出這筆帳有多大
 
@@ -87,7 +87,7 @@ hold output alive, call again: ptr 22480592830464 -> 22480592830464, same: True
     x.add_(1)
 ```
 
-同一個檢查也擋 CPU tensor 混在圖裡的情況。第三類是 dynamic shape，錄影錄的是固定位址加固定大小，Day 11 那種一張圖吃所有 batch size 的彈性到這裡失效，每個新 shape 都要重錄一張 graph，shape 太多時記憶體和重錄時間一起爆炸，重錄太多張還會被警告。最後是記憶體本身，pool 會把 workspace 一直留著換速度，這在 `torch.compile` 的文件裡寫得很直白，overhead 的減少是拿記憶體換的。順帶一提，除錯體驗也會變差，replay 中的 kernel 不會經過 Python，print 插不進去，出錯的堆疊也不會指向你的程式碼，開發階段先用預設模式把模型跑對，再換 reduce-overhead 收 overhead，是比較省事的順序。
+同一個檢查也擋 CPU tensor 混在圖裡的情況。第三類是 dynamic shape，錄影錄的是固定位址加固定大小，automatic dynamic 那種一張圖吃所有 batch size 的彈性到這裡失效，每個新 shape 都要重錄一張 graph，shape 太多時記憶體和重錄時間一起爆炸，重錄太多張還會被警告。最後是記憶體本身，pool 會把 workspace 一直留著換速度，這在 `torch.compile` 的文件裡寫得很直白，overhead 的減少是拿記憶體換的。順帶一提，除錯體驗也會變差，replay 中的 kernel 不會經過 Python，print 插不進去，出錯的堆疊也不會指向你的程式碼，開發階段先用預設模式把模型跑對，再換 reduce-overhead 收 overhead，是比較省事的順序。
 
 ## 什麼場景賺，什麼場景不賺
 
@@ -97,7 +97,7 @@ hold output alive, call again: ptr 22480592830464 -> 22480592830464, same: True
 
 執行期的這筆帳今天收完了。launch overhead 是 CPU 每次發射 kernel 的固定成本，編譯管不到它，CUDA Graph 用 capture 和 replay 把幾十次發射收成一次，reduce-overhead 靠 cudagraph trees 把錄影、共用 memory pool、跨 graph break 這些髒活自動化，代價是位址押死、輸出會被覆寫、shape 要穩定、記憶體多吃一些。batch 8 的 9.45 倍和 batch 8192 的 1.01 倍放在一起，就是這個模式的完整說明書，收的是 overhead 的帳，模型本身算得越重，這筆帳就越不值得收。
 
-不過剛剛有一句話埋了雷，「shape 要穩定」。不只 CUDA Graph 怕 shape 變來變去，整個 torch.compile 都怕，Day 6 的 Guard 每失敗一次就重編一次，錄影機還得跟著重錄。明天就來看 recompilation 爆炸這個 Part 4 最常見的事故，怎麼發生、怎麼診斷、怎麼修。那我們明天見！
+不過剛剛有一句話埋了雷，「shape 要穩定」。不只 CUDA Graph 怕 shape 變來變去，整個 torch.compile 都怕，Guard 每失敗一次就重編一次，錄影機還得跟著重錄。明天就來看 recompilation 爆炸這個 Part 4 最常見的事故，怎麼發生、怎麼診斷、怎麼修。那我們明天見！
 
 ## 參考資料
 

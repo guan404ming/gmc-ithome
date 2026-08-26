@@ -43,7 +43,7 @@ Explanation: Detected data-dependent branching (e.g. `if my_tensor.sum() > 0:`).
 Hint: Use `torch.cond` to express dynamic control flow.
 ```
 
-位置精確到行號，理由正是 Day 10 拆過的資料相依分支，Dynamo 在 trace 期拿不到 `y.sum() > 0` 的真假，只能在這裡切一刀，連替代方案都附在 Hint 裡。這份 log 是逐條事件的流水帳，想要一份免翻 log 的總表，可以改用 `torch._dynamo.explain`，入口在 [`torch/_dynamo/eval_frame.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/eval_frame.py)，它拿同一套 trace 流程把函式走一遍，回來的是一份結構化報告（節錄）。
+位置精確到行號，理由正是講 graph break 時拆過的資料相依分支，Dynamo 在 trace 期拿不到 `y.sum() > 0` 的真假，只能在這裡切一刀，連替代方案都附在 Hint 裡。這份 log 是逐條事件的流水帳，想要一份免翻 log 的總表，可以改用 `torch._dynamo.explain`，入口在 [`torch/_dynamo/eval_frame.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/eval_frame.py)，它拿同一套 trace 流程把函式走一遍，回來的是一份結構化報告（節錄）。
 
 ```
 Graph Count: 2
@@ -63,7 +63,7 @@ Ops per Graph:
     <built-in function mul>
 ```
 
-兩張圖、一個 break，六個 op 怎麼分家看得一清二楚，`sin`、`add` 和分支要用的 `gt` 在第一張，`relu` 和兩個 `mul` 在第二張。報告後半還把 19 條 guard 全部列出來，從 tensor 的 shape 到 `torch.relu` 本人有沒有被掉包都在名單上，正是 Day 6 的 Guard 站崗的那些條件。explain 不需要改任何環境變數，適合寫進測試裡當防線，例如斷言 break 數量是零，誰把 break 寫進模型，CI 直接亮紅燈。
+兩張圖、一個 break，六個 op 怎麼分家看得一清二楚，`sin`、`add` 和分支要用的 `gt` 在第一張，`relu` 和兩個 `mul` 在第二張。報告後半還把 19 條 guard 全部列出來，從 tensor 的 shape 到 `torch.relu` 本人有沒有被掉包都在名單上，正是 Guard 站崗的那些條件。explain 不需要改任何環境變數，適合寫進測試裡當防線，例如斷言 break 數量是零，誰把 break 寫進模型，CI 直接亮紅燈。
 
 ## 再數 recompile
 
@@ -75,7 +75,7 @@ triggered by the following guard failure(s):
 - 0/0: tensor 'x' size mismatch at index 0. expected 32, actual 48
 ```
 
-哪條 guard 倒的、期望什麼、實際來了什麼，一行講完，昨天整篇的排查靠的就是這行。log 裡緊接著還有一筆幾乎一樣的紀錄，主角換成 `torch_dynamo_resume_in_f_at_21`，也就是 Day 10 的 resume function。graph break 把函式切成兩半之後，重編的帳單也是兩份，這正是 break 要排在 recompile 前面數的原因，圖越碎，同一個 shape 變化要付的重編費就越多。至於 64x64 那一次，log 上什麼都沒有，因為第一次重編時 Day 11 的 automatic dynamic 已經把 size 升格成符號，第三種 shape 拿著同一把鑰匙直接通行。判讀這份 log 的重點是頻率，冷啟動時出現幾筆是正常的熱身，跑了幾百個 step 之後還在源源不絕地冒，就代表有某個 guard 永遠追不上輸入的變化，昨天修的就是這種病。
+哪條 guard 倒的、期望什麼、實際來了什麼，一行講完，昨天整篇的排查靠的就是這行。log 裡緊接著還有一筆幾乎一樣的紀錄，主角換成 `torch_dynamo_resume_in_f_at_21`，也就是 resume function。graph break 把函式切成兩半之後，重編的帳單也是兩份，這正是 break 要排在 recompile 前面數的原因，圖越碎，同一個 shape 變化要付的重編費就越多。至於 64x64 那一次，log 上什麼都沒有，因為第一次重編時 automatic dynamic 已經把 size 升格成符號，第三種 shape 拿著同一把鑰匙直接通行。判讀這份 log 的重點是頻率，冷啟動時出現幾筆是正常的熱身，跑了幾百個 step 之後還在源源不絕地冒，就代表有某個 guard 永遠追不上輸入的變化，昨天修的就是這種病。
 
 ## 驗收最終產物
 
@@ -88,7 +88,7 @@ cpp_fused_mul_relu_0 = async_compile.cpp_pybinding(['const float*', 'float*'], '
 Output code written to: /tmp/torchinductor_day27/c5/cc5whbo7fduoh4jvrq5dsve47xysjz5zycoukvicxpd7ga64bo7z.py
 ```
 
-Day 20 說過 kernel 名字就是融合報告，CPU 上是 `cpp_fused` 開頭，GPU 上則是 `triton` 開頭的一族。這裡還多一層資訊，兩顆 kernel 分屬兩個檔案，graph break 的痕跡一路留到了產物層。想把每一站的中間產物整包留下來慢慢看，改開 `TORCH_COMPILE_DEBUG=1`，它會把整趟編譯 dump 成一個帶時間戳的目錄（節錄）。
+講 fusion 時說過 kernel 名字就是融合報告，CPU 上是 `cpp_fused` 開頭，GPU 上則是 `triton` 開頭的一族。這裡還多一層資訊，兩顆 kernel 分屬兩個檔案，graph break 的痕跡一路留到了產物層。想把每一站的中間產物整包留下來慢慢看，改開 `TORCH_COMPILE_DEBUG=1`，它會把整趟編譯 dump 成一個帶時間戳的目錄（節錄）。
 
 ```
 torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchdynamo/debug.log  (0 KB)
@@ -98,11 +98,11 @@ torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model
 torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__1_inference_1.1/output_code.py  (3 KB)
 ```
 
-一格一格認過去。`fx_graph_readable.py` 是 AOTAutograd 展開後的 ATen 圖，`ir_pre_fusion.txt` 是 Day 19 融合前的 node 清單，`output_code.py` 就是剛才那份最終產物，兩個 model 目錄再次對應被 break 切開的兩張圖。這個系列一路在各站攔下來看的中間表示，這個目錄一次到齊，出事時把它整包壓縮起來，就是一份可以慢慢驗屍的病歷。
+一格一格認過去。`fx_graph_readable.py` 是 AOTAutograd 展開後的 ATen 圖，`ir_pre_fusion.txt` 是 Scheduler 融合前的 node 清單，`output_code.py` 就是剛才那份最終產物，兩個 model 目錄再次對應被 break 切開的兩張圖。這個系列一路在各站攔下來看的中間表示，這個目錄一次到齊，出事時把它整包壓縮起來，就是一份可以慢慢驗屍的病歷。
 
 ## depyf 把 bytecode 變回 Python
 
-Day 9 說過 Dynamo 的最終輸出是一段改寫過的 bytecode，當時我們對著反組譯的指令逐條腦補。第三方套件 [depyf](https://github.com/thuml/depyf) 專治這件事，用一個 context manager 包住編譯，就把改寫後的 bytecode 反編譯成等價的 Python 存進指定目錄。編譯後的 `f` 真面目長這樣（節錄）。
+前面說過 Dynamo 的最終輸出是一段改寫過的 bytecode，當時我們對著反組譯的指令逐條腦補。第三方套件 [depyf](https://github.com/thuml/depyf) 專治這件事，用一個 context manager 包住編譯，就把改寫後的 bytecode 反編譯成等價的 Python 存進指定目錄。編譯後的 `f` 真面目長這樣（節錄）。
 
 ```python
 def __transformed_code_0_for_f(x, n):
@@ -152,7 +152,7 @@ def forward(self, y):
 
 工具箱收好，最後把排查順序釘在蓋子上。先數 break，圖的碎片數是一切成本的基數，graph_breaks 給流水帳，explain 給總表。再數 recompile，看 guard 為什麼一直倒，是 shape 在跳動還是圖太碎連坐。這兩關都過了還是慢，才輪到懷疑 kernel，開 output_code 驗融合的結果，開 TORCH_COMPILE_DEBUG 把整趟中間產物留檔，要對照 Python 語意就請 depyf 攤開改寫後的程式。至於編譯直接掛掉的場合，交給 minifier 削出最小重現再回報。每一把工具背後，對應的都是這個系列某一天拆過的機制，現在 log 印出來的每一行，應該都讀得出弦外之音了。
 
-工具齊了，機制也拆完了，只剩最後一塊拼圖。torch.compile 的 backend 是一個開放的介面，Inductor 只是預設選項，剛才那個看到 `relu` 就翻臉的假 backend 其實已經摸到了它的門把。明天 Day 28 就正式自己寫一個 backend，把這個系列學到的東西接成一條真的能跑的編譯路。那我們明天見！
+工具齊了，機制也拆完了，只剩最後一塊拼圖。torch.compile 的 backend 是一個開放的介面，Inductor 只是預設選項，剛才那個看到 `relu` 就翻臉的假 backend 其實已經摸到了它的門把。明天就正式自己寫一個 backend，把這個系列學到的東西接成一條真的能跑的編譯路。那我們明天見！
 
 ## 參考資料
 
