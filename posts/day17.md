@@ -10,7 +10,7 @@
 
 Inductor 拿到的不是 Dynamo 那張還留著 `add_`、`view` 的圖，而是 AOTAutograd 加工完的版本。Functionalization 把 mutation 和 aliasing 洗掉了，Decomposition 把兩千多個 ATen op 收斂成幾百個核心 op，min-cut partitioner 把 forward 與 backward 分成兩張圖，而每個 node 上都掛著 FakeTensor 推好的 shape、dtype、stride。純函數式、詞彙表小、metadata 齊全，這是一張對編譯器最友善的圖。
 
-也因此 Inductor 的職責可以收得很窄。它不需要懂 Python 的動態，也不需要懂 autograd，只需要回答一個問題，這張 ATen 圖怎麼變成最少、最快的 kernel。前面站點的每一層正規化，都是在幫這一站減輕壓力，Dynamo 擋掉了 Python 的不可預測，AOTAutograd 擋掉了 mutation 和高階 op 的組合爆炸，輪到 Inductor 時，問題已經被削成純粹的編譯問題。
+也因此 Inductor 的職責可以收得很窄。它不需要懂 Python 的動態，也不需要懂 autograd，只需要回答一個問題，這張 ATen 圖怎麼變成最少、最快的 kernel。前面兩站的每一層整頓，都是在幫這一站減輕壓力，輪到 Inductor 時，問題已經被削成純粹的編譯問題。
 
 另外值得再提醒一次，這一站是可以換掉的。前兩站交出來的是標準的 FX Graph，任何吃 FX Graph 的東西都能接在這裡當 backend，Inductor 只是 PyTorch 自帶、預設、也最成熟的那一個。今天之後講的所有機制，都是這個預設選項的內部。
 
@@ -18,7 +18,9 @@ Inductor 拿到的不是 Dynamo 那張還留著 `add_`、`view` 的圖，而是 
 
 第一個念頭可能是，圖都這麼乾淨了，一個 node 生一個 kernel 不就好了。這其實就是 eager mode 的做法，而前面用頻寬 benchmark 量過，elementwise 運算的瓶頸是記憶體頻寬，逐 op 執行讓中間結果一直在記憶體之間來回，加速的最大來源正是把好幾個 op 融進同一個 kernel，資料讀一次、一路算完、寫一次。
 
-但要決定哪些 op 能融在一起，op 等級的 node 不夠用。`aten.add` 對排程器來說是一個黑盒子，看不出它讀哪些記憶體、寫哪些記憶體、迴圈長什麼樣。所以 Inductor 定義了自己的中間表示，把每個 op 攤開成一個描述「迴圈的每一輪在做什麼」的 Python 函式，每一筆讀取和寫入都變成顯式的 `ops.load`、`ops.store`。有了顯式的讀寫，排程器才判斷得出兩個 node 能不能共用一個迴圈。今天只需要知道有這一層以及它存在的理由，後面 scheduler 做 fusion、後端生程式碼，依據的都是這層 IR 而不是 FX Graph，細節明天再展開。
+但要決定哪些 op 能融在一起，op 等級的 node 不夠用。`aten.add` 對排程器來說是一個黑盒子，看不出它讀哪些記憶體、寫哪些記憶體、迴圈長什麼樣。所以 Inductor 定義了自己的中間表示，把每個 op 攤開成一個描述「迴圈的每一輪在做什麼」的 Python 函式，每一筆讀取和寫入都變成顯式的 `ops.load`、`ops.store`。有了顯式的讀寫，排程器才判斷得出兩個 node 能不能共用一個迴圈。
+
+PyTorch 把這個設計叫 define-by-run IR，意思是這層 IR 不是等著被走訪的靜態資料結構，它本身就是一段能跑的 Python。要知道某個 node 讀寫了什麼，做法不是去解析它，而是餵一個假的 `ops` 物件進去把它跑一遍，過程中被呼叫到的 `ops.load` 和 `ops.store` 就是答案。今天只需要知道有這一層以及它存在的理由，後面 scheduler 做 fusion、後端生程式碼，依據的都是這層 IR 而不是 FX Graph，細節明天再展開。
 
 ## 一張圖進廠之後的四道工序
 
@@ -95,13 +97,15 @@ def call(args):
 
 kernel 只是零件，wrapper 是組裝說明書。它檢查輸入的 size 和 stride、配置輸出 buffer、按正確順序呼叫每一個 kernel、及時 `del` 釋放引用。Dynamo 改寫後的 bytecode 裡那個 `__compiled_fn` 被呼叫之後，最後真正執行的就是這個 `call`。真實模型會生出幾十個 kernel，wrapper 就是串起它們的那條主線。
 
-中間產物也留得下痕跡。設環境變數 `TORCH_COMPILE_DEBUG=1` 重跑一次，Inductor 會把每一站的產物寫進 `torch_compile_debug/` 目錄，實測列出來有 `fx_graph_readable.py`、`ir_pre_fusion.txt`、`ir_post_fusion.txt`、`output_code.py` 這幾個檔案，正好對應進廠的 FX Graph、scheduler 前後的 IR、最終程式碼，四步走到哪一步出了狀況，就打開對應的那一份。
+中間產物也留得下痕跡。設環境變數 `TORCH_COMPILE_DEBUG=1` 重跑一次，Inductor 會把每一站的產物寫進 `torch_compile_debug/` 目錄，實測列出來有 `fx_graph_readable.py`、`ir_pre_fusion.txt`、`ir_post_fusion.txt`、`output_code.py`，正好對應進廠的 FX Graph、scheduler 前後的 IR 和最終程式碼，哪一步出了狀況就打開對應的那一份。
 
 翻開 `ir_pre_fusion.txt` 可以先感受一下 loop-level IR 的長相，裡面每個 node 都有一個 `body` 函式，讀寫全部寫成 `ops.load`、`ops.store`，跟上面 C++ kernel 的每一行都對得起來，後端只是把同一段用另一種語言重新念了一遍。旁邊還記著這個 node 讀了誰、寫了誰、迭代空間多大，fusion 的判斷靠的全是這些欄位。這也回應了前面的問題，為什麼 op 等級的 node 不夠用，明天就把這一層攤開來讀。
 
 ## 兩個後端，一套管線
 
 值得強調的是分家的位置。lowering、IR、scheduler 全部共用，只有最後 codegen 一步按裝置分流，CPU 和 GPU 各走一份 [`codegen`](https://github.com/pytorch/pytorch/tree/v2.8.0/torch/_inductor/codegen) 底下的生成器，wrapper 的生成則兩邊共用。這個切法的好處很直接，fusion 決策、記憶體規劃這些難的部分不必每個後端重寫一遍，支援一種新硬體，理論上只要補上最後一段 codegen，這正是自己養一層 IR 的回報。
+
+還有一個更大的選擇藏在更前面，這整座工廠是用 Python 蓋的。傳統編譯器的中段幾乎都用 C++ 寫，Inductor 卻從 lowering、IR 到 scheduler 全在 Python 裡，只有生出來的程式碼才是別的語言。代價是編譯本身比較慢，那些 pass 的執行時間全都算在使用者第一次呼叫的等待裡。換到的是改動成本，多支援一個 op 就是往表裡加一個函式，寫規則的人和寫模型的人用同一種語言、同一套除錯工具。對一個還在快速長大的編譯器來說這筆帳划得來，慢的那一半則交給磁碟快取去補。
 
 GPU 那一側還有一個值得記下的選擇。Inductor 生的不是 CUDA C 而是 Triton，一種用 Python 寫 GPU kernel 的語言。原因是 Triton 把 thread 排布、記憶體 coalescing 這些難寫對的細節接手掉，codegen 只需要描述 tile 等級的計算，生成器簡單得多，生出來的 kernel 又常能追上手寫 CUDA 的效能，這是 PyTorch 2 論文特別強調的取捨。前面節錄過的 `triton_poi_fused_add_cos_mul_sin_tanh_0` 這個 kernel，就是這條路徑的產物，跟今天的 C++ kernel 對照著看，同一層 IR、兩種長相。
 
