@@ -1,4 +1,4 @@
-# Day 13 | 讓 in-place 消失的潔癖書記官 Functionalization
+# Day 13 | 讓 in-place 操作消失的潔癖書記官 Functionalization
 
 ## 前言
 

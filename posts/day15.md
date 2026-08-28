@@ -118,7 +118,7 @@ def forward(self, mm, permute, tangents_1):
 
 ## 轉到底就是 activation checkpointing
 
-> **activation checkpointing 是什麼？** forward 的中間值不存了，只留少數檢查點，backward 要用到材料時從檢查點當場重算。多花一點計算，省下一大塊 activation 記憶體。
+> **activation checkpointing：**forward 的不存中間值，只留少數 checkpoint，backward 要用到的時候從檢查點當場重算。多花一點計算時間，不過可以省下一大塊 activation 記憶體。
 
 min-cut 是自動找的折衷點，但這顆旋鈕也可以手動轉到底。把同一個函式包進 `torch.utils.checkpoint`。
 

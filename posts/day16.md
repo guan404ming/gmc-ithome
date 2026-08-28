@@ -29,13 +29,17 @@ print("shape:", m.shape, "| dtype:", m.dtype, "| stride:", m.stride(), "| device
 y = m @ torch.empty(8, 16, device="meta")
 ```
 
-    tensor(..., device='meta', size=(4, 8))
-    shape: torch.Size([4, 8]) | dtype: torch.float32 | stride: (8, 1) | device: meta
-    matmul -> torch.Size([4, 16]) meta
+```
+tensor(..., device='meta', size=(4, 8))
+shape: torch.Size([4, 8]) | dtype: torch.float32 | stride: (8, 1) | device: meta
+matmul -> torch.Size([4, 16]) meta
+```
 
 印出來的內容是 `...`，因為真的沒有東西可以印。但 `(4, 8)` 乘 `(8, 16)` 的 matmul 照常執行，輸出一顆 `(4, 16)` 的 meta tensor，shape 推導完全正確。想讀數值則會直接吃 exception。
 
-    item() -> RuntimeError - Tensor.item() cannot be called on meta tensors
+```
+item() -> RuntimeError - Tensor.item() cannot be called on meta tensors
+```
 
 這能運作是因為每個 op 除了 CPU kernel、CUDA kernel，還註冊了一個 meta kernel，只負責根據輸入的 metadata 算出輸出的 metadata，一個位元組的資料都不碰。這些 meta kernel 大多集中在 [`torch/_meta_registrations.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_meta_registrations.py)，跟著 dispatcher 的機制走，`device="meta"` 的輸入自然分派過去。對編譯器來說這就是完美的「乾跑」，成本和 shape 大小無關，因為根本沒有資料在動。
 
@@ -59,11 +63,15 @@ with mode:
     c = torch.relu(a @ b)
 ```
 
-    type: FakeTensor | shape: (32, 128) | dtype: torch.float32 | device: cpu
+```
+type: FakeTensor | shape: (32, 128) | dtype: torch.float32 | device: cpu
+```
 
 在 mode 裡面連 `torch.randn` 都被攔掉了，沒有任何亂數被生成，但 `a @ b` 過 relu 之後的 shape、dtype、device 全部推對，而且 `device` 顯示 `cpu` 而不是 `meta`，謊撒得很完整。已經存在的真 Tensor 則用 `mode.from_tensor()` 轉換，抽掉數值、留下 metadata。這種乾跑有多便宜，拿一個誇張的 shape 就看得出來。
 
-    fake 65536x65536 matmul (16 GB per tensor): 0.48 ms -> (65536, 65536)
+```
+fake 65536x65536 matmul (16 GB per tensor): 0.48 ms -> (65536, 65536)
+```
 
 單顆 16 GB 的矩陣，真算一次 matmul 要幾百 TFLOPs，這台筆電的記憶體連放都放不下，fake 世界裡 0.48 毫秒走完。這就是「整個 forward 乾跑一遍」敢成立的底氣。
 
@@ -91,15 +99,19 @@ def f(x, w):
 torch.compile(f, backend=peek)(torch.randn(8, 16), torch.randn(16, 4))
 ```
 
-    placeholder   l_x_   example_value = FakeTensor(8, 16)
-    placeholder   l_w_   example_value = FakeTensor(16, 4)
-    call_function matmul example_value = FakeTensor(8, 4)
-    call_function tanh   example_value = FakeTensor(8, 4)
+```
+placeholder   l_x_   example_value = FakeTensor(8, 16)
+placeholder   l_w_   example_value = FakeTensor(16, 4)
+call_function matmul example_value = FakeTensor(8, 4)
+call_function tanh   example_value = FakeTensor(8, 4)
+```
 
 從輸入到中間結果，全是 FakeTensor。流程上，輸入的 Tensor 在被包成 `TensorVariable` 的那一刻就被轉成 fake，之後圖上每長一個 node，[`torch/_dynamo/utils.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/utils.py) 的 `get_fake_value` 就拿著輸入 node 們的 fake 值，在 `FakeTensorMode` 下把這個 op 乾跑一次，得到的輸出掛回 node 當 `example_value`。追蹤到 `y.view(-1)` 時 Dynamo 能回答 shape 問題、AOTAutograd 產出的圖上那些 `"f32[8, 4]"` 標註，靠的都是這一套。用 `TORCH_LOGS="+dynamo"` 也能看到 Dynamo 建圖輸入時的自白（節錄）。
 
-    create_graph_input L_x_ L['x'] FakeTensor(..., size=(8, 16)) at debug_level 0 before=False
-    create_graph_input L_w_ L['w'] FakeTensor(..., size=(16, 4)) at debug_level 0 before=False
+```
+create_graph_input L_x_ L['x'] FakeTensor(..., size=(8, 16)) at debug_level 0 before=False
+create_graph_input L_w_ L['w'] FakeTensor(..., size=(16, 4)) at debug_level 0 before=False
+```
 
 到了 AOTAutograd，同一批 FakeTensor 直接接手。介紹它時說的「拿 FakeTensor 把 forward 重新執行一遍，讓 autograd 引擎在上面展開 backward」，現在可以讀懂這句話的全部了。joint graph 的 trace 是一次真的 Python 執行，只是每顆 Tensor 都是 fake 的，所以幾千個 op 的模型也能在編譯期便宜地「跑」完，Functionalization 的 metadata 收集、partitioner 算保存成本用的元素個數，吃的全是同一套 fake metadata。一路到 Inductor 拿到的圖，每個 node 身上的 shape 標註也還是這批 FakeTensor 留下的。
 
@@ -109,8 +121,10 @@ torch.compile(f, backend=peek)(torch.randn(8, 16), torch.randn(16, 4))
 
 空殼終究有極限。只要程式真的需要一個具體數值，fake 世界就答不上來。最典型的就是 `.item()`，在 `FakeTensorMode` 下對一顆 fake tensor 呼叫它。
 
-    fake item() -> DataDependentOutputException
-       aten._local_scalar_dense.default
+```
+fake item() -> DataDependentOutputException
+   aten._local_scalar_dense.default
+```
 
 `FakeTensorMode` 丟出 `DataDependentOutputException`，意思是這個 op 的輸出取決於資料本身，而資料不存在。同一堵牆在 `torch.compile` 裡的樣子，就是 data-dependent 的控制流。
 
@@ -123,15 +137,17 @@ def g(x):
 torch.compile(g, fullgraph=True)(torch.randn(4))
 ```
 
-    compile data-dependent branch -> Unsupported
-    Data-dependent branching
-      Explanation: Detected data-dependent branching (e.g. `if my_tensor.sum() > 0:`). Dynamo does not support tracing dynamic control flow.
+```
+compile data-dependent branch -> Unsupported
+Data-dependent branching
+  Explanation: Detected data-dependent branching (e.g. `if my_tensor.sum() > 0:`). Dynamo does not support tracing dynamic control flow.
+```
 
 `x.sum() > 0` 的真假只有算了才知道，但追蹤期手上只有空殼，Dynamo 無從決定該走哪個分支，`fullgraph=True` 之下直接舉手投降，預設模式則是 Graph Break 退回 eager。這不是實作偷懶，是這套設計的本質邊界，用「不算數值」換到的所有便宜，在真正需要數值的那一刻都要還。PyTorch 的緩解方案也都是繞著這條線走，例如 `torch.cond` 把兩個分支都抓進圖裡、unbacked SymInt 給 `.item()` 的結果一個符號讓它繼續往下流，這些之後聊到 Dynamic Shapes 進階題再展開。
 
 ## 結語
 
-把今天濃縮成一句話，編譯期需要跑但不能真的算，於是每顆 Tensor 都換成一個只剩 metadata 的替身。meta device 提供「只算 shape 不碰資料」的 kernel，FakeTensor 在上面補一個 `fake_device` 把 device 語意保住，`FakeTensorMode` 在 dispatch 層攔下每個 op 完成乾跑。Dynamo 的 `example_value`、AOTAutograd 的 joint trace、partitioner 的成本計算，整條管線共用這一套替身，而 Symbolic Shapes 就住在替身的 shape 欄位裡。代價是碰到 data-dependent 的地方，空殼就再也演不下去。
+把今天的內容簡單濃縮成一句話就是：編譯期需要跑但不能真的算，於是每顆 Tensor 都換成一個只剩 metadata 的替身。meta device 提供「只算 shape 不碰資料」的 kernel，FakeTensor 在上面補一個 `fake_device` 把 device 語意保住，`FakeTensorMode` 在 dispatch 層攔下每個 op 完成乾跑。Dynamo 的 `example_value`、AOTAutograd 的 joint trace、partitioner 的成本計算，整條管線共用這一套替身，而 Symbolic Shapes 就住在替身的 shape 欄位裡。代價是碰到 data-dependent 的地方，空殼就再也演不下去。
 
 配角的債清完了，明天正式進入第三站 TorchInductor。它從 AOTAutograd 手上接過乾淨的 ATen 圖，要走過 lowering、fusion、codegen 三道工序，最後吐出真正跑在硬體上的 kernel。明天先看總覽，把這座工廠的每個車間走一遍。那我們明天見！
 
@@ -143,3 +159,4 @@ torch.compile(g, fullgraph=True)(torch.randn(4))
 - [Fake tensor（PyTorch 官方文件）](https://pytorch.org/docs/stable/torch.compiler_fake_tensor.html)
 - [Meta device（PyTorch 官方文件）](https://pytorch.org/docs/stable/meta.html)
 - [Dynamo Deep-Dive（PyTorch 官方文件）](https://pytorch.org/docs/stable/torch.compiler_dynamo_deepdive.html)
+

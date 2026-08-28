@@ -1,10 +1,10 @@
-# Day 19 | 誰跟誰可以同桌？TorchInductor 的宴席總管 Scheduler
+# Day 19 | 誰跟誰可以坐同桌？TorchInductor 的排座位大師 Scheduler
 
 ## 前言
 
 昨天 Lowering 把 FX Graph 翻成了 loop-level IR，每個 node 都知道「自己的第 i 格怎麼算」。但 IR 就緒後還缺兩個答案，這串 node 誰先誰後執行，以及誰跟誰可以生成同一個 kernel。這決定了最後生出幾個 kernel、每個 kernel 搬多少記憶體，也就是 Inductor 快不快的關鍵。今天的主角 `Scheduler` 負責回答這兩題，原始碼在 [`torch/_inductor/scheduler.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/scheduler.py)。
 
-今天的比喻是宴席總管。IR node 是賓客，kernel 是桌子。總管先弄清楚賓客的關係，排出入座順序，再盡量把互動最密切的賓客排在同一桌，因為隔桌傳話的成本比同桌講話高出一個數量級。誰跟誰同桌，就是 fusion 的決定。
+在這裡 IR node 就像是賓客，kernel 是桌子。總管需要先弄清楚賓客的關係，排出入座順序，再盡量把互動最密切的賓客排在同一桌，因為隔桌傳話的成本比同桌講話高出一個數量級。誰跟誰同桌，就是 fusion 的決定。
 
 正文開始！
 
@@ -24,7 +24,7 @@
 
 ## 拿四個小函式實測
 
-以下實驗在 CPU 上跑（torch 2.8.0），Inductor 走 C++ 後端，但排程與融合的決策所有後端共用同一個 `Scheduler`。以 `TORCH_LOGS="fusion,ir_pre_fusion"` 印出決策過程，完整程式在 `code/day19/`。
+以下實驗在 CPU 上跑（torch 2.8.0），Inductor 走 C++ 後端，但排程與融合的決策所有後端共用同一個 `Scheduler`。以 `TORCH_LOGS="fusion,ir_pre_fusion"` 印出決策過程。
 
 第一個對照組是三步 pointwise。
 
@@ -52,7 +52,7 @@ def epilogue(x):
     return torch.relu(s) * 2
 ```
 
-`ir_pre_fusion` 這次印出兩個 node，依賴邊看得一清二楚（節錄）。
+`ir_pre_fusion` 這次印出兩個 node，dependent edge 就看得一清二楚（節錄）。
 
 ```
 op0.writes = [MemoryDep('buf0', c0, {c0: 1024})]
@@ -80,7 +80,7 @@ completed fusion round (1/10): fused 2 nodes into 1 nodes
 
 ## 一道 reduction 就是一道牆
 
-上面的 reduction 跟後面的 pointwise 融在一起了，但它更常見的角色是牆。把 sum 換成全域的，讓後面每一格都依賴它。
+上面的 reduction 跟後面的 pointwise 融在一起了，但它更常見的角色是做爲一道牆。把 sum 換成全域的，讓後面每一格都依賴它。
 
 ```python
 def wall(x):
@@ -140,3 +140,4 @@ Scheduler 把 IR node 包成 SchedulerNode，靠 buffer 的讀寫關係建出依
 - [torch/_inductor/choices.py：score_fusion 與 can_fuse（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/choices.py)
 - [torch/_inductor/dependencies.py：MemoryDep（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/dependencies.py)
 - Ansel et al., [*PyTorch 2*](https://pytorch.org/assets/pytorch2-2.pdf), ASPLOS 2024（第 5 節）
+

@@ -1,10 +1,10 @@
-# Day 14 | AOTAutograd 的樂高大師：Decomposition
+# Day 14 | Torch AOTAutograd 的樂高大師：Decomposition
 
 ## 前言
 
 昨天 Functionalization 把圖變成了純函數式，但圖還是很大一塊的。一個 LayerNorm 節點背後頂著十幾個基本運算，一個 GELU 藏著一條完整的數學式。而這背後其實還有一個更根本的問題。PyTorch 有超過兩千個 operator（光 `torch.ops.aten` 就登記了八百多個 op 家族），如果每個後端都要為每一個 op 寫一份 codegen，那任何新後端都不用做了，光把 op 清單看完就先陣亡。
 
-而 Torch 在這邊則是透過一個獨立的模組去處理這件事，Decomposition 的思路很像玩樂高。大多數看起來很複雜的 op，其實都是少數基本積木的組合。把組合拆開，後端只需要面對基本積木，而且拆完之後，後端還可以用自己的方式把積木拼回去，拼出來的東西常常比原本更快。今天會實際看一次拆解、翻開拆解表看它長什麼樣、看規則是怎麼註冊的、講清楚為什麼拆了不會變慢，最後看哪些 op 不能拆。
+而 Torch 在這邊則是透過一個獨立的模組去處理這件事，Decomposition 的思路很像玩樂高。大多數看起來很複雜的 op，其實都是少數基本積木的組合。把組合拆開，後端只需要面對基本積木，而且拆完之後，後端還可以用自己的方式把積木拼回去，拼出來的東西常常比原本更快。今天會實際看一次拆解、翻開拆解表看它長什麼樣、看規則是怎麼註冊的、講清楚為什麼拆了不會變慢，最後看哪些 op 是絕對不能拆的。
 
 正文開始！
 
@@ -61,13 +61,11 @@ def forward(self, arg0_1: "f32[8]", arg1_1: "f32[8]", arg2_1: "f32[4, 8]"):
     return (mul_4,)
 ```
 
-逐段讀。LayerNorm 被拆成它的定義。`var_mean` 一次算出平均值和變異數，`add` 加上 `eps=1e-05` 防止除以零，`rsqrt` 取反平方根，`sub` 和 `mul` 完成標準化，最後兩行乘上 weight、加上 bias，正好對應 `nn.LayerNorm(8)` 的兩個參數 `arg0_1` 和 `arg1_1`。
+我們一段一段讀。LayerNorm 被拆成它的定義。`var_mean` 一次算出平均值和變異數，`add` 加上 `eps=1e-05` 防止除以零，`rsqrt` 取反平方根，`sub` 和 `mul` 完成標準化，最後兩行乘上 weight、加上 bias，正好對應 `nn.LayerNorm(8)` 的兩個參數 `arg0_1` 和 `arg1_1`。
 
-GELU 則被拆成它的數學定義 `0.5 * x * (1 + erf(x / sqrt(2)))`。`mul_2` 是 `0.5 * x`，`mul_3` 那個神秘的 `0.7071067811865476` 就是 `1 / sqrt(2)`，接著 `erf`、`+ 1`，最後 `mul_4` 把兩半乘起來。一條數學式，五行基本運算。
+GELU 則被拆成它的數學定義 `0.5 * x * (1 + erf(x / sqrt(2)))`。`mul_2` 是 `0.5 * x`，`mul_3` 那個神秘的 `0.7071067811865476` 就是 `1 / sqrt(2)`，接著 `erf`、`+ 1`，最後 `mul_4` 把兩半乘起來。一條數學式，最後被拆解成五行基本運算。
 
-整張圖數下來，兩個高階 op 變成了十二行，而且只用到 `var_mean`、`add`、`rsqrt`、`sub`、`mul`、`erf` 六種基本運算。這就是 decomposition 的效果，不管使用者用了多少花俏的 op，到了後端手上，詞彙表只剩下少數幾種。
-
-另外交代一下，這裡包了 `torch.no_grad()`，所以 AOTAutograd 判定是 inference，只有一張 forward 圖。訓練模式下 backward 圖也會經過同一套拆解，這點下面講到規則的本質時會再回來。
+整張圖數下來，兩個高階 op 變成了十二行，而且只用到 `var_mean`、`add`、`rsqrt`、`sub`、`mul`、`erf` 六種基本運算。這就是 decomposition 的效果，不管使用者用了多少花俏的 op，到了後端手上，詞彙表只剩下少數幾種基本的。另外交代一下，這裡包了 `torch.no_grad()`，所以 AOTAutograd 判定是 inference，只有一張 forward 圖。訓練模式下 backward 圖也會經過同一套拆解，這點下面講到規則的本質時會再回來。
 
 ## 拆了不會變慢嗎？
 
@@ -75,7 +73,7 @@ GELU 則被拆成它的數學定義 `0.5 * x * (1 + erf(x / sqrt(2)))`。`mul_2`
 
 答案藏在 Day 2 就看過的東西裡。Inductor 最擅長把連續的 elementwise 運算融合回一個 kernel。拆出來的 `mul`、`erf`、`add` 全部都是 pointwise，正是最好融合的那一種，Day 2 那個 `triton_poi_fused_add_cos_mul_sin_tanh_0` 的 kernel 名字就是證據，五個 op、一次 `tl.load`、一次 `tl.store`。拆解拆出來的這十幾行，最後在 GPU 上根本不會是十幾個 kernel。
 
-所以 decomposition 和 fusion 是一套組合拳，**拆解把高階 op 打散成基本運算，融合再把基本運算收攏成大 kernel**。效果等於「為每一種複合 op 手寫一個 fused kernel」，但成本完全不同，手寫路線要為每個 op、每種組合各寫一份。拆解加融合的路線只需要為六種基本運算寫 codegen，所有組合自動涵蓋。甚至連使用者自創的、PyTorch 從來沒見過的運算組合，都能被融合成一個不存在於任何函式庫裡的客製 kernel。這就是拆的底氣。拆不是把東西變碎，是把「怎麼拼」的決定權交給後端。
+所以 decomposition 和 fusion 是一套組合拳，**拆解把高階 op 打散成基本運算，融合再把基本運算收攏成大 kernel**。效果大概就會等於「為每一種複合 op 手寫一個 fused kernel」，但成本完全不同，手寫路線要為每個 op、每種組合各寫一份。拆解加融合的路線只需要為六種基本運算寫 codegen，所有組合自動涵蓋。甚至連使用者自創的、PyTorch 從來沒見過的運算組合，都能被融合成一個不存在於任何函式庫裡的客製 kernel。這就是拆的底氣。拆不是把東西變碎，是把「怎麼拼」的決定權交給後端。
 
 ![高階 op 逐層炸開成基本運算，再被 Inductor 融合收攏](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day14/decomposition.gif)
 
@@ -83,7 +81,7 @@ GELU 則被拆成它的數學定義 `0.5 * x * (1 + erf(x / sqrt(2)))`。`mul_2`
 
 ## 拆解表長什麼樣
 
-那「怎麼拆」是誰規定的？答案意外地樸素，就是一張 op 對到 Python 函式的映射表。在 [`torch/_decomp/__init__.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_decomp/__init__.py) 裡就是一個全域 dict，實測數一下規模。
+那「怎麼拆」是誰規定的？答案意外地樸素，就是一張 op 對到 Python 函式的映射表。在 [`torch/_decomp/__init__.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_decomp/__init__.py) 裡就是一個全域 dict，實測算一下他的規模：
 
 ```
 aten ops registered:                     827
@@ -104,7 +102,7 @@ def gelu(a, approximate="none"):
 
 跟上面 AOT 圖裡那五行完全對得上，連 `0.7071` 的出處都找到了。LayerNorm 的規則也一樣，`@register_decomposition(aten.native_layer_norm)` 註冊在 [`torch/_refs/__init__.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_refs/__init__.py)，更多規則集中住在 [`torch/_decomp/decompositions.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_decomp/decompositions.py)。查表的時機就是 Day 12 講過的 trace 過程。AOTAutograd 拿 FakeTensor 重跑函式時，每碰到一個 op 先查表，表裡有，就改成呼叫那個 Python 函式，tracer 走進函式內部，錄下來的自然就是拆開後的基本運算。
 
-「規則本身也是 PyTorch 程式」這個設計比看起來重要，因為它一次帶來三個好處。
+「規則本身也是 PyTorch 程式」這個設計雖然看起來很直覺，不過其實他蠻重要的，因為它一次帶來三個好處。
 
 - **可以再被 trace**：拆出來的還是 Tensor 運算，可以繼續拆、繼續變換，一路拆到 prims 也行。
 - **可以被微分**：規則是普通的可微運算組成的，autograd 引擎直接就能對它求導，所以 backward 圖的拆解不用另外寫一套。
@@ -131,13 +129,13 @@ remove_decompositions(decompositions, decomps_to_exclude)
 
 ## 哪些 op 不該拆
 
-最後回頭看圖上兩個「倖存者」，它們是理解 decomposition 分寸感的關鍵。
+最後回頭看圖上兩個「倖存者」，它們是理解 decomposition 邊界的關鍵。
 
 第一個是 `var_mean`。它明明可以再拆（平均值是 sum 除以 n，變異數也是幾個 reduction 的組合），但 AOT 圖裡它留著。第二個更明顯，如果函式裡有 `x @ w`，圖上會是一條原封不動的 `mm`，decomposition 完全不碰它。
 
-因為拆解是會丟資訊的。`mm` 一旦拆成三層迴圈的乘加，後端就再也認不出「這是矩陣乘法」，也就不知道該叫 cuBLAS、該套 Triton 的 matmul template、該用 tensor core。這些高度優化的實作只認得 `mm` 這個名字，不認得迴圈。所以計算密集、有專屬 kernel 的戰略 op 必須保持原樣，一路傳到後端，讓後端在 lowering 時各自決定它們的命運。
+這邊不碰主要就是因為拆解其實是會丟資訊的。`mm` 一旦拆成三層迴圈的乘加，後端就再也認不出「這是矩陣乘法」，也就不知道該叫 cuBLAS、該套 Triton 的 matmul template、該用 tensor core。這些高度優化的實作只認得 `mm` 這個名字，不認得迴圈。所以計算密集、有專屬 kernel 的重要 op 必須保持原樣，一路傳到後端，讓後端在 lowering 時各自決定它們的命運。
 
-判斷標準大致是下面三條。
+那 op 重不重要的判斷標準可以大致分成下面三條：
 
 - **pointwise 和簡單 reduction 儘管拆**：反正會被融合回來，拆了只賺不賠。
 - **matmul、conv 這類計算密集 op 絕不拆**：拆了就換不到專屬的高效實作，賠大了。

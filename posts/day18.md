@@ -1,18 +1,18 @@
-# Day 18 | Loop-level IR 不是樹，是函式
+# Day 18 | Loop-level IR 不是樹，而是函式
 
 ## 前言
 
-昨天總覽了 Inductor 的流水線，從接下 ATen 圖到吐出 kernel，中間排著 lowering、scheduling、codegen 幾站。今天走進第一站 Lowering，看每個 ATen node 是怎麼被翻譯成 Inductor 自己的 IR 的。FX Graph 是圖的語言，node 連 node，kernel 是迴圈的語言，一格一格算，Lowering 就是跨過這道鴻溝的那一步。
+昨天總覽了 Inductor 的 pipeline，從接下 ATen 圖到吐出 kernel，中間要經過 lowering、scheduling、codegen 幾站。今天走進第一站 Lowering，看每個 ATen node 怎麼被翻譯成 Inductor 自己的 IR。FX Graph 用 node 描述一張圖，kernel 卻用迴圈一格一格地算。Lowering 就是跨過這道鴻溝的那一步。
 
-這層 IR 的設計蠻反直覺。多數編譯器的 IR 是資料結構，節點加欄位，組成一棵樹或一張圖，可以走訪、比對、改寫。Inductor 的 loop-level IR 卻是一條函式。一個 node 被 lower 之後，留下來的是「給我一個 index，我告訴你這一格輸出怎麼算」的 Python callable，官方把這種風格叫 define-by-run IR。今天先看查表這個入口，再把這條函式的長相講清楚，接著用 debug 輸出實際看 Pointwise 和 Reduction 兩種 IR，最後回答為什麼這種設計讓融合幾乎是免費的。
+這層 IR 的設計蠻反直覺的。多數編譯器的 IR 是資料結構，節點加上欄位，組成一棵樹或一張圖。Inductor 的 loop-level IR 卻是一條函式。一個 node 被 lower 之後，留下的是「給我一個 index，我告訴你這格怎麼算」的 Python callable，官方把這種風格叫 define-by-run IR。今天先看查表的入口，再看 Pointwise 和 Reduction 兩種 IR，最後回答為什麼這種設計讓 fusion 幾乎不用額外動手。
 
 正文開始！
 
 ## 入口是一張表
 
-Inductor 拿到的圖經過 Functionalization 和 Decomposition 整頓，只剩純函數式的 ATen node。接手的類別叫 `GraphLowering`，定義在 [`graph.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/graph.py)，它本質上是一個 FX interpreter，把圖按拓撲序走一遍，每碰到一個 call_function node 就去查一個全域 dict。這個 dict 就叫 `lowerings`，住在 [`lowering.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/lowering.py) 開頭。查到了就呼叫它，把 node 換成 IR。查不到就走 fallback，把原本的 eager kernel 包起來原樣呼叫。
+Inductor 拿到的圖經過 Functionalization 和 Decomposition 整頓，只剩純函數式的 ATen node。接手的 `GraphLowering` 會把圖走一遍，每碰到一個 op，就去 `lowerings` 表裡查該怎麼翻譯。查到就把 node 換成 IR；查不到就走 fallback，原樣呼叫 eager kernel。一張表，就是 lowering 的入口。
 
-今天的實驗都跑在 CPU 上（torch 2.8.0），先看這張表的規模，還有幾個代表性的 op 在不在裡面。
+今天的實驗都跑在 CPU 上（torch 2.8.0），先看這張表的規模：
 
 ```
 lowerings entries: 1713
@@ -26,19 +26,7 @@ lowerings[aten.relu.default] -> torch._inductor.lowering.make_pointwise.<locals>
 lowerings[aten.sum.default] -> torch._inductor.lowering.sum_
 ```
 
-1713 條 entry（以 overload 計）。每一條的 value 都是普通的 Python 函式，relu 對到 `make_pointwise` 做出來的函式，sum 對到 `sum_`。註冊方式跟 decomposition table 如出一轍，就是 decorator。
-
-```python
-relu = register_pointwise(aten.relu)
-
-@register_lowering([aten.sum, prims.sum])
-def sum_(x, axis=None, keepdims=False, *, dtype=None):
-    ...
-    fn = make_reduction("sum", override_return_dtype=dtype)
-    return fn(x, axis, keepdims, dtype=dtype)
-```
-
-`register_lowering` 還會順手處理 broadcast 和 type promotion，每條規則只要專心描述計算本身。表裡也藏著幾種不同的命運。`aten.mm` 和 `aten.convolution` 在表裡，但 lowering 不長迴圈，而是走 matmul template 那條路，交給預先寫好的高效模板去 autotune，講 Decomposition 時說的「戰略 op 不拆」就是在這裡接關。`aten._cdist_forward` 也在表裡，但同時登記在 fallbacks 名單，value 是一層 wrapper，執行時直接呼叫 eager kernel，對 Inductor 來說是不透明的節點，融合的手伸不進去，但語意保住了。
+1713 條 entry（以 overload 計），每條都對到一個 Python 函式。op 查到後會走三條路。add、relu、sum 這類 op 會變成 loop IR，之後還能 fusion。mm 和 convolution 這類「戰略 op」不拆成迴圈，而是交給高效模板去 autotune。Inductor 還不會處理的 op 則走 fallback，不能參與 fusion，但程式至少還是能跑。
 
 ## 查表換到的是一條函式
 
@@ -55,17 +43,17 @@ def inner(*inputs):
     return Pointwise.create(device=device, dtype=dtype, inner_fn=inner_fn, ranges=ranges)
 ```
 
-一個 Pointwise 物件身上重要的就三樣。`ranges` 記輸出多大，`dtype` 記型別，`inner_fn` 吃一組 index，回傳「這一格的值怎麼算」。它不真的算出數字，body 裡呼叫的 `ops.load`、`ops.add` 都是符號操作，之後誰拿著這條函式執行，才決定這段描述變成 Triton code 還是 C++ code。這就是 define-by-run，IR 的內容不是被資料結構存下來，而是執行這條 Python 函式的過程跑出來的。
+第一個主角 Pointwise 物件重要的就三樣。`ranges` 記輸出多大，`dtype` 記型別，`inner_fn` 則回答「給我這格的 index，該怎麼算？」它現在只描述計算，不會真的算出數字。到了 codegen，同一條描述才會變成 Triton 或 C++ code。這就是 define-by-run：IR 不是一棵固定的樹，而是跑過函式才展開。
 
-這個設計還有一層聰明之處。`ops.load`、`ops.add` 的實際意義不是寫死的，會被轉發給當下掛著的 handler。debug 時掛一個印字串的 handler，把 inner_fn 跑一遍就得到人類可讀的 body。分析時掛計數的 handler，跑一遍就知道這條鏈讀了幾個 buffer。到了 codegen 掛的是 Triton 或 C++ handler，同一條函式跑出來的就是 kernel 原始碼。IR 只寫一份，解讀方式隨 handler 換，等一下實驗印出來的 loop body 就是這麼來的。
+這條函式也不只是給 codegen 用。debug 時跑一遍，它可以印成人類看得懂的 loop body；分析時跑一遍，可以數出它讀寫了哪些 buffer；codegen 時再把它變成 kernel。IR 只寫一份，不同階段用自己的方式解讀它。
 
-另一個主角 Reduction 多帶兩樣東西，記著哪幾個軸要被收掉、用什麼方式收（sum、max、prod）。兩個類別都繼承自 [`ir.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/ir.py) 裡的 `Loops`，絕大多數運算就落在這兩大類，一類每格獨立算，一類一群格子收成一格。
+另一個主角 Reduction 物件則是多記兩件事：哪幾個軸要被收掉，以及怎麼收（sum、max、prod）。絕大多數運算就落在這兩類：Pointwise 每格獨立算，Reduction 把一群格子收成一格。
 
-順帶交代外面的兩層殼。lowering 函式實際回傳的是 `TensorBox(StorageBox(Pointwise(...)))`，TensorBox 對應一個 tensor 名字，StorageBox 對應一塊儲存，兩層 box 的功能就是讓內容物可以換。之後這顆 Pointwise 要落地成真的 buffer 時，box 裡面會被原地換成 `ComputedBuffer`，拿著 box 的下游都不用改。
+這時的 IR 還只是一段描述。等到它必須成為中間 buffer，Inductor 才會讓它「落地」，這個動作叫 realize。等一下講 fusion 會用到。
 
 ## 把 IR 實際印出來
 
-不如直接印出來看。`TORCH_COMPILE_DEBUG=1` 會讓 Inductor 把每張圖的中間產物 dump 到 `torch_compile_debug/` 底下，其中 `ir_pre_fusion.txt` 記的是 Scheduler 融合前的 IR 狀態。拿一個 pointwise 和 reduction 都有的函式來編。
+上面都是用說的這邊就來直接印出來看。`TORCH_COMPILE_DEBUG=1` 會讓 Inductor 把每張圖的中間產物 dump 到 `torch_compile_debug/` 底下，其中 `ir_pre_fusion.txt` 記的是 Scheduler fusion 前的 IR 狀態。拿一個 pointwise 和 reduction 都有的函式來編。
 
 ```python
 def f(x):
@@ -75,106 +63,66 @@ def f(x):
 torch.compile(f)(torch.randn(4, 8))
 ```
 
-`y` 被 return，必須實際存在，所以這張圖有兩個 IR node。第一個是 pointwise，loop body 完整印了出來（節錄）。
+`y` 被 return，必須實際存在，所以這張圖有兩個 IR node。第一個是 pointwise。把 debug 輸出的樣板拿掉，它描述的其實就是下面這條迴圈。
 
-```python
-class op0_loop_body:
-    var_ranges = {p0: 32}
-    index0 = p0
-    def body(self, ops):
-        get_index = self.get_index('index0')
-        load = ops.load('arg0_1', get_index)
-        constant = ops.constant(2.0, torch.float32)
-        mul = ops.mul(load, constant)
-        constant_1 = ops.constant(1.0, torch.float32)
-        add = ops.add(mul, constant_1)
-        relu = ops.relu(add)
-        get_index_1 = self.get_index('index0')
-        store = ops.store('buf0', get_index_1, relu, None)
-        return store
+```text
+for p0 in 0..31:
+    buf0[p0] = relu(arg0_1[p0] * 2 + 1)
 ```
 
-這就是 inner_fn 印出來的樣子。`p0` 是 loop var，範圍 32，4x8 的輸出攤平成一維。讀進 `arg0_1` 之後乘 2、加 1、relu，最後寫進 `buf0`。注意 `x * 2`、`+ 1`、`.relu()` 在 FX Graph 上是三個 node，在這裡已經是同一條函式裡的三行，下一節回來講。第二個 node 是 reduction。
+`p0` 的範圍是 32，也就是把 4x8 的輸出攤平成一維。原本 FX Graph 上的乘、加、relu 是三個 node，到這裡已經變成同一條迴圈裡的一條算式。第二個 node 則是 reduction。
 
-```python
-class op1_loop_body:
-    var_ranges = {p0: 4, p1: 8}
-    index0 = 8*p0 + p1
-    index1 = p0
-    def body(self, ops):
-        get_index = self.get_index('index0')
-        load = ops.load('buf0', get_index)
-        reduction = ops.reduction(torch.float32, torch.float32, 'sum', load)
-        get_index_1 = self.get_index('index1')
-        store_reduction = ops.store_reduction('buf1', get_index_1, reduction)
-        return store_reduction
+```text
+for p0 in 0..3:
+    buf1[p0] = sum(buf0[8*p0 + p1] for p1 in 0..7)
 ```
 
-差異全在形狀上。loop var 變成兩組，`p0` 是留下來的軸，`p1` 是要被收掉的軸，讀的時候用 `8*p0 + p1` 掃過整列，寫的時候只用 `p0`，32 個格子收成 4 個。結尾也從 `ops.store` 換成 `ops.reduction` 加 `ops.store_reduction`。兩段擺在一起，分界就很清楚，前者輸入輸出一樣大，後者天生多進一出。
+這次多了一組迴圈：`p0` 是留下的軸，`p1` 是要收掉的軸。32 個格子最後收成 4 個。兩段擺在一起就很清楚：pointwise 的輸入輸出一樣大，reduction 則是多進一出。
 
-`ir_pre_fusion.txt` 裡除了 body 還印了每個 node 的讀寫依賴和 users。像 `buf0` 的 users 列著 op1 和 OUTPUT，意思是它同時被 reduction 讀、也要交還給呼叫者。這些依賴資訊今天先放著，明天 Scheduler 決定誰跟誰融，靠的全是它們。
+`ir_pre_fusion.txt` 還會列出每個 node 讀寫了誰、結果要交給誰。這些 dependent 的資訊今天先放著，明天 Scheduler 決定誰跟誰融，靠的就是它們。
 
-## 融合是內聯的副作用
+## Fusion 是 inline 的副作用
 
-現在改一個地方，`y` 不再被 return。
+現在來小改一個地方，這邊讓 `y` 不再被 return。
 
 ```python
 def g(x):
     return (x * 2 + 1).relu().sum(dim=1)
 ```
 
-同一條運算鏈，`ir_pre_fusion.txt` 只剩一個 node。
+雖然同一條運算鏈，不過 `ir_pre_fusion.txt` 只剩一個 node。
 
-```python
-class op0_loop_body:
-    var_ranges = {p0: 4, p1: 8}
-    index0 = 8*p0 + p1
-    def body(self, ops):
-        get_index = self.get_index('index0')
-        load = ops.load('arg0_1', get_index)
-        constant = ops.constant(2.0, torch.float32)
-        mul = ops.mul(load, constant)
-        constant_1 = ops.constant(1.0, torch.float32)
-        add = ops.add(mul, constant_1)
-        relu = ops.relu(add)
-        reduction = ops.reduction(torch.float32, torch.float32, 'sum', relu)
-        ...
+```text
+for p0 in 0..3:
+    buf0[p0] = sum(
+        relu(arg0_1[8*p0 + p1] * 2 + 1)
+        for p1 in 0..7
+    )
 ```
 
-mul、add、relu 直接出現在 reduction 的 body 裡，中間 buffer 一顆都沒有，整條鏈只讀一次 `arg0_1`、只寫一次 `buf0`。再強調一次檔名，這是 pre_fusion，Scheduler 還沒上場，融合就已經發生。三個 ATen node 沒有經過任何配對分析就縮成了一個。
+乘、加、relu 直接進了 reduction 的迴圈，中間沒有 buffer。整條鏈只讀一次輸入、寫一次輸出。這還是 pre_fusion，Scheduler 沒上場，fusion 卻已經發生。
 
-機制藏在前面 `make_pointwise` 那行 `make_loader()` 裡。sum 的 lowering 跟上游要一個 loader，而 Pointwise 的 `make_loader` 直白到不行：
+原因就在這層 IR 存的是函式。上游還沒 realize 時，下游拿到的不是 buffer，而是上游的 inner_fn。下游一呼叫它，就等於把上游整條計算抄進自己的 body。函式天生可以組合，所以 fusion 不需要先把兩顆 kernel 拆開重接，而是 inline 的副作用就能把他們先融合起來了。下面用動畫把整個過程走一遍。
 
-```python
-class Pointwise(Loops):
-    def make_loader(self):
-        ...
-        return self.inner_fn
-```
+![ATen node 逐個查表變成 inner_fn，pointwise 鏈 inline 進 reduction 的 body](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day18/lowering.gif)
 
-上游還沒落地成 buffer 的話，下游拿到的 loader 就是上游的 inner_fn 本身。呼叫它等於把上游整條計算抄進自己的 body。函式呼叫函式天生就能組合，融合在這層 IR 裡不是「分析兩個 kernel 能不能合併」的難題，而是內聯的副作用。如果 IR 是資料結構樹，同一件事得改圖、接邊、重寫 index 映射，每一步都是程式碼和 bug。整個過程用動畫走一遍。
+*圖一：ATen node 逐個查表變成 inner_fn，還沒 realize 的 pointwise 鏈被下游吸收，最後變成同一條 loop body。*
 
-![ATen node 逐個查表變成 inner_fn，pointwise 鏈內聯進 reduction 的 body](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day18/lowering.gif)
+回頭看 `f` 版本，`y` 還要 return 給呼叫者，不能單純只是一段描述，所以它必須 realize 成 `buf0`。當中間結果落地成 buffer，這條自動 inline 的鏈就在這裡斷開。
 
-*圖一：lowering 的全程。ATen 圖上的 node 逐個查 lowering table，`aten.add` 變成一條 inner_fn，relu 的 inner_fn 直接呼叫它、內聯成一條，sum 的 Reduction 再把整段 pointwise 鏈吸進自己的 body，realize 之後就是實驗裡那個 loop body。*
+當然 inline 不是永遠划算。一顆 Pointwise 物件如果被三個下游讀取，inline 的話就等於把同一段計算算三遍。所以節點被太多下游讀取、或 inner_fn 已經太大時，Inductor 會讓它提前落地。落地是 kernel 邊界的第一刀，第二刀則由 Scheduler 來畫。
 
-回頭看 `f` 版本，`buf0` 是誰決定要落地的？是 `StorageBox.realize()`。`y` 要 return 給呼叫者，不能只是一段描述，於是 box 裡的 Pointwise 被換成 ComputedBuffer、登記進圖，這才有了 `buf0` 這個名字。
+## 與 Decomposition 的分工
 
-當然，內聯不是永遠划算。一顆被三個下游讀到的 Pointwise，內聯進去等於同一段計算抄三份、算三遍，便宜的加減乘除無所謂，一長串鏈就虧了。所以除了輸出必須 realize，Inductor 還有一組 heuristic，被太多下游讀到、inner_fn 累積得太大，都會讓節點提前落地。落地就是 kernel 邊界的第一刀，第二刀由 Scheduler 來畫。
+decomposition 和 lowering 都在翻譯 op，但分工很清楚。decomposition 在 ATen 語言內部改寫，例如把 gelu 拆成 mul、erf、add。拆完仍然是 ATen node，發生在 AOTAutograd 那一層。lowering 則是換語言，把 ATen node 換成 loop-level IR，發生在圖進入 Inductor 之後。先拆再 lower，lowering table 只要覆蓋拆剩的基本詞彙。
 
-## 跟 Decomposition 的分工
-
-decomposition 和 lowering 都在翻譯 op，分工劃得很乾淨。decomposition 是 ATen 語言內部的改寫，gelu 拆成 mul、erf、add，拆完還是 ATen node，發生在 AOTAutograd 那一層。lowering 是換語言，把 ATen node 換成 loop-level IR，發生在圖進到 Inductor 之後。先拆再 lower，lowering table 只需要覆蓋拆剩的基本詞彙。
-
-這也解釋了講 Decomposition 時留下的小謎。Inductor 的 decomposition 表特地把 `aten.sum` 排除掉，旁邊註明 inductor lowers this directly。答案揭曉，sum 在 lowering 這層有自己的 `make_reduction` 路線，直接長成 Reduction node，比先拆再翻譯乾淨。兩張表是協調過的，decomposition 拆到 lowering table 接得住的粒度就收手。
-
-這 1713 條 entry 也分成三種待遇，對應三種 op 的性格。走 loop IR 的（add、relu、sum）可以被融合，走 template 的（mm、convolution）去做 autotune，fallback 的原樣執行。一張表就是這個後端能力範圍的完整清單。哪天要幫 Inductor 加一個 op 的支援，第一件事就是往這張表裡塞一條規則。
+這也解釋了講 Decomposition 時留下的小謎題。Inductor 的 decomposition 表特地排除 `aten.sum`，旁邊註明 inductor lowers this directly。現在答案揭曉了：sum 在 lowering 這層有自己的 `make_reduction` 路線，可以直接長成 Reduction node，比先拆再翻譯乾淨。兩張表早就協調過，只要在 decomposition 拆到 lowering table 接得住的粒度就收手。
 
 ## 結語
 
-Lowering 是 Inductor 的第一站。入口是一張 dict，ATen op 對到 Python 函式，查到就把 node 換成 IR。這層 IR 不是資料結構樹，而是一條 inner_fn，給我 index，我告訴你這格怎麼算，Pointwise 和 Reduction 兩大類撐起絕大多數運算，外面包著 TensorBox 和 StorageBox 兩層可換內容物的殼。define-by-run 的可組合性讓融合變成內聯的副作用，還沒 realize 的計算自動被下游吸收，realize 的時機就是 kernel 邊界的第一刀。
+Lowering 是 Inductor 的第一站。它先查表決定每個 ATen op 要走 loop IR、template 還是 fallback。其中 loop IR 不是一棵資料結構樹，而是一條回答「這格怎麼算」的 inner_fn。Pointwise 每格獨立算，Reduction 把一群格子收成一格。Python 函式的可組合性讓 fusion 自然發生，直到中間結果 realize 成 buffer，才畫下 kernel 邊界的第一刀。
 
-不過今天看到的融合都是順便發生的，上游剛好只有一個下游、形狀又剛好對得上。真實的圖裡誰跟誰融、划不划算、迴圈順序要不要重排，需要一個真的排程器來拍板。明天來看 Scheduler，它會把今天這些 loop body 接過去，配對、融合、排順序，把 kernel 邊界正式定下來。那我們明天見！
+不過今天的 fusion 都是順便發生的：上游剛好只有一個下游，形狀也剛好對得上。真實的圖裡哪些 node 要 fusion、划不划算、迴圈順序要不要重排，還是要由排程器拍板。明天來看 Scheduler，它會接手這些 loop body，配對、fusion、排順序，正式定下 kernel 邊界。那我們明天見！
 
 ## 參考資料
 
