@@ -18,9 +18,9 @@
 
 值得再提一次的是，這四站不是黑箱接黑箱。每一站的中間產物都印得出來，Dynamo 吐的 FX Graph、AOTAutograd 展開後的 ATen 圖、Inductor 生出的 kernel，系列裡每一篇的實驗都是靠這些產物對照原始碼講的。地圖上任何一站出了狀況，你都有辦法停在那一站，把它手上的東西攤開來看。
 
-![一行 torch.compile 沿著四站走過，每站亮起累積的關鍵字，最後全管線點亮又收回那一行](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day30/recap.gif)
+![一行 torch.compile 沿著四站走過，每站亮起累積的關鍵字，最後全 pipeline 點亮又收回那一行](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day30/recap.gif)
 
-*圖一：30 天的路線圖。一行 torch.compile 落下，鏡頭沿管線走過四站，Dynamo 亮起 eval hook 與 Guard，AOTAutograd 亮起 joint graph 與 min-cut，Inductor 亮起 fusion 與 Triton，執行期亮起 cache 與 CUDA Graph，最後整條管線一起點亮，收回最初的那一行。*
+*圖一：30 天的路線圖。一行 torch.compile 落下，鏡頭沿 pipeline 走過四站，Dynamo 亮起 eval hook 與 Guard，AOTAutograd 亮起 joint graph 與 min-cut，Inductor 亮起 fusion 與 Triton，執行期亮起 cache 與 CUDA Graph，最後整條 pipeline 一起點亮，收回最初的那一行。*
 
 ## 什麼時候快
 

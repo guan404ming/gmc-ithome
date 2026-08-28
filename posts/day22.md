@@ -128,7 +128,7 @@ pointwise 切一切就能分工，reduction 不行，8 條 thread 各自加各�
 
 ## 從 .cpp 到 .so
 
-最後看產物怎麼落地。Triton 有自己的編譯管線，cpp 後端借的則是系統編譯器。把編譯命令攔下來看，實測長這樣（節錄）。
+最後看產物怎麼落地。Triton 有自己的編譯 pipeline，cpp 後端借的則是系統編譯器。把編譯命令攔下來看，實測長這樣（節錄）。
 
 ```
 compile cmd: clang++ .../ck3n4ozn...main.cpp ... -shared -fPIC ... -O3 -DNDEBUG ... -Xclang -fopenmp ... -o .../ck3n4ozn...main.so -lomp ...
