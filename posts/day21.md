@@ -147,7 +147,7 @@ triton_red_fused_sum_0: picked {'XBLOCK': 1, 'R0_BLOCK': 2048} num_warps=16 num_
 
 ## 自己讀 kernel 的小抄
 
-拿到一份陌生的 kernel，可以照這四個地方看。
+拿到一份陌生的 inductor-generated kernel，可以照這四個地方看：
 
 - **名字的前綴**。`poi` 是 pointwise，`per` 是一塊磚裝下整段收縮的 persistent reduction，`red` 是帶迴圈的長跑型。
 - **變數的字首**。x 家族管平行維度，r 家族管收縮維度。
@@ -160,7 +160,7 @@ triton_red_fused_sum_0: picked {'XBLOCK': 1, 'R0_BLOCK': 2048} num_warps=16 num_
 
 今天把 Inductor 的 GPU 產物逐行讀完了。Triton 把寫 kernel 的單位從 thread 抬高到 block，codegen 只需要把 loop-level IR 逐行翻成 tl.load、算術、tl.store。pointwise 是一磚配一個 instance 的模板，mask 照顧除不盡的尾端，reduction 按大小選 persistent 或兩段式，XBLOCK 和 grid 留到 launch 時刻由 heuristics 拍板。pipeline 地圖裡那個只能遠觀的黑盒子，現在應該已經是可以逐行指認的老朋友了。
 
-不過 GPU 只是 codegen 的其中一條分流。同一層 IR 落在 CPU 上走的是另一條路，生出來的是 C++加 OpenMP，決策長得完全不同。明天就來把 C++ Codegen 這條路走完。那我們明天見！
+不過 GPU 只是 codegen 的其中一條分流。同一層 IR 落在 CPU 上走的是另一條路，生出來的是 C 再加上 OpenMP，決策長得完全不同。明天就來把 C Codegen 這條路走完。那我們明天見！
 
 ## 參考資料
 

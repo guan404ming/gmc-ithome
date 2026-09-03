@@ -2,7 +2,7 @@
 
 ## 前言
 
-昨天把快取講完，編譯的帳結清了，同一張圖第二次遇到直接撿現成的，Part 3 走完。今天起進入 Part 4，視角從「怎麼把 kernel 編快」換成「這套東西在真實場景怎麼用、會出什麼事」，第一站是執行期的另一種 overhead。kernel 編好也快取好了，每一步還是得由 CPU 一顆一顆丟上 GPU，這個發射動作本身有固定成本，模型裡小 kernel 一多，GPU 反而大部分時間在等 CPU。今天的主角 CUDA Graph 就是來收這筆帳的，torch.compile 把它包裝成 mode="reduce-overhead"。
+昨天把快取講完，編譯的帳結清了，同一張圖第二次遇到直接撿現成的，Part 3 走完。今天起進入 Part 4，視角從「怎麼把 kernel 編快」換成「這套東西在真實場景怎麼用、會出什麼事」，第一站是執行期的另一種 overhead。kernel 編好也快取好了，每一步還是得由 CPU 一顆一顆丟上 GPU，這個發射動作本身有固定成本，模型裡小 kernel 一多，GPU 反而大部分時間在等 CPU。今天的主角 CUDA Graph 就是來收這筆帳的，torch.compile 把它包裝成 `mode="reduce-overhead"`。
 
 正文開始！
 
@@ -16,7 +16,7 @@ GPU 不會自己動。每一顆 kernel 都要 CPU 透過 CUDA API 發射，填�
 
 ## 先量出這筆帳有多大
 
-實驗跑在 L40S 上（torch 2.8.0），模型故意挑 launch-bound 的體質，32 層 Linear(256, 256) 接 ReLU，batch 只有 8，每顆 kernel 都小得可憐。eager、預設 compile、reduce-overhead 各 bench 一輪，計時用 CUDA event 取平均，完整程式在 `code/day25/`。
+實驗跑在 L40S 上（torch 2.8.0），模型故意挑 launch-bound 的體質，32 層 Linear(256, 256) 接 ReLU，batch 只有 8，每顆 kernel 都超小。eager、預設 compile、reduce-overhead 各 bench 一輪，計時用 CUDA event 取平均，完整程式在 `code/day25/`。
 
 ```
 eager            1.124 ms (+/- 0.008)
@@ -39,7 +39,7 @@ kernel 一大，執行時間把 overhead 整個淹掉，reduce-overhead 跟預�
 
 ## 錄影機模型，capture 與 replay
 
-reduce-overhead 底下是 CUDA 原生的 CUDA Graph，心智模型就是錄影。capture 是開錄，先正常發射一遍，把期間每次發射的參數、順序、依賴側錄成一張 graph。replay 是重播，之後跑同樣的序列時 CPU 只按一次，driver 把整張圖原樣放一遍，幾十次發射收成一次。PyTorch 把它包成 `torch.cuda.CUDAGraph`，手動玩一次長這樣。開錄前要先跑幾輪 warmup，讓初始化和記憶體配置這些只做一次的動作先完成，免得被錄進圖裡。
+reduce-overhead 底下是 CUDA 原生的 CUDA Graph，他的邏輯其實就有點像錄影。capture 是開錄，先正常發射一遍，把期間每次發射的參數、順序、依賴側錄成一張 graph。replay 是重播，之後跑同樣的序列時 CPU 只按一次，driver 把整張圖原樣放一遍，幾十次發射收成一次。PyTorch 把它包成 `torch.cuda.CUDAGraph`，手動玩一次長這樣。開錄前要先跑幾輪 warmup，讓初始化和記憶體配置這些只做一次的動作先完成，免得被錄進圖裡。
 
 ```python
 g = torch.cuda.CUDAGraph()
@@ -118,6 +118,7 @@ hold output alive, call again: ptr 22480592830464 -> 22480592830464, same: True
 
 - [torch/_inductor/cudagraph_trees.py（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/cudagraph_trees.py)
 - [torch/_inductor/cudagraph_utils.py（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/cudagraph_utils.py)
-- [torch/_inductor/__init__.py：list_mode_options（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/__init__.py)
+- [torch/_inductor/**init**.py：list_mode_options（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/__init__.py)
 - [Accelerating PyTorch with CUDA Graphs（PyTorch Blog）](https://pytorch.org/blog/accelerating-pytorch-with-cuda-graphs/)
 - [torch.cuda.CUDAGraph（PyTorch Docs）](https://docs.pytorch.org/docs/stable/generated/torch.cuda.CUDAGraph.html)
+

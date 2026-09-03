@@ -1,14 +1,14 @@
-# Day 22 | 同一條迴圈，C++ 後端有三段變速
+# Day 22 | Inductor Codegen 的 C++ 後端有三段變速？
 
 ## 前言
 
-昨天看完 GPU 這條線，融好的 node 被寫成一份份 Triton kernel。codegen 是整條產線唯一分流的地方，前面的步驟全部共用，最後一步才按裝置各走各的。今天換到 CPU 這條線，看 Inductor 怎麼把同一層 loop-level IR 寫成 C++，再交給系統編譯器變成 `.so`。答案放前面，cpp 後端拿到一條迴圈不是只有一種寫法，而是像變速箱一樣備了三段。
+昨天看完 GPU 這條線，融好的 node 被寫成一份份 Triton kernel。codegen 是整條產線唯一分流的地方，前面的步驟全部共用，最後一步才按裝置各走各的。今天換到 CPU 這條線，看 Inductor 怎麼把同一層 loop-level IR 寫成 C++，再交給系統編譯器變成 `.so`。這裡先小小透漏一下其實 cpp 後端 codegen 完拿到的一條迴圈不是只有一種寫法，而是像變速箱一樣準備了三段。
 
 - **純量**：一次只算一個數字，最樸素的迴圈。
 - **SIMD**：一道 instruction 同時算好幾個數字。
 - **OpenMP**：把整條迴圈切開，交給好幾條 thread 一起跑。
 
-換不換檔，看的是張量多大。
+決定換不換檔，取決於當下的張量有多大。
 
 正文開始！
 
@@ -72,7 +72,7 @@ def f(x, y):
 
 ## 第三段，OpenMP 上多執行緒
 
-把輸入放大到 `1 << 20` 個元素重編，迴圈外多了兩行 pragma（節錄）。
+把輸入放大到 `1 << 20` 個元素 recompile，迴圈外多了兩行 pragma（節錄）。
 
 ```cpp
     #pragma omp parallel num_threads(8)
@@ -153,3 +153,4 @@ CPU 後端的 codegen 今天走完了。同一份 loop-level IR，cpp 後端用�
 - [torch/_inductor/cpp_builder.py（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/cpp_builder.py)
 - [torch/_inductor/config.py：cpp.min_chunk_size（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/config.py)
 - Ansel et al., [*PyTorch 2*](https://pytorch.org/assets/pytorch2-2.pdf), ASPLOS 2024（第 5 節）
+

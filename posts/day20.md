@@ -6,11 +6,12 @@
 
 正文開始！
 
-## 兩種融法，一個入口
+## 兩種主要融法
 
 pointwise 這類 op 的瓶頸全在資料搬運上，算一次加法的時間遠小於等一次記憶體。eager mode 每個 op 各自是一顆 kernel，中間結果寫出去再讀回來，資料白跑好幾趟。融進同一個 kernel，中間值就留在暫存器裡交棒，讀寫從每 op 一輪變成頭尾各一次，這是 fusion 的全部動機。
 
-**垂直融合**融的是 producer 和 consumer，下游讀的正是上游剛寫出的 buffer，融在一起後值直接在暫存器裡交棒，中間那顆 buffer 從此不存在。**水平融合**融的是兄弟，兩個 node 誰也不吃誰的輸出，但讀同一份 input 且 loop 範圍相同，併進同一個 kernel 之後 input 只需讀一次。
+- **垂直融合**融的是 producer 和 consumer，下游讀的正是上游剛寫出的 buffer，融在一起後值直接在暫存器裡交棒，中間那顆 buffer 從此不存在。
+- **水平融合**融的是兄弟，兩個 node 誰也不吃誰的輸出，但讀同一份 input 且 loop 範圍相同，併進同一個 kernel 之後 input 只需讀一次。
 
 兩種融法共用同一個入口 `can_fuse`。它先擋掉幾種硬性不合格，extern kernel 不融、device 要相同、融了不能把依賴圖繞成 cycle。接著估這一對共享了多少讀寫，收益全部來自省下的記憶體流量，什麼都不共享的一對連上場資格都沒有。過了這關再問 backend 一次，因為 loop 縫不縫得起來，只有負責生程式碼的人知道。Scheduler 就拿著這套判準一輪一輪融到收斂。
 
@@ -31,15 +32,19 @@ def siblings(x):
 
 `chain` 是純 pointwise 鏈，log 開場就只有一個 node，四個 op 全擠在同一個 `Pointwise` 裡。
 
-    SchedulerNode(name='op0'), Pointwise(['[1024, 1024]', 'origins=OrderedSet([sin, mul, relu, add])'])
-    found 0 possible fusions
+```
+SchedulerNode(name='op0'), Pointwise(['[1024, 1024]', 'origins=OrderedSet([sin, mul, relu, add])'])
+found 0 possible fusions
+```
 
 有趣的是這裡連 Scheduler 都沒出手。只有單一使用者的 pointwise 在 lowering 階段就被 inline 進下游，Scheduler 負責融的是 lowering 吸收不掉的那些。`rowsum` 也只剩一個 node，但型別變成 `Reduction`，pointwise 被垂直融進了 reduction 的 loop 裡。`siblings` 則是水平融合的標準案例，`amax` 和 `sum` 互不相欠，但都要把 `x` 掃一遍。
 
-    SchedulerNode(name='op0'), Reduction(['[1024]', 'max', 'origins=OrderedSet([amax])'])
-    SchedulerNode(name='op1'), Reduction(['[1024]', 'sum', 'origins=OrderedSet([sum_1])'])
-    found 1 possible fusions
-    fusing op0 with op1
+```
+SchedulerNode(name='op0'), Reduction(['[1024]', 'max', 'origins=OrderedSet([amax])'])
+SchedulerNode(name='op1'), Reduction(['[1024]', 'sum', 'origins=OrderedSet([sum_1])'])
+found 1 possible fusions
+fusing op0 with op1
+```
 
 兩顆 reduction 併成一顆 kernel，`x` 只讀一次就同時算出兩個統計量。反過來讓兩個分支各自操作不相干的 tensor，shape 和 loop 範圍完全相同，log 卻變成 `found 0 possible fusions`。不是不能融，是沒有共享資料就沒有可省的流量。水平融合省的不是 kernel launch 次數，是同一份資料的重複讀取。
 
@@ -54,22 +59,26 @@ def wall(x):
 
 `mean` 把 1024x1024 收成一個 scalar，下游任何一個輸出元素都要等整份 input 掃完才能動筆。這不是啟發式的取捨，是依賴上的死結，log 也乾脆。
 
-    SchedulerNode(name='op0'), Reduction(['[1024, 1024]', 'sum', 'origins=OrderedSet([mean])'])
-    SchedulerNode(name='op1'), Pointwise(['[1024, 1024]', 'origins=OrderedSet([relu, sub, mean])'])
-    found 0 possible fusions
+```
+SchedulerNode(name='op0'), Reduction(['[1024, 1024]', 'sum', 'origins=OrderedSet([mean])'])
+SchedulerNode(name='op1'), Pointwise(['[1024, 1024]', 'origins=OrderedSet([relu, sub, mean])'])
+found 0 possible fusions
+```
 
 這裡有個 CPU 特有的判讀陷阱。產物只印出一個 `cpp_fused_mean_relu_sub_0`，但裡面是兩個獨立的 loop nest，`x` 讀了兩次。CPU 上沒融合的 node 會被打包進同一個函式，所以函式數量不等於融合結果，牆的痕跡要看 loop nest，換到 GPU 就是實打實的兩次 kernel launch。
 
 不過牆不是碰到 reduction 就無條件成立。把 `wall` 換成 softmax，同樣有 reduction 又有後續 pointwise，結局完全不同。
 
-    cannot fuse op1 with op3: intermediate nodes between node1 & node2
-    found 1 possible fusions
-    fusing op1 with op2
-    completed fusion round (1/10): fused 4 nodes into 3 nodes
-    ...
-    fusing op0 with op1_op2
-    fusing op0_op1_op2 with op3
-    completed fusion round (2/10): fused 3 nodes into 1 nodes
+```
+cannot fuse op1 with op3: intermediate nodes between node1 & node2
+found 1 possible fusions
+fusing op1 with op2
+completed fusion round (1/10): fused 4 nodes into 3 nodes
+...
+fusing op0 with op1_op2
+fusing op0_op1_op2 with op3
+completed fusion round (2/10): fused 3 nodes into 1 nodes
+```
 
 開場四個 node，兩輪之內融成一個。差別在粒度，softmax 的 reduction 是逐 row 的，每個 row 的 `div` 只依賴自己這一 row 的統計量，外圈同樣是 1024 個 row，幾段 loop 共用同一個外圈，資料進了 cache 就一路算完。所以牆的本質不是 reduction 這個 op，而是它把 loop 結構切成對不上的兩半。全域收縮把牆砌死，逐 row 收縮則留了一扇門。
 
@@ -83,7 +92,9 @@ def wall(x):
 
 reduction 之外還有幾面牆。第一面是 extern kernel。matmul、convolution 這類 op 調的是外部程式庫，Inductor 手上根本沒有它的 loop 可以縫。拿 `relu((x + 1) @ w)` 一試，前後兩段 pointwise 只能各自成家。
 
-    call sequence: ['cpp_fused_add_0', 'extern_kernels.mm', 'cpp_fused_relu_1']
+```
+call sequence: ['cpp_fused_add_0', 'extern_kernels.mm', 'cpp_fused_relu_1']
+```
 
 想把 matmul 前後的 pointwise 也吃進來，得換一條路，讓 Inductor 用 Triton template 自己生 matmul，再把 pointwise 當 epilogue 縫上去，這條路留到 autotune 那天再走。
 
@@ -108,3 +119,4 @@ node 怎麼配對已經定案，下一步就是把每顆 fused node 真的寫成
 - [torch/_inductor/codegen/simd.py：SIMDScheduling.can_fuse（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/codegen/simd.py)
 - [torch/_inductor/codegen/cpp.py：CppScheduling（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/codegen/cpp.py)
 - Ansel et al., [*PyTorch 2*](https://pytorch.org/assets/pytorch2-2.pdf), ASPLOS 2024（第 5 節）
+

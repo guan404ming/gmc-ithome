@@ -38,7 +38,7 @@ max-autotune options: {'max_autotune': True, 'triton.cudagraphs': True, 'coordin
 - **coordinate_descent_tuning**：另一種調參方式，待會講。
 - **triton.cudagraphs**：獨立的加速機制，跟今天無關，後面的實驗用 max-autotune-no-cudagraphs 這個變體隔開它。
 
-同一顆 matmul 重編一次，log 裡多了一張計分表（節錄）。
+同一顆 matmul recompile 一次，log 裡多了一張計分表（節錄）。
 
 ```
 AUTOTUNE mm(2048x2048, 2048x2048)
@@ -76,7 +76,7 @@ max-autotune    0.0700 ms
 
 *圖一：autotune 的一生。lowering 碰到 aten.mm 先開出候選名單，extern 的 cuBLAS 加上不同 BLOCK 配置的 Triton template，AlgorithmSelectorCache 拿真的 tensor 同場計時挑出冠軍，代價是編譯時間從 1.0 秒漲到 3.8 秒，答案蓋上 cached 收進快取。*
 
-## 換個 shape，劇本翻盤
+## 換個 shape 劇本就翻盤啦
 
 把矩陣換成 16x4096 乘 4096x4096 這種瘦長條，再比一次（節錄）。
 
@@ -133,9 +133,9 @@ Improve from XBLOCK: 8, R0_BLOCK: 512, num_warps: 16, ... 0.013312 -> XBLOCK: 8,
 
 每個參數都往上下各試了一步，這一題鄰居都沒有更快，最後的 1.000x 表示原配就是最佳解。碼表說不用改，也是一種答案。
 
-## 代價，以及為什麼需要快取
+## 為什麼需要快取？
 
-把三場實驗的編譯時間排在一起，2048 方陣從 1.0 秒漲到 3.8 秒，瘦長條從 0.1 秒漲到 1.6 秒，mm 加 relu 從 0.3 秒漲到 1.5 秒。一顆 matmul 就要精編二十個候選再逐一計時，真實模型裡幾十顆 shape 各異的 matmul 會把這筆帳乘上去，編譯拉長到幾分鐘並不稀奇。這是一筆用編譯時間換執行時間的交易。模型定型後要跑成千上萬次 inference 或訓練 step，攤下來穩賺，改兩行就重編一次的開發階段則未必划算。
+把三場實驗的編譯時間排在一起，2048 方陣從 1.0 秒漲到 3.8 秒，瘦長條從 0.1 秒漲到 1.6 秒，mm 加 relu 從 0.3 秒漲到 1.5 秒。一顆 matmul 就要精編二十個候選再逐一計時，真實模型裡幾十顆 shape 各異的 matmul 會把這筆帳乘上去，編譯拉長到幾分鐘並不稀奇。這是一筆用編譯時間換執行時間的交易。模型定型後要跑成千上萬次 inference 或訓練 step，攤下來穩賺，改兩行就 recompile 一次的開發階段則未必划算。
 
 好消息是這筆錢不用重複付。`AlgorithmSelectorCache` 名字的後半段就是重點，比賽的計時結果會存下來，同樣的比賽第二次直接翻答案。這整個系列的每個實驗背後，都有一套快取體系默默接住所有編譯產物，從 kernel 原始碼、編好的整張圖到今天的計時表。它怎麼分層、存在哪裡、什麼時候會失效，明天就來把它攤開。
 
@@ -153,3 +153,4 @@ Improve from XBLOCK: 8, R0_BLOCK: 512, num_warps: 16, ... 0.013312 -> XBLOCK: 8,
 - [torch/_inductor/runtime/coordinate_descent_tuner.py（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/runtime/coordinate_descent_tuner.py)
 - [torch.compile API：mode 參數](https://docs.pytorch.org/docs/2.8/generated/torch.compile.html)
 - Ansel et al., [*PyTorch 2*](https://pytorch.org/assets/pytorch2-2.pdf), ASPLOS 2024（第 5 節）
+
