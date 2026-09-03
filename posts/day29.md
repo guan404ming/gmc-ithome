@@ -13,7 +13,7 @@
 兩條路走的是同一條流水線，分開它們的只有一個問題，編譯發生在什麼時候。
 
 - **torch.compile 是 JIT**：just-in-time，編譯發生在模型第一次被呼叫時。之後每次呼叫都要驗一輪 guard，遇到新的 shape 或分支就當場再編一份。前提是 Dynamo 永遠在場，看不懂的程式碼就 graph break 交還給直譯器。彈性極高，代價是 Python、Dynamo、Inductor 整組人馬都得留在 runtime，也就是模型上線之後實際在跑的那套程式。
-- **export 加 AOTInductor 是 AOT**：ahead-of-time，編譯發生在部署之前。torch.export 把模型抓成一張完整的圖，AOTInductor 再把這張圖編成機器碼並打包成一個自足的 .pt2 檔。到了執行現場沒有 trace、沒有 guard、沒有重編，只剩下載入和呼叫。
+- **export 加 AOTInductor 是 AOT**：ahead-of-time，編譯發生在部署之前。torch.export 把模型抓成一張完整的圖，AOTInductor 再把這張圖編成機器碼並打包成一個自足的 .pt2 檔。到了執行現場沒有 trace、沒有 guard、沒有 recompile，只剩下載入和呼叫。
 
 這不是另一套編譯器。export 底下抓圖的是同一個 Dynamo，AOTInductor 就是 Inductor，講過的 lowering、fusion、codegen 一路照走。
 
@@ -48,7 +48,7 @@ torch.compile 的反應是切開來繼續跑。
 
 分支條件取決於張量的值，圖沒辦法在編譯期決定走哪一邊。compile 選擇切成兩段，export 把問題丟回給你，要嘛改寫成 torch.where 這類留在圖裡的寫法，要嘛用控制流 op 把兩個分支都收進圖裡。
 
-動態 shape 也一樣。export 沒有重編的機會，所以哪個維度會變、範圍多大，都得在匯出時用 `Dim` 宣告清楚。這份宣告是一紙雙向的合約。編譯器拿到範圍，就把這個維度當符號處理，生成一份通吃整段範圍的程式碼。使用者這邊則是自我約束，執行期餵進超出範圍的輸入會被直接拒絕，而不是默默算錯。同一套 symbolic shape 機制，在 compile 那邊是事後升格，在這裡是事前簽字。
+動態 shape 也一樣。export 沒有 recompile 的機會，所以哪個維度會變、範圍多大，都得在匯出時用 `Dim` 宣告清楚。這份宣告是一紙雙向的合約。編譯器拿到範圍，就把這個維度當符號處理，生成一份通吃整段範圍的程式碼。使用者這邊則是自我約束，執行期餵進超出範圍的輸入會被直接拒絕，而不是默默算錯。同一套 symbolic shape 機制，在 compile 那邊是事後升格，在這裡是事前簽字。
 
 ## 打開 ExportedProgram
 
@@ -94,7 +94,7 @@ Range constraints: {s77: VR[1, 1024]}
 
 ![同一個模型分兩條軌道，上軌 JIT 常駐 Python，下軌 export 收成一張圖再鑄成 .pt2](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day29/export_aoti.gif)
 
-*圖一：同一個模型的兩條出路。上軌 torch.compile 常駐 Python runtime，每次呼叫都經過 guard，遇到新狀況當場重編。下軌 export 把全圖收成 ExportedProgram，AOTInductor 鑄成一顆 .pt2，Python 圖層淡出，便當獨自在 C++ runtime 上開飯。*
+*圖一：同一個模型的兩條出路。上軌 torch.compile 常駐 Python runtime，每次呼叫都經過 guard，遇到新狀況當場 recompile。下軌 export 把全圖收成 ExportedProgram，AOTInductor 鑄成一顆 .pt2，Python 圖層淡出，便當獨自在 C++ runtime 上開飯。*
 
 ## 便當盒裡裝了什麼
 
@@ -135,7 +135,7 @@ torch._inductor.aoti_compile_and_package(ep, package_path="tiny.pt2")
 - **現場有 Python，模型還在改**：走 torch.compile。寫法幾乎不用改，輸入形狀多變也沒關係，看不懂的地方自動 fallback，cache 還能把重啟的成本壓下來。
 - **現場沒有 Python，或者要的是一啟動就全速**：走 export 加 AOTInductor。C++ server、行動裝置這類環境根本沒有直譯器，把不確定性全部留在出貨之前，行為才完全可預期。
 
-折衷的場景也存在。有 Python 的推論服務可以先把模型用 AOTInductor 編好，Python 端只負責載入呼叫，換一批機器也不必再付重編的帳。
+折衷的場景也存在。有 Python 的推論服務可以先把模型用 AOTInductor 編好，Python 端只負責載入呼叫，換一批機器也不必再付 recompile 的帳。
 
 ## 結語
 

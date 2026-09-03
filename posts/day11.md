@@ -2,7 +2,7 @@
 
 ## 前言
 
-在 Day 5 的時候我們說 Python int 被 bake 成常數是一場賭注，這個賭輸的代價則是 recompile，我們在那篇的結尾埋了一個伏筆：`n` 變了一次之後，`x` 的 size Guard 從 `[4, 4]` 變成了 `[None, 4]`。因為把 shape 押死的 Guard 實在太窄，所以 batch size 一變就得重編一次，Dynamo 在這邊採取了一個聰明的策略，而這就是昨天說的最後一塊拼圖。
+在 Day 5 的時候我們說 Python int 被 bake 成常數是一場賭注，這個賭輸的代價則是 recompile，我們在那篇的結尾埋了一個伏筆：`n` 變了一次之後，`x` 的 size Guard 從 `[4, 4]` 變成了 `[None, 4]`。因為把 shape 押死的 Guard 實在太窄，所以 batch size 一變就得 recompile 一次，Dynamo 在這邊採取了一個聰明的策略，而這就是昨天說的最後一塊拼圖。
 
 今天就來把這邊補上。Guard 原本用的是一把押死的量尺，量到 4 就是 4，差一格都不行。Symbolic Shapes 給了它一把伸縮量尺，把具體的 4 換成符號 `s0`，讓一張圖吃下所有 batch size。原始碼主要住在 [`torch/fx/experimental/symbolic_shapes.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/fx/experimental/symbolic_shapes.py)，這是 PyTorch 裡最長的檔案之一，今天會把它的核心概念一次講完。
 
@@ -53,7 +53,7 @@ Recompiling function f ...
     - 0/0: tensor 'x' size mismatch at index 0. expected 4, actual 8
 ```
 
-到這裡都跟 Day 6 一樣，Guard 失敗、重編。但這次重編不是單純再來一遍。Dynamo 在 code object 上記著一本叫 `frame_state` 的小冊子（實作在 [`pgo.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/pgo.py) 的 `FrameStateSizeEntry`），記著每個輸入每個維度上次見過的值。第二次編譯前，[`variables/builder.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/variables/builder.py) 的 `_automatic_dynamic` 逐維比對，發現「dim 0 上次 4 這次 8，它會變」，這個維度就不再特化，改發一個符號。看新那張圖的 Guard 樹，`x` 那條 `TENSOR_MATCH` 變了，長成下面這樣。
+到這裡都跟 Day 6 一樣，Guard 失敗、recompile。但這次 recompile 不是單純再來一遍。Dynamo 在 code object 上記著一本叫 `frame_state` 的小冊子（實作在 [`pgo.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/pgo.py) 的 `FrameStateSizeEntry`），記著每個輸入每個維度上次見過的值。第二次編譯前，[`variables/builder.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/variables/builder.py) 的 `_automatic_dynamic` 逐維比對，發現「dim 0 上次 4 這次 8，它會變」，這個維度就不再特化，改發一個符號。看新那張圖的 Guard 樹，`x` 那條 `TENSOR_MATCH` 變了，長成下面這樣。
 
 ```
 | +- TENSOR_MATCH: check_tensor(L['x'], ..., torch.float32, device=0,
@@ -75,7 +75,7 @@ def guard(L):
 
 ![呼叫像球一樣流進 Guard 驗票，dim 0 的 4 在賭輸後當場變身成符號 s0](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day11/automatic_dynamic.gif)
 
-*圖一：automatic dynamic 的升級現場。中央是編譯出來的圖記住的 shape 與它的 Guard 鎖，每次呼叫像球一樣流進來驗票。`(4, 4)` 第一次編譯全部特化，Guard 押死成 `TENSOR_MATCH [4, 4]`。`(8, 4)` 進來驗票，4 對不上 8，Guard 亮紅，`frame_state` 比對出 dim 0 會變，dim 0 的 `4` 當場變身成符號 `s0`，鎖換成 `[None, 4]` 加一條 `2 <= s0`。此後 `(8, 4)`、`(16, 4)`、`(100, 4)` 全部放行，不再重編。*
+*圖一：automatic dynamic 的升級現場。中央是編譯出來的圖記住的 shape 與它的 Guard 鎖，每次呼叫像球一樣流進來驗票。`(4, 4)` 第一次編譯全部特化，Guard 押死成 `TENSOR_MATCH [4, 4]`。`(8, 4)` 進來驗票，4 對不上 8，Guard 亮紅，`frame_state` 比對出 dim 0 會變，dim 0 的 `4` 當場變身成符號 `s0`，鎖換成 `[None, 4]` 加一條 `2 <= s0`。此後 `(8, 4)`、`(16, 4)`、`(100, 4)` 全部放行，不再 recompile。*
 
 再補兩筆帳。第一，兩次編譯是這個機制的固定成本，第一張特化的圖幾乎注定被浪費掉。如果事先就知道某個維度一定會變，可以用 `torch._dynamo.mark_dynamic(x, 0)` 直接宣告，第一次編譯就用符號，省掉那次賭輸。`torch.compile(f, dynamic=True)` 是全部維度都這樣做的粗暴版，反過來 `dynamic=False` 則把升級機制整個關掉。第二，Guard 的驗票成本幾乎沒變。這次實驗裡兩張圖的 Guard eval latency 一個 61.67 us、一個 57.55 us，符號版少驗一個具體數字、多驗一條範圍檢查，整體打平。
 
@@ -155,7 +155,7 @@ Hint: Set `torch._dynamo.config.capture_scalar_outputs = True` ... to
 
 ## mark_dynamic 還能當偵錯工具
 
-`mark_dynamic` 除了省掉第一次賭輸，還有一個容易被忽略的用途。假設程式碼裡藏著 `if x.shape[0] == 4`。automatic dynamic 把 dim 0 換成符號後，翻譯走到這個 if，ShapeEnv 拿 hint 押注、生成 Guard `s0 == 4`，符號當場又被押死回 4。結果是每個沒見過的 batch size 都重編一次，撞上 `recompile_limit` 後退回 eager，全程沒有錯誤訊息，只有越跑越慢。這種「符號被默默押死」的情況，`mark_dynamic` 可以把它變成大聲的失敗，實跑一次就知道。
+`mark_dynamic` 除了省掉第一次賭輸，還有一個容易被忽略的用途。假設程式碼裡藏著 `if x.shape[0] == 4`。automatic dynamic 把 dim 0 換成符號後，翻譯走到這個 if，ShapeEnv 拿 hint 押注、生成 Guard `s0 == 4`，符號當場又被押死回 4。結果是每個沒見過的 batch size 都 recompile 一次，撞上 `recompile_limit` 後退回 eager，全程沒有錯誤訊息，只有越跑越慢。這種「符號被默默押死」的情況，`mark_dynamic` 可以把它變成大聲的失敗，實跑一次就知道。
 
 ```python
 def bad(x):
@@ -187,7 +187,7 @@ User stack:
 
 - **後端最佳化變弱**：動態圖裡少了具體數字，Inductor 不能按 shape 挑 kernel、不能完全展開迴圈，動態版 kernel 通常比特化版慢一些。
 - **編譯變慢**：ShapeEnv 的 sympy 推理、約束化簡、Guard 生成都要時間，動態維度越多這筆帳越大。
-- **推理有極限**：sympy 面對整除、取模這類表達式常常推不動，推不動就得押注加 Guard，Guard 多了又回到重編的老路。
+- **推理有極限**：sympy 面對整除、取模這類表達式常常推不動，推不動就得押注加 Guard，Guard 多了又回到 recompile 的老路。
 
 所以「預設 static、被逼才 dynamic、0 和 1 永遠特化」整套都是刻意的折衷，只為證實會變的維度付符號的成本，其他維度繼續享受特化的紅利。這跟 Day 1 的哲學一脈相承，賭注能押多準押多準，賭輸了有止損機制兜底。
 

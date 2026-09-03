@@ -78,7 +78,7 @@ extern "C"  void kernel(const float* in_ptr0,
 
 函數的名字 `cpp_fused_add_mul_relu_0` 已經把重點講完了，`add`、`relu`、`mul` 三個 op 融成了一個 kernel。在 eager mode 下這是三次獨立的 kernel 呼叫，中間結果要寫回記憶體再讀出來兩次，這裡整段程式只有一個迴圈，兩筆輸入各讀一次，中間結果 `tmp2`、`tmp3` 只活在暫存器裡，最後寫一次。滿場的 `at::vec` 則是 CPU 後端順手做的 SIMD 向量化，一輪迴圈一次吃掉 4 個 float。
 
-輸入的大小也會改變生成的程式碼。把兩個輸入換成一百萬個元素重編一次，同一條 op 鏈生出的 kernel 外面多了一圈 OpenMP 的宣告，迴圈被切給 8 條 thread。小 tensor 單執行緒跑完就好，大 tensor 才值得付 thread 啟動的開銷，這種按 shape 量身訂做的決策，正是 FakeTensor 一路推下來的 metadata 在這裡兌現。
+輸入的大小也會改變生成的程式碼。把兩個輸入換成一百萬個元素 recompile 一次，同一條 op 鏈生出的 kernel 外面多了一圈 OpenMP 的宣告，迴圈被切給 8 條 thread。小 tensor 單執行緒跑完就好，大 tensor 才值得付 thread 啟動的開銷，這種按 shape 量身訂做的決策，正是 FakeTensor 一路推下來的 metadata 在這裡兌現。
 
 同一份產物裡還有一段 Python，這就是 wrapper code。
 

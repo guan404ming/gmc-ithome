@@ -214,7 +214,7 @@ Break 不會報錯，只會默默變慢，所以我們得主動去抓，工具�
 
 今天我們看到，一次 break 會把函式切成三段，前半編成圖一、斷點那條 instruction 回 eager、剩下的包成 resume function 再被攔截編成圖二。而斷點必須落在有 frame 的地方，所以 inline 子函式裡的 break 會傳染到 caller 的那條 `CALL`，連鎖出一串圖和 resume function。
 
-到今天為止，Dynamo 的主線就完整了，攔截、翻譯、包裝、驗票、記帳、收圖、寫碼、斷了再接。不過還剩下最後一塊拼圖。那條 `EQUALS_MATCH: L['n'] == 3` 的 Guard 實在太窄了，值一變就得重編。明天就來講 Symbolic Shapes，看 SymInt 怎麼把具體的 4 換成符號 s0、ShapeEnv 又是怎麼管理符號之間的約束，讓一張圖吃下所有 batch size。那我們明天見！
+到今天為止，Dynamo 的主線就完整了，攔截、翻譯、包裝、驗票、記帳、收圖、寫碼、斷了再接。不過還剩下最後一塊拼圖。那條 `EQUALS_MATCH: L['n'] == 3` 的 Guard 實在太窄了，值一變就得 recompile。明天就來講 Symbolic Shapes，看 SymInt 怎麼把具體的 4 換成符號 s0、ShapeEnv 又是怎麼管理符號之間的約束，讓一張圖吃下所有 batch size。那我們明天見！
 
 ## 參考資料
 

@@ -35,7 +35,7 @@
 慢的原因也量過三種，差別在這筆成本付在哪個時間點。
 
 - **graph break 把圖切碎**：Dynamo 遇到吃不下的 Python 就切一刀，一個 print 就讓函式裂成兩張圖，中間夾一段 eager。藏在 inline 函式深處的 break 還會往上傳染，一個工具函式裡的 print 換來四次編譯。圖一碎，跨不過斷點的 fusion 就全沒了。
-- **recompile 反覆重編**：recompile 是 Guard 沒過就整張圖重編一次，batch size 一變就觸發。automatic dynamic 會在第二次把 shape 升級成符號，但程式裡若藏著針對 shape 的 if，符號會被默默押死，每個新 shape 都重編一輪。撞上預設 8 次上限後，整個 frame 退回 eager，全程沒有錯誤訊息，只有越跑越慢。
+- **recompile 反覆發生**：recompile 是 Guard 沒過就整張圖 recompile 一次，batch size 一變就觸發。automatic dynamic 會在第二次把 shape 升級成符號，但程式裡若藏著針對 shape 的 if，符號會被默默押死，每個新 shape 都 recompile 一輪。撞上預設 8 次上限後，整個 frame 退回 eager，全程沒有錯誤訊息，只有越跑越慢。
 - **編譯本身的成本**：第一次呼叫花了 1592.9 ms，是之後每次呼叫的八千倍。一個三行小函式冷編譯要 3.75 秒，靠磁碟快取的下一個 process 降到 0.79 秒，但 shape、config、torch 版本任一變動都會讓快取的鑰匙對不上，整段重付。
 
 這三種慢都不是 bug，而是設計裡明碼標價的成本。重點不是成本存不存在，而是你付出去的有沒有賺回來。每小時重啟一次的服務，和編一次跑一個月的訓練 job，對同一筆帳的感受完全不同。

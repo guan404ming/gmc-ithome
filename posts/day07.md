@@ -172,7 +172,7 @@ RETURN_VALUE
 - **寫**：寫入被 `SideEffects` 攔下記帳，真實物件凍結，後續的讀先查帳本。
 - **replay**：生指令時要先把「被改的那個物件」放上 stack，而找回它靠的正是 Source，也就是發出 `LOAD_FAST self`、`LOAD_DEREF log` 的那條鏈。Source 一邊會幫忙生出 Guard、另一邊則去幫忙重建 bytecode，而這邊他的真正的使用者就是 SideEffects。
 
-也因為讀跟寫是分別在兩本帳，`self.calls += 1` 這種計數器是經典踩雷組合。讀的那半被 bake 成常數、裝了 `EQUALS_MATCH` 的 Guard，寫的那半又把它加一寫回，於是每呼叫一次 Guard 必失敗、必重編。想在編譯區域裡維護計數器，用 buffer（Tensor）會更好而不是使用 Python int。
+也因為讀跟寫是分別在兩本帳，`self.calls += 1` 這種計數器是經典踩雷組合。讀的那半被 bake 成常數、裝了 `EQUALS_MATCH` 的 Guard，寫的那半又把它加一寫回，於是每呼叫一次 Guard 必失敗、必 recompile。想在編譯區域裡維護計數器，用 buffer（Tensor）會更好而不是使用 Python int。
 
 ## 結語
 

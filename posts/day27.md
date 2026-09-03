@@ -2,7 +2,7 @@
 
 ## 前言
 
-前面幾天修過重編，也繞開過 graph break，也就是 Dynamo 半路遇到吃不下的東西，把一張圖切成兩張。不過這些手法一直是碰到問題才撿一把來用。出事當下最需要的是一張清單，慢了先開哪個 log，編譯掛掉又該交出什麼給 issue。今天把整個系列用過的診斷工具收齊成一個工具箱，拿診間的檢查流程來比喻，log 是問診紀錄，explain 是健檢總表，depyf 是 X 光片，minifier 是最後才上場的手術刀。症狀走一遍流程，每站留下證據，病灶自己會浮出來。本篇實驗全部在本機 CPU 上跑（torch 2.8.0），完整程式與 log 在 `code/day27/`。
+前面幾天修過 recompile，也繞開過 graph break，也就是 Dynamo 半路遇到吃不下的東西，把一張圖切成兩張。不過這些手法一直是碰到問題才撿一把來用。出事當下最需要的是一張清單，慢了先開哪個 log，編譯掛掉又該交出什麼給 issue。今天把整個系列用過的診斷工具收齊成一個工具箱，拿診間的檢查流程來比喻，log 是問診紀錄，explain 是健檢總表，depyf 是 X 光片，minifier 是最後才上場的手術刀。症狀走一遍流程，每站留下證據，病灶自己會浮出來。本篇實驗全部在本機 CPU 上跑（torch 2.8.0），完整程式與 log 在 `code/day27/`。
 
 正文開始！
 
@@ -13,7 +13,7 @@
 | 症狀 | 工具 | 拿到什麼 |
 |---|---|---|
 | 沒變快，懷疑圖被切碎 | `TORCH_LOGS="graph_breaks"` | 每個 break 的位置與理由 |
-| 越跑越慢，一直在編譯 | `TORCH_LOGS="recompiles"` | 每次重編踩到哪條 guard |
+| 越跑越慢，一直在編譯 | `TORCH_LOGS="recompiles"` | 每次 recompile 踩到哪條 guard |
 | 想驗收生成的 kernel | `TORCH_LOGS="output_code"` | Inductor 的最終產物 |
 | 想要一份總覽報告 | `torch._dynamo.explain` | 圖數、break 數、guard 清單 |
 | 想對照改寫後的程式 | `depyf` | bytecode 反編譯回 Python |
@@ -63,7 +63,7 @@ Ops per Graph:
     <built-in function mul>
 ```
 
-兩張圖、一個 break，六個 op 怎麼分家一清二楚。報告後半還列出十幾條 guard，也就是講 Guard 時看過的那些通行條件，一條沒過就得重編。explain 不需要改環境變數，適合寫進測試當防線，例如斷言 break 數量是零，誰把 break 寫進模型，CI 就亮紅燈。
+兩張圖、一個 break，六個 op 怎麼分家一清二楚。報告後半還列出十幾條 guard，也就是講 Guard 時看過的那些通行條件，一條沒過就得 recompile。explain 不需要改環境變數，適合寫進測試當防線，例如斷言 break 數量是零，誰把 break 寫進模型，CI 就亮紅燈。
 
 ## 再數 recompile
 
@@ -75,7 +75,7 @@ triggered by the following guard failure(s):
 - 0/0: tensor 'x' size mismatch at index 0. expected 32, actual 48
 ```
 
-哪條 guard 倒的、期望什麼、實際來了什麼，一行講完。log 裡緊接著還有一筆幾乎一樣的紀錄，主角是 graph break 切出來的下半段，也就是 resume function。圖被切成兩張，重編帳單也是兩份，這正是 break 要排在 recompile 前面數的原因。至於 64x64 那次 log 上什麼都沒有，因為第一次重編時 automatic dynamic 已經把 size 升格成符號，第三種 shape 拿同一把鑰匙通行。判讀重點是頻率，冷啟動出現幾筆是正常熱身，跑了幾百個 step 還在冒，就代表有某個 guard 永遠追不上輸入的變化。這正是排查重編要抓的病。
+哪條 guard 倒的、期望什麼、實際來了什麼，一行講完。log 裡緊接著還有一筆幾乎一樣的紀錄，主角是 graph break 切出來的下半段，也就是 resume function。圖被切成兩張，recompile 帳單也是兩份，這正是 break 要排在 recompile 前面數的原因。至於 64x64 那次 log 上什麼都沒有，因為第一次 recompile 時 automatic dynamic 已經把 size 升格成符號，第三種 shape 拿同一把鑰匙通行。判讀重點是頻率，冷啟動出現幾筆是正常熱身，跑了幾百個 step 還在冒，就代表有某個 guard 永遠追不上輸入的變化。這正是排查 recompile 要抓的病。
 
 ## 驗收最終產物
 

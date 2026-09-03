@@ -52,9 +52,9 @@ matches eager: True
 
 ## 上游的機制照常運轉
 
-第二次用同樣 shape 呼叫，log 一片安靜，observer 的計數停在 1。Guard 檢查和編譯成品的快取都發生在 backend 被呼叫之前，是 Dynamo 的地盤。你的 backend 再簡陋，也自動繼承整套上游機制，驗過放行，不會重編。
+第二次用同樣 shape 呼叫，log 一片安靜，observer 的計數停在 1。Guard 檢查和編譯成品的快取都發生在 backend 被呼叫之前，是 Dynamo 的地盤。你的 backend 再簡陋，也自動繼承整套上游機制，驗過放行，不會 recompile。
 
-換一個 shape 再呼叫，Guard 失敗觸發重編，observer 第二次被叫醒，收到的圖也變了樣。
+換一個 shape 再呼叫，Guard 失敗觸發 recompile，observer 第二次被叫醒，收到的圖也變了樣。
 
 ```
 [observer] call #2
