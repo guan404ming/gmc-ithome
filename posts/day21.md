@@ -8,7 +8,7 @@
 
 ## Triton 站在哪個高度寫 GPU
 
-先交代 Triton 是什麼。它是 OpenAI 開源的專案，後來成了 PyTorch 預設 GPU 後端的地基。表面上它是用 Python 語法寫 GPU kernel 的語言，但真正的差別不在語法，在抽象的高度。
+先交代 Triton 是什麼。它是 OpenAI 開源的專案，後來成了 PyTorch 預設 GPU 後端的地基。表面上它是用 Python 語法寫 GPU kernel 的語言，但真正的差別不在語法，在抽象的程度。
 
 - **CUDA 的單位是 thread**。寫的人要自己安排每條 thread 摸哪個元素、shared memory 怎麼擺、存取怎麼對齊，任何一處寫錯效能就掉一截。
 - **Triton 的單位是 block**。一份 kernel 描述的是「一個 program instance 一次處理一塊資料」，塊內怎麼分工給 thread、存取怎麼 coalesce，全交給 Triton 編譯器處理。
@@ -41,17 +41,17 @@ def triton_poi_fused_add_mul_relu_0(in_ptr0, in_ptr1, out_ptr0, xnumel, XBLOCK :
 
 名字先講。`poi` 代表 pointwise，後面接被融進來的 op 清單。一個名字一顆 kernel，光看名字就知道 fusion 的戰果。
 
-開頭四行是所有 pointwise kernel 共用的模板。先說一個詞，program instance 就是 GPU 上同時開跑的一份 kernel 副本，一份副本領一塊磚。
+開頭四行是所有 pointwise kernel 共用的模板。而 program instance 就是 GPU 上同時開跑的一份 kernel 副本，一份副本領一塊磚。
 
-Inductor 先把輸出攤平成長度 xnumel 的線性索引，切成 XBLOCK 大小的磚。GPU 同時發射一大批 program instance，每個用 `tl.program_id(0)` 拿到編號，乘上 XBLOCK 就是自己那塊磚的起點，再加上 `tl.arange` 展開，xindex 就是磚裡每一格（也就是每條 lane）負責的元素編號。一個 instance 一次操作整塊 XBLOCK 長的向量，而不是單一元素，這是讀 Triton 最需要切換的視角。
+Inductor 先把輸出攤平成長度 xnumel 的線性索引，切成 XBLOCK 大小的磚。GPU 同時 launch 一大批 program instance，每個用 `tl.program_id(0)` 拿到編號，乘上 XBLOCK 就是自己那塊磚的起點，再加上 `tl.arange` 展開，xindex 就是磚裡每一格（也就是每條 lane）負責的元素編號。一個 instance 一次操作整塊 XBLOCK 長的向量，而不是單一元素，這是讀 Triton 最需要切換的視角。
 
-再來是 mask。一百萬除不盡 1024，最後一塊磚只有一部分是真的。`xindex < xnumel` 把越界的 lane 關掉，load 和 store 都帶著它，被遮住的 lane 不讀也不寫，尾巴就安全處理掉了。
+再來是 mask。一百萬除以 1024 不能整除，最後一塊磚只有一部分是真的。`xindex < xnumel` 把越界的 lane 關掉，load 和 store 都帶著它，被遮住的 lane 不讀也不寫，尾巴就安全處理掉了。
 
 中段就是 IR 那個 body 的直譯。兩筆 `tl.load` 把磚吸進來，接著加法、`maximum`（relu 在 lowering 之後的長相）、乘 2，中間值全活在暫存器，最後一筆 `tl.store` 把磚放回去。三個 op 一顆 kernel，讀兩次寫一次，fusion 承諾的事在這十幾行裡兌現。
 
 還有兩個容易忽略的細節。
 
-- **`xnumel = 1000000`**。參數明明傳進來了，卻直接用常數蓋掉。這是講 automatic dynamic 時說過的 static shape 特化，shape 押死之後編譯器能做更多假設，走 dynamic shape 這裡就會留著變數。
+- `**xnumel = 1000000**`。參數明明傳進來了，卻直接用常數蓋掉。這是講 automatic dynamic 時說過的 static shape 特化，shape 押死之後編譯器能做更多假設，走 dynamic shape 這裡就會留著變數。
 - **XBLOCK 宣告成 `tl.constexpr`**，整份原始碼卻沒有它的數值。這是故意留白，同一份程式配不同的 XBLOCK 就是不同的效能，這個決定被推遲到 launch 時刻。
 
 ![tensor 切成 XBLOCK 大小的磚，program instance 領磚，mask 遮尾，load 算完 store 回去](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day21/triton_codegen.gif)
@@ -87,7 +87,12 @@ XBLOCK 選了 1024，一塊磚 1024 個元素。num_warps=4 表示塊內由 128 
 
 ## reduction kernel 的兩種長相
 
-pointwise 的磚彼此獨立，reduction 得把一整段收成一個值，模板自然不同。先看逐 row 的，`relu(x + 1).sum(dim=1)` 配 1024x1024 的輸入，kernel 名字變成 `triton_per_fused_add_relu_sum_0`（節錄）。
+pointwise 的磚彼此獨立，reduction 卻要把一整段收成一個值，模板自然不同。而選哪個模板，只看一個問題，要收的那一段塞不塞得進一塊磚。
+
+- **`per`**：塞得進。一塊磚裝下整段，load 進來一口氣收掉，一個 instance 負責一段。
+- **`red`**：塞不進。磚裡擺一個累加器，用迴圈一輪一輪吃完。
+
+先看塞得進的。`relu(x + 1).sum(dim=1)` 配 1024x1024 的輸入，每個 row 剛好 1024 個元素，kernel 名字是 `triton_per_fused_add_relu_sum_0`（節錄）。
 
 ```python
 def triton_per_fused_add_relu_sum_0(in_ptr0, out_ptr0, xnumel, r0_numel):
@@ -105,11 +110,11 @@ def triton_per_fused_add_relu_sum_0(in_ptr0, out_ptr0, xnumel, r0_numel):
     tl.store(out_ptr0 + (x0), tmp7, None)
 ```
 
-`per` 是 persistent reduction，意思是整段收縮塞得進一塊磚。一個 row 有 1024 個元素，R0_BLOCK 直接開到 1024，一塊磚剛好裝下一整個 row。load 進來、pointwise 順路做完、`tl.sum` 一口氣收掉，一個 instance 負責一個 row，講 fusion 時說的「pointwise 融進 reduction 的迴圈」就是這模樣。塞不進一塊磚的，才走待會那個迴圈版。
+`per` 是 persistent reduction，一塊磚裝下一整個 row，所以 R0_BLOCK 直接開到 1024。load 進來、pointwise 順路做完、`tl.sum` 一口氣收掉，一個 instance 負責一個 row。講 fusion 時說的「pointwise 融進 reduction 的迴圈」，就是這個模樣。索引也出現新面孔，x 開頭的變數管平行維度，r 開頭的管收縮維度。
 
-索引也出現新面孔。x 開頭的變數管平行維度，r 開頭的管收縮維度，`r0_1 + 1024*x0` 讀作第 x0 個 row 的第 r0_1 格。load 和 store 的 mask 位置都是 None，因為 1024 恰好塞滿 R0_BLOCK，沒有尾巴要遮。
+換成全域的 `x.sum()` 就沒這麼舒服。4096x4096 一千六百多萬個元素，一塊磚吞不下，可是只派一個 instance 慢慢收，整張 GPU 又閒著。
 
-換成全域的 `x.sum()` 就沒這麼舒服，4096x4096 一千六百多萬個元素，一顆磚吞不下，只派一個 instance 收又會讓整張 GPU 閒著。Inductor 的解法是拆兩段。第一段派 512 個 instance 各自負責一小段，名字前綴 `red` 代表帶迴圈的 reduction，核心是一個 for 迴圈抱著累加器一輪一輪吃（節錄）。
+Inductor 的解法是拆兩段。第一段派 512 個 instance 各認領一小段，前綴 `red` 代表帶迴圈，核心是一個 for 迴圈抱著累加器一輪一輪吃（節錄）。
 
 ```python
     _tmp2 = tl.full([XBLOCK, R0_BLOCK], 0, tl.float32)
@@ -122,7 +127,7 @@ def triton_per_fused_add_relu_sum_0(in_ptr0, out_ptr0, xnumel, r0_numel):
     tl.store(out_ptr0 + (x0), tmp2, xmask)
 ```
 
-跑完迴圈才用 `tl.sum` 把累加器收成部分和。第一段吐出 512 個部分和，第二段再用一顆 persistent reduction 把它們收成最後的 scalar，wrapper 裡就寫著兩次 launch。
+跑完迴圈才把累加器收成一個部分和，512 個 instance 就吐出 512 個部分和。第二段再用一顆 `per` 把它們收成最後的答案，wrapper 裡就寫著兩次 launch。
 
 ```
 triton_red_fused_sum_0.run(arg0_1, buf0, 512, 32768, stream=stream0)
@@ -138,7 +143,7 @@ triton_per_fused_add_relu_sum_0: picked {} num_warps=8 num_stages=1
 triton_red_fused_sum_0: picked {'XBLOCK': 1, 'R0_BLOCK': 2048} num_warps=16 num_stages=1
 ```
 
-逐 row 那顆沒什麼好挑，塊的大小被 row 定死，只挑了 num_warps=8，讓 256 條 thread 合力收一個 row。兩段式的第一段選了 R0_BLOCK=2048，迴圈一輪吃兩千多個元素，十六輪吃完自己那一段。同一套模板，不同的 shape，分工的帳一顆一顆算。
+逐 row 那顆沒什麼好挑，塊的大小被 row 定死了。兩段式的第一段則選了比較大的 R0_BLOCK，迴圈一輪多吃一點，早點吃完自己那一段。同一套模板，不同的 shape，分工的帳一顆一顆算。
 
 ## 自己讀 kernel 的小抄
 
@@ -155,7 +160,7 @@ triton_red_fused_sum_0: picked {'XBLOCK': 1, 'R0_BLOCK': 2048} num_warps=16 num_
 
 今天把 Inductor 的 GPU 產物逐行讀完了。Triton 把寫 kernel 的單位從 thread 抬高到 block，codegen 只需要把 loop-level IR 逐行翻成 tl.load、算術、tl.store。pointwise 是一磚配一個 instance 的模板，mask 照顧除不盡的尾端，reduction 按大小選 persistent 或兩段式，XBLOCK 和 grid 留到 launch 時刻由 heuristics 拍板。pipeline 地圖裡那個只能遠觀的黑盒子，現在應該已經是可以逐行指認的老朋友了。
 
-不過 GPU 只是 codegen 的其中一條分流。同一層 IR 落在 CPU 上走的是另一條路，生出來的是 C++ 加 OpenMP，決策長得完全不同。明天就來把 C++ Codegen 這條路走完。那我們明天見！
+不過 GPU 只是 codegen 的其中一條分流。同一層 IR 落在 CPU 上走的是另一條路，生出來的是 C++加 OpenMP，決策長得完全不同。明天就來把 C++ Codegen 這條路走完。那我們明天見！
 
 ## 參考資料
 
@@ -165,3 +170,4 @@ triton_red_fused_sum_0: picked {'XBLOCK': 1, 'R0_BLOCK': 2048} num_warps=16 num_
 - [Triton 官方文件](https://triton-lang.org/main/index.html)
 - Tillet et al., [*Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations*](https://dl.acm.org/doi/10.1145/3315508.3329973), MAPL 2019
 - Ansel et al., [*PyTorch 2*](https://pytorch.org/assets/pytorch2-2.pdf), ASPLOS 2024（第 5 節）
+
