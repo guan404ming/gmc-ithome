@@ -2,7 +2,7 @@
 
 ## 前言
 
-前面幾天修過重編，也學會怎麼繞開 graph break，也就是編譯器中途卡住、把一張圖切成兩張。不過這些診斷手法一直是用到哪把撿哪把。出事當下最需要的是一張清單，慢了先開哪個 log，編譯掛掉又該交出什麼給 issue。今天把整個系列用過的診斷工具收齊成一個工具箱。比喻是診間的檢查流程，log 是問診紀錄，explain 是健檢總表，depyf 是 X 光片，minifier 是最後才上場的手術刀。症狀走一遍流程，每站留下證據，病灶自己會浮出來。本篇實驗全部在本機 CPU 上跑（torch 2.8.0），完整程式與 log 在 `code/day27/`。
+前面幾天修過重編，也繞開過 graph break，也就是 Dynamo 半路遇到吃不下的東西，把一張圖切成兩張。不過這些手法一直是碰到問題才撿一把來用。出事當下最需要的是一張清單，慢了先開哪個 log，編譯掛掉又該交出什麼給 issue。今天把整個系列用過的診斷工具收齊成一個工具箱，拿診間的檢查流程來比喻，log 是問診紀錄，explain 是健檢總表，depyf 是 X 光片，minifier 是最後才上場的手術刀。症狀走一遍流程，每站留下證據，病灶自己會浮出來。本篇實驗全部在本機 CPU 上跑（torch 2.8.0），完整程式與 log 在 `code/day27/`。
 
 正文開始！
 
@@ -30,11 +30,11 @@ def f(x, n):
     return torch.relu(y) * n
 ```
 
-順帶一提，前三列的 `TORCH_LOGS` 不是三個獨立開關，而是整條 pipeline 共用的日誌系統。每個元件把自己的產出註冊成一種 artifact，用逗號隔開就能一次點好幾道，這個系列每次實驗開場那行環境變數點的就是這份菜單。七把工具的成本也不一樣。`TORCH_LOGS` 完全不用改程式，設個環境變數重跑一次就有，explain 要改一行呼叫方式，depyf 得額外安裝。排查總是從最便宜的 log 開起。
+順帶一提，前三列的 `TORCH_LOGS` 不是三個獨立開關，而是整條 pipeline 共用的日誌系統。每個元件把自己的產出登記成一種 artifact，用逗號隔開就能同時開好幾個，這個系列每次實驗開場那行環境變數開的就是這些。七把工具的成本也不一樣。`TORCH_LOGS` 完全不用改程式，設個環境變數重跑一次就有，explain 要改一行呼叫方式，depyf 得額外安裝。排查總是從最便宜的 log 開起。
 
 ## 先數 break
 
-排查的第一步永遠是數 break，因為它決定手上有幾張圖，而碎片數是後面一切成本的基數。開 `TORCH_LOGS="graph_breaks"` 編譯一次（節錄）。
+排查的第一步永遠是數 break，因為它決定手上有幾張圖，後面每一筆成本都要乘上這個數字。開 `TORCH_LOGS="graph_breaks"` 編譯一次（節錄）。
 
 ```
 Graph break in user code at /Users/wchiu/Documents/GitHub/gmc-ithome/code/day27/debug_toolbox.py:21
@@ -98,7 +98,7 @@ torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model
 torch_compile_debug/run_2026_08_25_23_18_14_169341-pid_21348/torchinductor/model__1_inference_1.1/output_code.py  (3 KB)
 ```
 
-檔名就是站名，從 ATen 圖、融合前的 node 清單到最終產物，這個系列一路攔下來看的中間表示這裡一次到齊。兩個 model 目錄再次對應被 break 切開的兩張圖。出事時整包壓縮起來，就是一份可以慢慢驗屍的病歷。
+檔名就是站名，從 ATen 圖、融合前的 node 清單到最終產物，這個系列一路上攔下來看的東西，這裡一次到齊。兩個 model 目錄再次對應被 break 切開的兩張圖。出事時整包壓縮起來，就是一份可以慢慢驗屍的病歷。
 
 ## depyf 把 bytecode 變回 Python
 
@@ -150,7 +150,7 @@ def forward(self, y):
 
 ## 結語
 
-工具箱收好，最後把排查順序釘在蓋子上。先數 break，碎片數是一切成本的基數。再數 recompile，看 guard 為什麼一直倒。這兩關都過了還是慢，才輪到懷疑 kernel 的品質。編譯掛掉的場合直接跳關，請 minifier 削出最小重現再回報。每把工具對應的都是這個系列某一天拆過的機制，現在 log 的每一行應該都讀得出弦外之音了。
+工具箱收好，最後把排查順序釘在蓋子上。先數 break，圖有幾張，後面的帳就乘幾倍。再數 recompile，看 guard 為什麼一直倒。這兩關都過了還是慢，才輪到懷疑 kernel 的品質。編譯掛掉的場合直接跳關，請 minifier 削出最小重現再回報。每把工具對應的都是這個系列某一天拆過的機制，現在 log 的每一行應該都讀得出弦外之音了。
 
 只剩最後一塊拼圖。torch.compile 的 backend 是一個開放的介面，Inductor 只是預設選項，剛才那個看到 `relu` 就翻臉的假 backend 其實已經摸到了門把。明天就正式自己寫一個 backend，把這個系列學到的東西接成一條真的能跑的編譯路。那我們明天見！
 

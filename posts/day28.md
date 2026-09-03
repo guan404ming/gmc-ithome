@@ -2,7 +2,7 @@
 
 ## 前言
 
-前幾天把診斷 torch.compile 的工具一件一件收進了工具箱，今天可以做一件更過癮的事，自己下場把 pipeline 的第三站接管過來。畫 pipeline 地圖時說過，前兩站交出來的是一張標準的 FX Graph，第三站可以換掉，Inductor 只是 PyTorch 自帶、也最成熟的那一個。這句話今天要兌現。所謂 backend，就是站在第三站接手那張圖的那段程式。今天由淺入深寫三個。
+前幾天把診斷 torch.compile 的工具一件一件收進了工具箱，今天可以做一件更過癮的事，自己下場把 pipeline 的第三站接管過來。畫 pipeline 地圖時說過，前兩站交出來的是一張標準的 FX Graph，第三站可以換掉，Inductor 只是 PyTorch 自帶、也最成熟的那一個。這句話今天要兌現。所謂 backend，就是站在第三站接手那張圖的那段程式，我們由淺入深寫三個。
 
 - **旁觀的 backend**：證明我們真的拿得到圖。
 - **改圖的 backend**：證明拿到的圖可以改。
@@ -12,7 +12,7 @@
 
 ## 契約只有一句話
 
-寫 backend 之前先把契約講清楚。一個 backend 就是一個 Python callable，收 Dynamo 抓好的 GraphModule 和一串 example inputs，回傳一個 callable。契約就這麼一句話，沒有要繼承的類別，也沒有要實作的介面。GraphModule 是把 FX Graph 包成可以直接執行的物件，example inputs 是這次呼叫真的傳進來的那幾個輸入，callable 則是任何可以被呼叫的東西。改寫後的 bytecode 執行到圖的位置時，呼叫的就是你回傳的那個。
+寫 backend 之前先把契約講清楚。一個 backend 就是一個 Python 函式，收兩樣東西，回一樣東西。收的是 Dynamo 抓好的 GraphModule，也就是把 FX Graph 包成可以直接執行的物件，以及一串 example inputs，也就是這次呼叫真的傳進來的那幾個輸入。回的是一個 callable，任何可以被呼叫的東西都算。改寫後的 bytecode 執行到圖的位置時，呼叫的就是你回傳的那個。契約就這麼一句話，沒有要繼承的類別，也沒有要實作的介面。
 
 這份契約把時間切成兩段。backend 本體在編譯期執行，一張圖一生只來一次，回傳的 callable 才是執行期的常客。所以再貴的分析、改寫、程式碼生成都可以放心塞進 backend 本體，那是一次性的成本，執行期的快慢完全取決於你交出去的那個 callable。義務也只有一條，回傳的 callable 吃的參數和吐的結果要跟圖的輸入輸出對得上，語意等價是你自己的責任。
 
@@ -125,7 +125,7 @@ graph():
     return (add,)
 ```
 
-node 的目標從 `torch.relu` 變成 `torch.ops.aten.relu.default`。這是一張 ATen 圖，也就是全部換成 PyTorch 底層那組 operator 寫成的圖，純函數式、operator 集合小而穩定，正是編譯器該吃的形狀。需要訓練的話再多傳一個 backward 用的編譯函式就行。Inductor 的正職也是當 `aot_autograd` 手下的編譯函式，我們此刻站的就是它平常站的月台。兩層各有客群，做貼著使用者程式碼的分析工具就留在 Dynamo 層，接真正的 code generator 就包一層下到 ATen 層。
+node 的目標從 `torch.relu` 變成 `torch.ops.aten.relu.default`。這是一張 ATen 圖，每個 node 都換成了 PyTorch 底層那組 operator，純函數式、operator 集合小而穩定，正是編譯器該吃的形狀。需要訓練的話再多傳一個 backward 用的編譯函式就行。Inductor 的正職也是當 `aot_autograd` 手下的編譯函式，我們此刻站的就是它平常站的月台。兩層各有客群，做貼著使用者程式碼的分析工具就留在 Dynamo 層，接真正的 code generator 就包一層下到 ATen 層。
 
 ## 把名字掛進註冊表
 
@@ -141,7 +141,7 @@ observer calls via registry: 1
 
 ## 什麼時候值得自己寫
 
-冷靜說，多數人永遠不需要寫 backend，Inductor 已經很好，加速交給它就是了。值得動手的場景有三種。
+老實說，多數人永遠不需要寫 backend，Inductor 已經很好，加速交給它就是了。值得動手的場景有三種。
 
 - **接自家的編譯器或硬體**：這個介面就是接進 torch.compile 生態的正門，名單上那幾位就是這麼進來的。
 - **做分析工具**：反正 Dynamo 已經把圖抓好了，順手拿來統計 op 分布、估 FLOPs、比對兩個版本的圖，成本低得驚人。
