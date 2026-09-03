@@ -2,17 +2,23 @@
 
 ## 前言
 
-昨天看完 GPU 這條線，融好的 node 被寫成一份份 Triton kernel。但介紹 Inductor 總覽時就說過，codegen 是整條產線唯一分流的地方，lowering、scheduler、fusion 全部共用，最後一步才按裝置各走各的。今天換到 CPU 這條線，看 [`torch/_inductor/codegen/cpp.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/codegen/cpp.py) 怎麼把同一層 loop-level IR 寫成 C++，再交給系統編譯器變成 `.so`。答案放前面，cpp 後端拿到一條迴圈不是只有一種寫法，而是像變速箱一樣備了三段，純量、SIMD、OpenMP，換不換檔看的是 shape。
+昨天看完 GPU 這條線，融好的 node 被寫成一份份 Triton kernel。codegen 是整條產線唯一分流的地方，前面的步驟全部共用，最後一步才按裝置各走各的。今天換到 CPU 這條線，看 Inductor 怎麼把同一層 loop-level IR 寫成 C++，再交給系統編譯器變成 `.so`。答案放前面，cpp 後端拿到一條迴圈不是只有一種寫法，而是像變速箱一樣備了三段。
+
+- **純量**：一次只算一個數字，最樸素的迴圈。
+- **SIMD**：一道 instruction 同時算好幾個數字。
+- **OpenMP**：把整條迴圈切開，交給好幾條 thread 一起跑。
+
+換不換檔，看的是張量多大。
 
 正文開始！
 
 ## 分流之後的另一條產線
 
-CPU 後端收到的原料跟 Triton 後端一樣，就是 scheduler 融好的 node，裡面還是那個用 `ops.load`、`ops.store` 描述「迴圈每一輪做什麼」的 body 函式，差別在輸出的形狀。Triton kernel 天生是「每個 program 抓一塊 tile」的平行寫法，誰跑哪一塊由 grid 決定。C++ kernel 就是一條普通的 for 迴圈，誰來跑、一步走多寬、要不要開多執行緒，全得由 codegen 自己寫明在程式碼裡。
+CPU 後端收到的原料跟 Triton 後端一樣，就是 scheduler 融好的 node，裡面帶著一份「迴圈每一輪做什麼」的說明，差別在輸出的形狀。Triton kernel 天生是平行寫法，誰跑哪一塊由硬體排程決定。C++ kernel 就是一條普通的 for 迴圈，誰來跑、一步走多寬、要不要開多執行緒，全得由 codegen 自己寫明在程式碼裡。
 
-負責的角色就在 `cpp.py`，它接過一組組 node，逐組生出 `extern "C" void kernel(...)` 這樣的 C 函式，指標進、指標出，本體就是迴圈。講 fusion 時提過的判讀陷阱這裡補一句，cpp 後端會把沒融合的多個 node 打包進同一個 C++ 函式，一個函式裡可能有好幾個獨立的 loop nest，數融合結果要看 loop 不是函式。
+cpp 後端接過一組組 node，逐組生出 `extern "C" void kernel(...)` 這樣的 C 函式，指標進、指標出，本體就是迴圈。這裡補一個判讀陷阱，沒融合的多個 node 也會被打包進同一個 C++ 函式，一個函式裡可能有好幾條各自獨立的迴圈，數融合結果要看迴圈不是函式。
 
-本篇實驗都在本機 CPU 上跑（Apple M1 Max，arm64，torch 2.8.0），完整程式與 log 在 `code/day22/`。實驗品沿用 Inductor 總覽用過的函式。
+本篇實驗都在本機 CPU 上跑（Apple M1 Max，arm64，torch 2.8.0），完整程式與 log 在 `code/day22/`。實驗品是這個函式。
 
 ```python
 def f(x, y):
@@ -23,7 +29,7 @@ def f(x, y):
 
 ## 第一段，純量迴圈
 
-先看最素的版本。把 config 的向量寬度設成 1 關掉向量化，1024 個元素的輸入生出的 kernel 長這樣（節錄）。
+先看最素的版本。把向量寬度設成 1 關掉向量化，1024 個元素的輸入生出的 kernel 長這樣（節錄）。
 
 ```cpp
     for(int64_t x0=static_cast<int64_t>(0LL); x0<static_cast<int64_t>(1024LL); x0+=static_cast<int64_t>(1LL))
@@ -38,9 +44,9 @@ def f(x, y):
     }
 ```
 
-這就是 lowering 攤出來那個 body 函式的直譯，`ops.load` 變成 `in_ptr0[x0]`，`ops.relu` 變成 `std::max`，`ops.store` 變成最後那行賦值，一次算一個 float。`tmp0` 到 `tmp5` 跟 IR 的中間值一一對應，全是區域變數，編譯器會放進暫存器，三個 op 融成一個迴圈的效果這裡最清楚，讀兩筆、寫一筆，中間值不落地。
+這就是 loop-level IR 的直譯，讀值變成 `in_ptr0[x0]`，relu 變成 `std::max`，寫值變成最後那行賦值，一次算一個 float。`tmp0` 到 `tmp5` 全是區域變數，編譯器會把它們放進暫存器。三個 op 融成一條迴圈的效果這裡最清楚，讀兩筆、寫一筆，中間值不落地。
 
-另外這段程式碼裡沒有任何 PyTorch 的影子。沒有 dispatcher、沒有 TensorImpl，連 shape 都寫死成 `1024LL`，因為編譯期已經知道所有 metadata，生出來的就是一段裸的 C++。拿它當基準，後面兩段變速省的都是這個版本的時間。
+另外這段程式碼裡沒有任何 PyTorch 的影子，連 shape 都寫死成 `1024LL`。編譯期已經知道所有 metadata，生出來的就是一段裸的 C++。拿它當基準，後面兩段變速省的都是這個版本的時間。
 
 ## 第二段，SIMD 一步四格
 
@@ -60,9 +66,9 @@ def f(x, y):
     }
 ```
 
-`x0` 一次前進 4 格，每個 `tmp` 從單一 float 變成 `at::vec::Vectorized<float>`，加法還是寫 `+`、relu 換成 `clamp_min`，但每個運算元都是一整包 SIMD 暫存器。`Vectorized` 是 PyTorch 自己的跨 ISA 向量抽象，好處是 codegen 不必認識每種指令集，永遠生同一種程式碼，`Vectorized<float>` 在編譯 `.cpp` 時才按目標機器展開成對應的 intrinsic。同一份原始碼，AVX2 機器上一包是 8 個 float，AVX512 是 16 個，這台 M1 Max 的 NEON 是 128-bit，一包 4 個。log 第一行的 `isa: asimd | bit_width: 128` 就是編譯期探測指令集的結果，codegen 按它決定步幅，128 除以 float 的 32 位元，正好是迴圈裡那個 4。
+`x0` 一次前進 4 格，每個 `tmp` 從單一 float 變成 `at::vec::Vectorized<float>`。加法還是寫 `+`，relu 換成 `clamp_min`，但每個 operand 都是一整包數字。`Vectorized` 是 PyTorch 自己的向量抽象，codegen 因此不必認識每種指令集，永遠生同一種程式碼，編譯 `.cpp` 時才按目標機器展開成真正的 instruction。同一份原始碼，換台機器一包可能是 8 個或 16 個 float，這台 M1 Max 一包 4 個。log 第一行的 `isa: asimd | bit_width: 128` 就是編譯期探測到的結果，128 除以 float 的 32 位元，正好是迴圈裡那個 4。
 
-原本以為小張量會退回純量版，實測不是。把輸入縮到只剩 3 個元素，迴圈照樣是向量版，只是 load 和 store 都多帶了長度參數，`loadu(in_ptr0 + x0, 3LL)` 用 masked load 只搬 3 格。也就是說 v2.8.0 的 cpp 後端向量化幾乎總是開著，零頭用遮罩處理掉，真正跟張量大小掛鉤的是下一段。
+原本以為小張量會退回純量版，實測不是。把輸入縮到只剩 3 個元素，迴圈照樣是向量版，只是 load 和 store 多帶了長度參數，用遮罩擋掉多出來的那一格。也就是說向量化幾乎總是開著，零頭用遮罩處理掉，真正跟張量大小掛鉤的是下一段。
 
 ## 第三段，OpenMP 上多執行緒
 
@@ -76,7 +82,7 @@ def f(x, y):
         for(int64_t x0=static_cast<int64_t>(0LL); x0<static_cast<int64_t>(1048576LL); x0+=static_cast<int64_t>(4LL))
 ```
 
-`#pragma omp parallel` 起了 8 條 thread，數字來自 log 開頭的 `threads: 8`，也就是 `torch.get_num_threads()` 的值。`#pragma omp for` 再把迭代範圍切給這 8 條 thread 分工，每條 thread 分到的那段照樣是一步 4 格的 SIMD，兩層平行疊在一起，8 條 thread 乘 4 條 lane，同一時間最多有 32 格在前進。值得留意的是 kernel 函式本身渾然不覺，它還是那個 `extern "C"` 的普通函式，平行完全由 OpenMP runtime 在函式內部發生，呼叫端一無所知。
+`#pragma omp parallel` 起了 8 條 thread，數字來自 log 開頭的 `threads: 8`。`#pragma omp for` 再把迴圈的範圍切給這 8 條 thread 分工。每條 thread 分到的那段照樣是一步 4 格的 SIMD，兩層平行疊在一起，8 條 thread 乘 4 格，同一時間最多有 32 格在前進。值得留意的是 kernel 函式本身渾然不覺，它還是那個普通的 C 函式，平行完全發生在函式內部，呼叫端一無所知。
 
 那門檻在哪裡。1024 個元素不開、一百萬個會開，中間必有一條線。實測掃了一輪 shape，log 是這麼說的。
 
@@ -85,7 +91,7 @@ n=16384: single thread
 n=32768: omp parallel
 ```
 
-這條線劃在 `cpp.py` 的 `decide_parallel_depth`，規則是總工作量除以 thread 數小於最小工作量門檻（預設 4096）就不開，原始碼註解只有一句 not enough work。8 條 thread 乘 4096，門檻正好是 32768，跟實測分界完全對上。thread 不是免費的，起手就要付建立與同步的成本，每條 thread 分不到幾千個元素的活，省下的時間不夠付開工錢，攤不回來就乖乖單執行緒。這種按 shape 換檔的決策全發生在編譯期，靠的又是 FakeTensor 一路推下來的 shape metadata。
+規則其實很土法煉鋼，總工作量除以 thread 數，小於門檻（預設 4096）就不開。8 條 thread 乘 4096 正好是 32768，跟實測的分界完全對上。thread 不是免費的，起手就要付建立與同步的成本，每條 thread 分不到幾千個元素的活，省下的時間不夠付開工錢，攤不回來就乖乖單執行緒。這種按 shape 換檔的決策全發生在編譯期，靠的還是編譯前就推好的 shape metadata。
 
 三段變速用動畫走一遍。
 
@@ -118,13 +124,11 @@ pointwise 切一切就能分工，reduction 不行，8 條 thread 各加各的�
     tmp_acc0 = tmp_acc0 + at::vec::vec_reduce_all<float, 1>([](at::vec::Vectorized<float>& x, at::vec::Vectorized<float>& y) { return x + y; }, tmp_acc0_vec);
 ```
 
-有趣的是 `#pragma omp for` 後面沒掛教科書式的 `reduction(+:...)` 子句，Inductor 選擇自己攤開來寫。每條 thread 抱著私有累加器 `tmp_acc0_vec_local`，掃完自己的地盤存進以 `tid` 為索引的陣列，離開平行區後由主執行緒把 8 份加總，最後用 `vec_reduce_all` 把 4 條 lane 收成一個數。私有累加器是平行 reduction 的標準解法，8 條 thread 要是直接往同一個變數加，不是搶成一團就是每次都要上鎖，各記各的帳、最後合併一次，貴的同步只發生在收尾那一下。兩層平行怎麼開的，就得兩層各收一次尾，這正是前面說的「全部寫明在程式碼裡」。
+有趣的是 Inductor 沒用 OpenMP 內建的 reduction 子句，而是自己攤開來寫。每條 thread 抱著私有的累加器，掃完自己的地盤存進陣列，離開平行區後由主執行緒把 8 份加總，最後再把一包裡的 4 個數字收成一個。私有累加器是標準解法，8 條 thread 要是直接往同一個變數加，不是搶成一團就是每次都要上鎖。各記各的帳、最後合併一次，貴的同步只發生在收尾那一下。兩層平行怎麼開的，就得兩層各收一次尾，這正是前面說的「全部寫明在程式碼裡」。
 
 ## 跟 Triton 那條線對照
 
-把兩個後端的產物擺在一起，差的其實是對硬體的想像。Triton kernel 假設 thread 要多少有多少，codegen 只描述一個 program 算哪塊 tile，launch 幾千個 program 是常態甚至鼓勵超額，讓硬體用排程把記憶體延遲藏起來，向量化、warp 怎麼跑全下放給 Triton 編譯器和 GPU。C++ kernel 面對的是 thread 個位數、起 thread 要付真金白銀的機器，平行不平行要算過才開，SIMD 寬度要明碼寫進指令，效能靠的不是人海而是每條 thread 順著 cache 走。
-
-兩邊處理零頭倒是異曲同工。Triton kernel 靠 mask 讓越界的 lane 不作數，cpp 後端靠帶長度參數的 masked `loadu`，思路相同，向量寬度是硬體定的，資料長度是使用者給的，對不齊的部分用遮罩補平。同一層 IR，GPU 那條線把「怎麼平行」交出去，CPU 這條線一筆一筆自己寫完，這就是 thread 模型的差異在 codegen 上留下的痕跡。
+把兩個後端的產物擺在一起，差的其實是對硬體的想像。昨天的 Triton kernel 假設 thread 要多少有多少，一次 launch 幾千個是常態，怎麼平行全下放給 Triton 編譯器和 GPU。C++ kernel 面對的是 thread 只有個位數、起 thread 要付真金白銀的機器，平行不平行要算過才開，一步走幾格要明碼寫進程式碼，效能靠的不是人海而是每條 thread 順著 cache 走。同一層 IR，GPU 那條線把「怎麼平行」交出去，CPU 這條線一筆一筆自己寫完。
 
 ## 從 .cpp 到 .so
 
@@ -134,13 +138,13 @@ pointwise 切一切就能分工，reduction 不行，8 條 thread 各加各的�
 compile cmd: clang++ .../ck3n4ozn...main.cpp ... -shared -fPIC ... -O3 -DNDEBUG ... -Xclang -fopenmp ... -o .../ck3n4ozn...main.so -lomp ...
 ```
 
-組裝命令的是 [`cpp_builder.py`](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_inductor/cpp_builder.py)，它按平台挑編譯器、湊齊 include 路徑和連結參數，這台 Mac 用的是 clang++ 加 Homebrew 的 libomp。生成的 kernel 以內容 hash 命名存成 `.main.cpp`，開著 `-O3` 和 `-fopenmp` 編成同名的 `.main.so`，翻 cache 目錄就看得到成對的兩個檔案，旁邊還有 wrapper 的 `.py`。wrapper 把動態庫載回 Python，之後每次呼叫都直接進 C++，改寫過的 bytecode 呼叫下來，落點就是這個 `.so` 裡的函式。編譯一次要一兩秒，先前講過的快取在 CPU 後端格外有感，hash 沒變就不再叫醒 clang++。
+Inductor 按平台挑編譯器、湊齊 include 路徑和連結參數，這台 Mac 用的是 clang++。生成的 `.cpp` 開著 `-O3` 和 `-fopenmp` 編成 `.so`，再由一段 wrapper 把它載回 Python。改寫過的 bytecode 呼叫下來，落點就是這個 `.so` 裡的函式。編譯一次要一兩秒，所以快取在 CPU 後端格外有感，程式碼沒變就不再叫醒編譯器。
 
 ## 結語
 
-CPU 後端的 codegen 今天走完了。同一份 loop-level IR，cpp 後端用三段變速寫成 C++，純量版是語意的直譯，SIMD 版靠 `at::vec::Vectorized` 一步多格而且幾乎總是開著，OpenMP 版在工作量攤得回 thread 成本時才掛檔，reduction 則要每層平行各收一次尾。最後由系統編譯器把 `.cpp` 鑄成 `.so`，快取記住一切。
+CPU 後端的 codegen 今天走完了。同一份 loop-level IR，cpp 後端用三段變速寫成 C++。純量版是語意的直譯，SIMD 版一步多格而且幾乎總是開著，OpenMP 版要工作量攤得回 thread 成本才掛檔，reduction 則是每層平行各收一次尾。最後由系統編譯器把 `.cpp` 鑄成 `.so`。
 
-不過到目前為止，不管哪個後端，一個 kernel 都只有「一種生法」。但同一個運算常有好幾種寫法可選，tile 怎麼切、迴圈怎麼排，效能可以差好幾倍，矩陣乘尤其明顯。Inductor 的辦法很實在，把候選都生出來、真的跑一遍、用碼表挑冠軍。明天就來看 Autotune 這場比賽怎麼辦。那我們明天見！
+不過到目前為止，不管哪個後端，一個 kernel 都只有「一種生法」。但同一個運算常有好幾種寫法可選，效能可以差好幾倍，矩陣乘尤其明顯。Inductor 的辦法很實在，把候選都生出來、真的跑一遍、用碼表挑冠軍。明天就來看 Autotune 這場比賽怎麼辦。那我們明天見！
 
 ## 參考資料
 
