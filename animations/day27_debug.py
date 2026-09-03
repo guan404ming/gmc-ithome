@@ -59,7 +59,7 @@ def card(l1, l2, w=6.3):
 
 
 SX = -4.0
-YS = [0.75, -0.3, -1.35, -2.4]
+YS = [0.5, -0.55, -1.6, -2.65]
 CX = 3.2
 
 
@@ -81,8 +81,9 @@ class Debug(Scene):
         stations = VGroup(*[station(n).move_to([SX, y, 0]) for n, y in zip(names, YS)])
         flow = VGroup(*[Line(stations[i][0].get_bottom(), stations[i + 1][0].get_top(), stroke_color=DIM, stroke_width=2.4) for i in range(3)])
         code_lines = ["y = torch.sin(x) + 1", "if y.sum() > 0:", "    y = y * 2", "return torch.relu(y) * n"]
-        code = VGroup(*[T(l, font=MONO, font_size=16, color=TXT) for l in code_lines]).arrange(DOWN, aligned_edge=LEFT, buff=0.16)
-        codebox = RoundedRectangle(corner_radius=0.12, width=4.6, height=code.height + 0.44, stroke_color=EDGE, stroke_width=1.5, fill_color=CARD, fill_opacity=1).move_to([CX, 2.2, 0])
+        code = VGroup(*[T(l, font=MONO, font_size=16, color=TXT) for l in code_lines]).arrange(DOWN, aligned_edge=LEFT, buff=0.10)
+        codebox = RoundedRectangle(corner_radius=0.12, width=4.6, height=code.height + 0.44, stroke_color=EDGE, stroke_width=1.5, fill_color=CARD, fill_opacity=1)
+        codebox.move_to([CX, 0, 0]).align_to([0, title.get_center()[1] - 0.52, 0], UP)
         code.move_to(codebox).align_to(codebox.get_left() + RIGHT * 0.28, LEFT)
         code[2].shift(RIGHT * 0.55)
         dot = Dot(radius=0.09, color=ACCENT).move_to(stations[0][0].get_left() + LEFT * 0.35 + UP * 1.1)
