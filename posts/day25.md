@@ -77,7 +77,7 @@ replay vs eager    9.90x
 
 ## 這筆交易的代價
 
-位址押死這件事，Inductor 替你處理了大半，輸入會自動複製進 static buffer，參數本來就長住固定位址。但有一條逃不掉，輸出活在 graph 的 memory pool 裡，下一次 replay 會原地覆寫上一次的結果。抓著上一輪的輸出不放再呼叫一次，兩個 tensor 位址一模一樣。
+剛剛那三條要求，Inductor 替你扛了大半。輸入會自動複製進 static buffer，參數本來就長住固定位址。但有一條逃不掉，輸出活在 graph 的 memory pool 裡，下一次 replay 會原地覆寫上一次的結果。抓著上一輪的輸出不放再呼叫一次，兩個 tensor 位址一模一樣。
 
 ```
 hold output alive, call again: ptr 22480592830464 -> 22480592830464, same: True
@@ -101,7 +101,12 @@ hold output alive, call again: ptr 22480592830464 -> 22480592830464, same: True
 
 ## 什麼場景賺，什麼場景不賺
 
-把今天的數字收成一條準則。賺的是 overhead-bound 的場景，也就是 GPU 大半時間在等 CPU 發射，kernel 小、串很長、batch 小。典型例子是小 batch 推論和 LLM 的 decode 迴圈，每吐一個 token 都要把整個網路走一遍，一次卻只算一個 token 的量，正好是幾百顆小 kernel 排成長串。而且這種場景 shape 固定、輸入位址可控，上面那些限制一條都不礙事，這也是 vLLM 這類推論引擎都內建 CUDA Graph 的原因。不賺的是 compute-bound，大 batch 訓練裡 kernel 動輒幾百 us，1.01 倍換不回多吃的記憶體和押死位址的不自由。判斷也簡單，profiler 裡 GPU 時間軸上的空隙就是可以收的帳，空隙不多就別開。
+賺不賺只看一件事，GPU 到底有沒有在等 CPU。
+
+- **賺**：overhead-bound，kernel 小、串很長、batch 小。典型是小 batch 推論和 LLM 的 decode 迴圈，每吐一個 token 就要把整個網路走一遍，一次卻只算一個 token 的量，正好是幾百顆小 kernel 排成長串。這種場景 shape 固定、輸入位址可控，上面那些限制一條都不礙事，vLLM 這類推論引擎內建 CUDA Graph 就是這個道理。
+- **不賺**：compute-bound，大 batch 訓練裡 kernel 動輒幾百 us。1.01 倍換不回多吃的記憶體和押死位址的不自由。
+
+判斷也簡單，profiler 裡 GPU 時間軸上的空隙就是可以收的帳，空隙不多就別開。
 
 ## 結語
 
