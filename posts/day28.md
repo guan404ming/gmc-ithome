@@ -2,25 +2,28 @@
 
 ## 前言
 
-前幾天把診斷 torch.compile 的工具一件一件收進了工具箱，今天可以做一件更過癮的事，自己下場把 pipeline 的第三站接管過來。畫 pipeline 地圖時說過，前兩站交出來的是一張標準的 FX Graph，第三站可以換掉，Inductor 只是 PyTorch 自帶、也最成熟的那一個。這句話今天要兌現。所謂 backend，就是站在第三站接手那張圖的那段程式，我們由淺入深寫三個。
+前幾天把診斷 torch.compile 的工具一件一件收進工具箱，今天來做件更過癮的事，自己下場把 pipeline 的第三站接管過來。畫 pipeline 的時候提過，前兩站交出來的是一張標準的 FX Graph，第三站是可以換掉的，Inductor 只是 PyTorch 自帶、也最成熟的那一個。今天會做出三種不同程度的 backend：
 
 - **旁觀的 backend**：證明我們真的拿得到圖。
+
 - **改圖的 backend**：證明拿到的圖可以改。
 - **接到 ATen 層的 backend**：證明我們可以站上 Inductor 平常站的位置。
 
 正文開始！
 
-## 契約只有一句話
+## contract 只有一句話
 
-寫 backend 之前先把契約講清楚。一個 backend 就是一個 Python 函式，收兩樣東西，回一樣東西。收的是 Dynamo 抓好的 GraphModule，也就是把 FX Graph 包成可以直接執行的物件，以及一串 example inputs，也就是這次呼叫真的傳進來的那幾個輸入。回的是一個 callable，任何可以被呼叫的東西都算。改寫後的 bytecode 執行到圖的位置時，呼叫的就是你回傳的那個。契約就這麼一句話，沒有要繼承的類別，也沒有要實作的介面。
+動手之前先把 contract 講清楚。這裡的 contract 指的是介面約定，也就是雙方講好「你收什麼、回什麼、要保證什麼」。只要守住這幾條，兩邊就能各自換實作而不互相干擾，torch.compile 和 backend 就是靠這份約定接在一起的。
 
-這份契約把時間切成兩段。backend 本體在編譯期執行，一張圖一生只來一次，回傳的 callable 才是執行期的常客。所以再貴的分析、改寫、程式碼生成都可以放心塞進 backend 本體，那是一次性的成本，執行期的快慢完全取決於你交出去的那個 callable。義務也只有一條，回傳的 callable 吃的參數和吐的結果要跟圖的輸入輸出對得上，語意等價是你自己的責任。
+一個 backend 其實就是一個 Python 函式，收兩樣東西，回一樣東西。收的是 Dynamo 抓好的 GraphModule，也就是把 FX Graph 包成可以直接執行的物件，再加上一串 example inputs，也就是這次呼叫真的傳進來的那幾個輸入。回的是一個 callable，任何可以被呼叫的東西都算，改寫後的 bytecode 跑到圖的位置時，叫的就是你回傳的那個。contract 就這麼一句話，沒有要繼承的類別，也沒有要實作的介面。
 
-這代表最小的合法 backend 短得驚人，直接把 GraphModule 自己的 forward 回傳出去就行，圖照原樣用 eager 執行。而 Inductor 忙了整整一個 Part 3，最後交出來的也不過是一個 callable。兩者在契約面前完全平等，這就是介面設計得薄的好處。
+這份 contract 把時間切成兩段。backend 本體在編譯期執行，一張圖一生只來一次，回傳的 callable 才是執行期的常客。所以再貴的分析、改寫、程式碼生成都可以放心塞進 backend 本體，反正是一次性的成本，執行期跑得快不快，完全取決於你交出去的那個 callable。義務也只有一條，回傳的 callable 吃的參數和吐的結果要跟圖的輸入輸出對得上，語意等不等價則是你自己的責任。
+
+這代表最小的合法 backend 是可以非常非常短的，甚至直接把 GraphModule 自己的 forward 回傳出去就行，圖就照原樣用 eager 跑也可以。而 Inductor 忙了整整一個 Part 3，最後交出來的也不過是一個 callable。兩者在 contract 面前完全平等，這就是介面設計得薄的好處。
 
 ## 第一個後端只旁觀
 
-第一個 backend 只多做一件事，把收到的東西印出來再原樣放行。以下實驗都在本機 CPU 上跑（torch 2.8.0），完整程式在 `code/day28/`。
+第一個 backend 只多做一件事，把收到的東西印出來，然後原樣放行。以下實驗都在本機 CPU 上跑（torch 2.8.0），完整程式在 `code/day28/`。
 
 ```python
 def observer(gm, example_inputs):
@@ -48,11 +51,11 @@ graph():
 matches eager: True
 ```
 
-這就是 backend 收到的原料。圖還停在 Dynamo 這一層，node 的目標是 `torch.relu` 和 `operator.add` 這種 Python 層函式，跟使用者寫的程式一一對得上。example inputs 給的是帶著 shape 和 dtype 的真實張量，想在編譯期先試跑量測或驗證，直接拿這串輸入餵圖就行。回傳 `gm.forward` 之後圖照跑，結果和 eager 一致。
+這就是 backend 收到的原料。圖還停在 Dynamo 這一層，node 的目標是 `torch.relu` 和 `operator.add` 這種 Python 層函式，跟使用者寫的程式一一對得上。example inputs 給的是帶著 shape 和 dtype 的真實張量，想在編譯期先試跑、量測或驗證，直接拿這串輸入餵圖就行。回傳 `gm.forward` 之後圖照跑，結果和 eager 一致。
 
 ## 上游的機制照常運轉
 
-第二次用同樣 shape 呼叫，log 一片安靜，observer 的計數停在 1。Guard 檢查和編譯成品的快取都發生在 backend 被呼叫之前，是 Dynamo 的地盤。你的 backend 再簡陋，也自動繼承整套上游機制，驗過放行，不會 recompile。
+第二次用同樣 shape 呼叫，log 一片安靜，observer 的計數停在 1。Guard 檢查和編譯成品的快取都發生在 backend 被呼叫之前，那是 Dynamo 的地盤。所以你的 backend 再簡陋，也自動繼承了整套上游機制，驗過就放行，不會 recompile。
 
 換一個 shape 再呼叫，Guard 失敗觸發 recompile，observer 第二次被叫醒，收到的圖也變了樣。
 
@@ -66,13 +69,13 @@ graph():
   input[1]: shape=(6, 8) dtype=torch.float32
 ```
 
-第二張圖多了一個 SymInt 的 placeholder，example inputs 裡也混進了一個不是張量的符號，這是講 dynamic shape 時看過的自動放寬。寫 backend 的人只要記住一件事，輸入不保證都是張量。
+第二張圖多了一個 SymInt 的 placeholder，example inputs 裡也混進一個不是張量的符號，這就是講 dynamic shape 時看過的自動放寬。寫 backend 的人只要記住一件事，輸入不保證都是張量。
 
-graph break 也照常上班。函式要是中途斷開，Dynamo 會切出好幾張子圖，每張子圖各自把 backend 叫起來編一次。自訂 backend 接手的從來不是「整個函式」，而是 Dynamo 切好的每一段安全區。
+graph break 也照常上班。函式要是中途斷開，Dynamo 會切出好幾張子圖，每張子圖都各自把 backend 叫起來編一次。所以自訂 backend 接手的從來不是「整個函式」，而是 Dynamo 切好的每一段安全區。
 
 ## 第二個後端動手改圖
 
-旁觀證明了我們拿得到圖，下一步證明圖可以改。FX Graph 是普通的 Python 資料結構，走訪 node、換掉目標、重新生成程式碼，三步完成一次改寫。
+旁觀證明了我們拿得到圖，下一步就來證明圖可以改。FX Graph 就是個普通的 Python 資料結構，走訪 node、換掉目標、重新生成程式碼，三步就完成一次改寫。
 
 ```python
 def relu_to_sigmoid(gm, example_inputs):
@@ -95,7 +98,7 @@ compiled f(t): tensor([1.1192, 1.5000, 1.8808])
 sigmoid(t)+1 : tensor([1.1192, 1.5000, 1.8808])
 ```
 
-eager 版是 relu 的結果，編譯版和 sigmoid 加一逐位一致，這顆 op 真的被換掉了。使用者的 Python 程式碼一個字都沒動，動的是它被抓下來的那張圖。程式一旦變成資料，改寫它就只是普通的資料處理，這正是圖表示法的價值。故意把語意改壞只是為了讓證據夠明顯，實務上同一套手法溫和得多，例如統計每種 op 出現幾次、在特定 node 前後夾一段 profiling、把某個 op 換成數值上更穩的等價寫法。Inductor 的各種圖層最佳化，起點也不過就是這三步。
+eager 版是 relu 的結果，編譯版則和 sigmoid 加一逐位一致，這顆 op 真的被換掉了。使用者的 Python 程式碼一個字都沒動，動的是它被抓下來的那張圖。程式一旦變成資料，改寫它就只是普通的資料處理，這正是圖表示法的價值。這裡故意把語意改壞，只是想讓證據夠明顯，實務上同一套手法溫和得多，例如統計每種 op 出現幾次、在特定 node 前後夾一段 profiling、把某個 op 換成數值上更穩的等價寫法。Inductor 的各種圖層最佳化，起點也就是這三步。
 
 ![pipeline 第三站的廠房被換成自己的工作坊，FX Graph 流進來被逐節點檢視改寫](https://raw.githubusercontent.com/guan404ming/gmc-ithome/main/assets/day28/custom_backend.gif)
 
@@ -103,7 +106,7 @@ eager 版是 relu 的結果，編譯版和 sigmoid 加一逐位一致，這顆 o
 
 ## 第三個後端往下接到 ATen 層
 
-Dynamo 層的圖貼近使用者，但對編譯器來說太高階，in-place 和 view 還在，backward 也還沒展開。這些是 AOTAutograd 負責的髒活，不用自己重寫，用 `aot_autograd` 把自己的編譯函式包起來，就能站到跟 Inductor 一樣的位置。
+Dynamo 層的圖貼近使用者，但對編譯器來說還是太高階，in-place 和 view 都還在，backward 也還沒展開。這些髒活是 AOTAutograd 負責的，不用自己重寫一遍，只要用 `aot_autograd` 把自己的編譯函式包起來，就能站到跟 Inductor 一樣的位置。
 
 ```python
 def fw(gm, example_inputs):
@@ -125,11 +128,11 @@ graph():
     return (add,)
 ```
 
-node 的目標從 `torch.relu` 變成 `torch.ops.aten.relu.default`。這是一張 ATen 圖，每個 node 都換成了 PyTorch 底層那組 operator，純函數式、operator 集合小而穩定，正是編譯器該吃的形狀。需要訓練的話再多傳一個 backward 用的編譯函式就行。Inductor 的正職也是當 `aot_autograd` 手下的編譯函式，我們此刻站的就是它平常站的月台。兩層各有客群，做貼著使用者程式碼的分析工具就留在 Dynamo 層，接真正的 code generator 就包一層下到 ATen 層。
+node 的目標從 `torch.relu` 變成了 `torch.ops.aten.relu.default`。這是一張 ATen 圖，每個 node 都換成 PyTorch 底層那組 operator，純函數式，operator 集合又小又穩定，正是編譯器該吃的形狀。需要訓練的話，再多傳一個 backward 用的編譯函式就行。Inductor 的正職也是當 `aot_autograd` 手下的編譯函式，我們此刻站的就是它平常站的月台。兩層各有各的客群，做貼著使用者程式碼的分析工具就留在 Dynamo 層，要接真正的 code generator 就包一層下到 ATen 層。
 
 ## 把名字掛進註冊表
 
-最後一步是掛牌。傳函式物件只有自己能用，用 `register_backend` 給它一個名字，任何人都能用字串指名。
+最後一步是掛牌。直接傳函式物件只有自己能用，用 `register_backend` 給它一個名字，別人就能用字串指名。
 
 ```
 list_backends(): ['cudagraphs', 'inductor', 'onnxrt', 'openxla', 'tvm']
@@ -137,21 +140,21 @@ registered: True
 observer calls via registry: 1
 ```
 
-`list_backends()` 列出的就是這張註冊表。名單裡的 onnxrt、tvm、openxla 全是靠同一套機制接進來的第三方後端，套件裝好名字就自動出現。我們的 observer 掛上名字後，用 `backend="day28_observer"` 一樣叫得動，計數器如實跳了一格。所謂生態系插槽，拆開來就是一個 dict 加一點套件掃描。
+`list_backends()` 列出的就是這張註冊表。名單裡的 onnxrt、tvm、openxla 全是靠同一套機制接進來的第三方後端，套件裝好，名字就自動出現。我們的 observer 掛上名字後，用 `backend="day28_observer"` 一樣叫得動，計數器也如實跳了一格。所謂的生態系插槽，拆開來就是一個 dict 加一點套件掃描而已。
 
 ## 什麼時候值得自己寫
 
-老實說，多數人永遠不需要寫 backend，Inductor 已經很好，加速交給它就是了。值得動手的場景有三種。
+老實說，多數人永遠不需要寫 backend，Inductor 已經夠好了，加速交給它就是。真正值得動手的場景有三種。
 
-- **接自家的編譯器或硬體**：這個介面就是接進 torch.compile 生態的正門，名單上那幾位就是這麼進來的。
-- **做分析工具**：反正 Dynamo 已經把圖抓好了，順手拿來統計 op 分布、估 FLOPs、比對兩個版本的圖，成本低得驚人。
-- **教學與除錯**：一個十行的 observer 勝過十頁文件，想知道 pipeline 某一站交出了什麼，寫個 backend 站在那裡看就是了。
+- **接自家的編譯器或硬體**：這個介面就是接進 torch.compile 生態的正門，名單上那幾位就是這樣進來的。
+- **做分析工具**：反正 Dynamo 已經把圖抓好了，順手拿來統計 op 分布、估 FLOPs、比對兩個版本的圖，基本上是沒有成本的。
+- **教學與除錯**：一個十行的 observer 勝過十頁文件，想知道 pipeline 某一站交出了什麼，寫個 backend 站在那裡看就好。
 
 ## 結語
 
-回頭看，今天沒有學新機制，而是把整個系列的知識換一個站位再用一次。契約是收 GraphModule 和 example inputs、回一個 callable。上游的 Guard、快取、dynamic shape 對自訂 backend 一視同仁。一開始畫地圖時說第三站可以換，今天真的換給你看。
+今天其實沒學什麼新機制，而是把整個系列的知識換一個站位再用一次。contract 就是收 GraphModule 和 example inputs、回一個 callable。上游的 Guard、快取、dynamic shape 對自訂 backend 一視同仁。一開始畫地圖時說第三站可以換，今天總算真的換給各位看了。
 
-不過 torch.compile 再怎麼換後端都還是一個 JIT，編譯發生在部署機的第一次呼叫，Python 直譯器也一直在場。想把編譯徹底搬到上線之前，甚至讓成品脫離 Python、在 C++ 環境裡直接執行，就需要另一條路。明天來看 torch.export 和 AOTInductor 這對搭檔，把整條 pipeline 從即時編譯改成事先出貨。那我們明天見！
+不過 torch.compile 再怎麼換後端，都還是一個 JIT，編譯發生在部署機的第一次呼叫，Python 直譯器也一直在場。想把編譯徹底搬到上線之前，甚至讓成品脫離 Python、直接在 C++ 環境裡跑，就得走另一條路。明天來看 torch.export 和 AOTInductor 這對搭檔，把整條 pipeline 從即時編譯改成事先出貨。那我們明天見！
 
 ## 參考資料
 
@@ -159,3 +162,4 @@ observer calls via registry: 1
 - [torch/_dynamo/backends/common.py：aot_autograd（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/backends/common.py)
 - [torch/_dynamo/backends/debugging.py：eager 等 debug 後端（v2.8.0）](https://github.com/pytorch/pytorch/blob/v2.8.0/torch/_dynamo/backends/debugging.py)
 - [PyTorch Docs: Custom Backends](https://docs.pytorch.org/docs/stable/torch.compiler_custom_backends.html)
+
